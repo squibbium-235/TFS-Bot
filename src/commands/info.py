@@ -33,7 +33,7 @@ def build_info_embed(bot: commands.Bot, guild: discord.Guild | None) -> discord.
     uptime = format_uptime(time.monotonic() - STARTED_AT)
 
     embed = EmbedFactory.base(
-        title="TFSBot Info",
+        title="TFSBot Info - \"This bot serves the server\"",
         description="General bot status and runtime information.",
     )
 
