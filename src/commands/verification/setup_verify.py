@@ -4,102 +4,19 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from ...utils.embed_builder import EmbedFactory
-from ...utils.form_builder import FormAnswer, FormQuestion, build_form_modal
-
-
-VERIFICATION_QUESTIONS: list[FormQuestion] = [
-    FormQuestion(
-        key="age",
-        label="How old are you?",
-        style=discord.TextStyle.short,
-        placeholder="Example: 18",
-        required=True,
-        min_length=1,
-        max_length=3,
-    ),
-    FormQuestion(
-        key="reason",
-        label="Why do you want to join?",
-        style=discord.TextStyle.paragraph,
-        placeholder="Write a short answer.",
-        required=True,
-        min_length=20,
-        max_length=1000,
-    ),
-    FormQuestion(
-        key="rules",
-        label="Do you agree to follow the rules?",
-        style=discord.TextStyle.short,
-        placeholder="Yes / No",
-        required=True,
-        min_length=2,
-        max_length=20,
-    ),
-]
-
-
-async def handle_verify_submit(
-    interaction: discord.Interaction,
-    answers: list[FormAnswer],
-) -> None:
-    # Temporary behaviour.
-    # Later this will:
-    # - save the application
-    # - scan for blocked terms
-    # - calculate AI score
-    # - send the full application to the review channel
-    # - add approve/reject/question/kick/ban buttons
-    summary = "\n".join(
-        f"**{answer.label}**\n{answer.value or '*No answer provided.*'}"
-        for answer in answers
-    )
-
-    embed = EmbedFactory.base(
-        title="Application Submitted",
-        description=summary,
-    )
-
-    await interaction.response.send_message(
-        "Your application has been submitted.",
-        embed=embed,
-        ephemeral=True,
-    )
-
-
-class VerifyView(discord.ui.View):
-    def __init__(self) -> None:
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Verify",
-        style=discord.ButtonStyle.primary,
-        custom_id="verify:start",
-    )
-    async def verify_button(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ) -> None:
-        modal = build_form_modal(
-            title="Verification Application",
-            custom_id=f"verify:application:{interaction.user.id}",
-            questions=VERIFICATION_QUESTIONS,
-            on_submit=handle_verify_submit,
-        )
-
-        await interaction.response.send_modal(modal)
+from src.commands.verification.verification import VerifyView
+from src.utils.embed_builder import EmbedFactory
 
 
 def build_verify_embed() -> discord.Embed:
     embed = EmbedFactory.base(
         title="Welcome To The Furry Sanctuary!",
-        description="🔽 Click the button below to **VERIFY!** 🔽",
+        description="Click the button below to **VERIFY**!",
     )
 
     embed.add_field(
         name="Please follow our rules at all times",
-        value="Press the Verify button to start your application.",
+        value="Press the verify button to start your application.",
         inline=False,
     )
 
@@ -107,31 +24,86 @@ def build_verify_embed() -> discord.Embed:
 
 
 class SetupVerifyCommand(commands.Cog):
+    config_group = app_commands.Group(
+        name="config",
+        description="Configure verification settings.",
+    )
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(
-        name="setupverify",
-        description="Posts the verification panel in this channel.",
+    @config_group.command(
+        name="channels",
+        description="Sets verification-related channels.",
     )
+    @app_commands.describe(
+        setting="Which verification channel to configure.",
+        channel="The channel to use for this setting.",
+    )
+    @app_commands.choices(
+        setting=[
+            app_commands.Choice(name="Verification panel", value="verification_panel"),
+            app_commands.Choice(name="Review applications", value="review"),
+            app_commands.Choice(name="Application logs", value="application_log"),
+        ]
+    )
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def setup_verify_slash(self, interaction: discord.Interaction) -> None:
-        embed = build_verify_embed()
+    async def config_channels(
+        self,
+        interaction: discord.Interaction,
+        setting: app_commands.Choice[str],
+        channel: discord.TextChannel,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True,
+            )
+            return
 
-        await interaction.channel.send(embed=embed, view=VerifyView())
+        if setting.value == "verification_panel":
+            embed = build_verify_embed()
+
+            await channel.send(embed=embed, view=VerifyView())
+
+            await interaction.response.send_message(
+                f"Verification panel posted in {channel.mention}.",
+                ephemeral=True,
+            )
+            return
+
+        if setting.value == "review":
+            self.bot.guild_settings.set_review_channel_id(
+                guild_id=interaction.guild.id,
+                channel_id=channel.id,
+            )
+
+            await interaction.response.send_message(
+                f"Verification applications will now be sent to {channel.mention}.",
+                ephemeral=True,
+            )
+            return
+
+        if setting.value == "application_log":
+            self.bot.guild_settings.set_application_log_channel_id(
+                guild_id=interaction.guild.id,
+                channel_id=channel.id,
+            )
+
+            await interaction.response.send_message(
+                f"Completed verification applications will now be logged in {channel.mention}.",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.send_message(
-            "Verification panel posted.",
+            "Unknown channel setting.",
             ephemeral=True,
         )
 
-    @commands.command(name="setupverify")
-    @commands.has_permissions(manage_guild=True)
-    async def setup_verify_text(self, ctx: commands.Context) -> None:
-        embed = build_verify_embed()
-
-        await ctx.send(embed=embed, view=VerifyView())
-        await ctx.reply("Verification panel posted.", mention_author=False)
-
 
 async def setup(bot: commands.Bot) -> None:
+    bot.add_view(VerifyView())
     await bot.add_cog(SetupVerifyCommand(bot))

@@ -1,7 +1,4 @@
-# TFSBot Python Rewrite
-
-Python rewrite of the current C# Discord bot setup.
-
+# TFSBot
 ## Features included
 
 - `discord.py`

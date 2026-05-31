@@ -1,0 +1,78 @@
+{
+    "title": "Verification Application",
+    "custom_id_prefix": "verify:application",
+    "questions": [
+        {
+            "key": "name",
+            "label": "What's your name?",
+            "style": "short",
+            "placeholder": "Or perhaps, a preferred nickname instead?",
+            "required": true,
+            "min_length": 1,
+            "max_length": 100
+        },
+        {
+            "key": "gender",
+            "label": "What gender do you identify with?",
+            "style": "short",
+            "placeholder": "What are your pronouns?",
+            "required": true,
+            "min_length": 1,
+            "max_length": 100
+        },
+        {
+            "key": "age",
+            "label": "What's your exact age?",
+            "style": "short",
+            "placeholder": "Do NOT add ranges - lying will result in a ban.",
+            "required": true,
+            "min_length": 1,
+            "max_length": 100
+        },
+        {
+            "key": "hobbies",
+            "label": "What are your hobbies/interests?",
+            "style": "paragraph",
+            "placeholder": "Tell us a bit about yoursel! Please be descriptive as low effort applications will not be accepted",
+            "required": true,
+            "min_length": 1,
+            "max_length": 1000
+        },
+        {
+            "key": "where",
+            "label": "How/where did you find TFS?",
+            "style": "paragraph",
+            "placeholder": "Be specific: discovery, Disboard, etc. If it was a friend, please provide their username.",
+            "required": true,
+            "min_length": 1,
+            "max_length": 500
+        },
+        {
+            "key": "long",
+            "label": "How long have you been in the fandom?",
+            "style": "short",
+            "placeholder": "if you aren't a furry, just say \"N/A\"!",
+            "required": true,
+            "min_length": 1,
+            "max_length": 500
+        },
+        {
+            "key": "getin",
+            "label": "How did you get into the furry fandom?",
+            "style": "paragraph",
+            "placeholder": "If you aren't a furry, please let us know why you want to join the server!",
+            "required": true,
+            "min_length": 1,
+            "max_length": 1000
+        },
+        {
+            "key": "rules",
+            "label": "Have you read and agreed to the #Rules?",
+            "style": "short",
+            "placeholder": "If not, please review them before verifying!",
+            "required": true,
+            "min_length": 1,
+            "max_length": 50
+        }
+    ]
+}
