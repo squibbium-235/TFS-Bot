@@ -2274,6 +2274,249 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return ""
 
+    def make_health_item(
+        label: str,
+        value: str,
+        status_class: str,
+    ) -> dict[str, str]:
+        return {
+            "label": label,
+            "value": value,
+            "class": status_class,
+        }
+
+
+    def get_bot_member(guild: discord.Guild) -> discord.Member | None:
+        if bot.user is None:
+            return None
+
+        member = guild.me
+
+        if member is not None:
+            return member
+
+        return guild.get_member(bot.user.id)
+
+
+    def get_guild_permission_health_item(
+        guild: discord.Guild,
+        label: str,
+        permission_name: str,
+        friendly_name: str,
+    ) -> dict[str, str]:
+        member = get_bot_member(guild)
+
+        if member is None:
+            return make_health_item(
+                label=label,
+                value="Bot member unavailable",
+                status_class="warn",
+            )
+
+        has_permission = bool(
+            getattr(member.guild_permissions, permission_name, False)
+        )
+
+        if has_permission:
+            return make_health_item(
+                label=label,
+                value="OK",
+                status_class="good",
+            )
+
+        return make_health_item(
+            label=label,
+            value=f"Missing {friendly_name}",
+            status_class="bad",
+        )
+
+
+    def get_role_hierarchy_health_item(
+        guild: discord.Guild,
+        label: str,
+        role_id: int | None,
+    ) -> dict[str, str]:
+        if role_id is None:
+            return make_health_item(
+                label=label,
+                value="Not set",
+                status_class="warn",
+            )
+
+        role = guild.get_role(role_id)
+
+        if role is None:
+            return make_health_item(
+                label=label,
+                value=f"Unknown role {role_id}",
+                status_class="bad",
+            )
+
+        member = get_bot_member(guild)
+
+        if member is None:
+            return make_health_item(
+                label=label,
+                value="Bot member unavailable",
+                status_class="warn",
+            )
+
+        if not member.guild_permissions.manage_roles:
+            return make_health_item(
+                label=label,
+                value="Missing Manage Roles",
+                status_class="bad",
+            )
+
+        if role >= member.top_role:
+            return make_health_item(
+                label=label,
+                value=f"Bot role too low for {role.name}",
+                status_class="bad",
+            )
+
+        return make_health_item(
+            label=label,
+            value=f"OK - {role.name}",
+            status_class="good",
+        )
+
+
+    def get_channel_permission_health_item(
+        guild: discord.Guild,
+        label: str,
+        channel_id: int | None,
+        required_permissions: dict[str, str],
+        optional_permissions: dict[str, str] | None = None,
+    ) -> dict[str, str]:
+        optional_permissions = optional_permissions or {}
+
+        if channel_id is None:
+            return make_health_item(
+                label=label,
+                value="Not set",
+                status_class="warn",
+            )
+
+        channel = guild.get_channel(channel_id)
+
+        if not isinstance(channel, discord.TextChannel):
+            return make_health_item(
+                label=label,
+                value=f"Missing channel {channel_id}",
+                status_class="bad",
+            )
+
+        member = get_bot_member(guild)
+
+        if member is None:
+            return make_health_item(
+                label=label,
+                value="Bot member unavailable",
+                status_class="warn",
+            )
+
+        permissions = channel.permissions_for(member)
+
+        missing_required = [
+            friendly_name
+            for permission_name, friendly_name in required_permissions.items()
+            if not bool(getattr(permissions, permission_name, False))
+        ]
+
+        if missing_required:
+            return make_health_item(
+                label=label,
+                value="Missing " + ", ".join(missing_required),
+                status_class="bad",
+            )
+
+        missing_optional = [
+            friendly_name
+            for permission_name, friendly_name in optional_permissions.items()
+            if not bool(getattr(permissions, permission_name, False))
+        ]
+
+        if missing_optional:
+            return make_health_item(
+                label=label,
+                value="OK, but missing " + ", ".join(missing_optional),
+                status_class="warn",
+            )
+
+        return make_health_item(
+            label=label,
+            value="OK",
+            status_class="good",
+        )
+
+
+    def build_sanity_health_items(
+        guild: discord.Guild,
+        review_channel_id: int | None,
+        log_channel_id: int | None,
+        approved_add_role_id: int | None,
+        approved_remove_role_id: int | None,
+    ) -> list[dict[str, str]]:
+        return [
+            get_guild_permission_health_item(
+                guild=guild,
+                label="Role management",
+                permission_name="manage_roles",
+                friendly_name="Manage Roles",
+            ),
+            get_guild_permission_health_item(
+                guild=guild,
+                label="Ban permission",
+                permission_name="ban_members",
+                friendly_name="Ban Members",
+            ),
+            get_guild_permission_health_item(
+                guild=guild,
+                label="Invite tracking permission",
+                permission_name="manage_guild",
+                friendly_name="Manage Server",
+            ),
+            get_role_hierarchy_health_item(
+                guild=guild,
+                label="Give role hierarchy",
+                role_id=approved_add_role_id,
+            ),
+            get_role_hierarchy_health_item(
+                guild=guild,
+                label="Remove role hierarchy",
+                role_id=approved_remove_role_id,
+            ),
+            get_channel_permission_health_item(
+                guild=guild,
+                label="Review channel permissions",
+                channel_id=review_channel_id,
+                required_permissions={
+                    "view_channel": "View Channel",
+                    "send_messages": "Send Messages",
+                    "embed_links": "Embed Links",
+                    "attach_files": "Attach Files",
+                    "read_message_history": "Read Message History",
+                    "create_public_threads": "Create Public Threads",
+                    "send_messages_in_threads": "Send Messages in Threads",
+                },
+                optional_permissions={
+                    "manage_threads": "Manage Threads",
+                },
+            ),
+            get_channel_permission_health_item(
+                guild=guild,
+                label="Log channel permissions",
+                channel_id=log_channel_id,
+                required_permissions={
+                    "view_channel": "View Channel",
+                    "send_messages": "Send Messages",
+                    "embed_links": "Embed Links",
+                    "attach_files": "Attach Files",
+                },
+            ),
+        ]
+
     def display_status(status: str, questioning_thread_id: int | None = None) -> str:
         cleaned = status.lower().strip()
 
@@ -2538,6 +2781,16 @@ def create_webui(bot: discord.Client) -> Flask:
                 "class": "",
             },
         ]
+
+        health_items.extend(
+            build_sanity_health_items(
+                guild=guild,
+                review_channel_id=review_channel_id,
+                log_channel_id=log_channel_id,
+                approved_add_role_id=add_role_id,
+                approved_remove_role_id=remove_role_id,
+            )
+        )
 
         app_stats["health_items"] = health_items
         return app_stats
