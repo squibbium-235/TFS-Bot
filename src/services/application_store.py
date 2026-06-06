@@ -15,7 +15,9 @@ APPLICATION_STATUS_APPROVED = "approved"
 APPLICATION_STATUS_REJECTED = "rejected"
 APPLICATION_STATUS_KICKED = "kicked"
 APPLICATION_STATUS_BANNED = "banned"
+APPLICATION_STATUS_LEFT = "left"
 APPLICATION_STATUS_CANCELLED = "cancelled"
+
 
 @dataclass(frozen=True)
 class StoredApplication:
@@ -32,6 +34,7 @@ class StoredApplication:
     log_message_id: int | None
 
     questioning_thread_id: int | None
+    question_controls_message_id: int | None
 
     moderator_id: int | None
     action_reason: str | None
@@ -45,26 +48,36 @@ class StoredApplication:
     def review_message_url(self) -> str | None:
         if self.review_channel_id is None or self.review_message_id is None:
             return None
-        
+
         return (
             f"https://discord.com/channels/"
             f"{self.guild_id}/{self.review_channel_id}/{self.review_message_id}"
         )
-    
+
     @property
     def log_message_url(self) -> str | None:
         if self.log_channel_id is None or self.log_message_id is None:
             return None
-        
+
         return (
             f"https://discord.com/channels/"
             f"{self.guild_id}/{self.log_channel_id}/{self.log_message_id}"
         )
-    
+
+    @property
+    def questioning_thread_url(self) -> str | None:
+        if self.questioning_thread_id is None:
+            return None
+
+        return (
+            f"https://discord.com/channels/"
+            f"{self.guild_id}/{self.questioning_thread_id}"
+        )
+
     @property
     def best_message_url(self) -> str | None:
         return self.log_message_url or self.review_message_url
-    
+
 
 class ApplicationStore:
     def __init__(self, database_path: str) -> None:
@@ -93,6 +106,7 @@ class ApplicationStore:
                     log_message_id INTEGER,
 
                     questioning_thread_id INTEGER,
+                    question_controls_message_id INTEGER,
 
                     moderator_id INTEGER,
                     action_reason TEXT,
@@ -103,6 +117,13 @@ class ApplicationStore:
                     actioned_at TEXT
                 )
                 """
+            )
+
+            await self._ensure_column(
+                database=database,
+                table_name="applications",
+                column_name="question_controls_message_id",
+                column_definition="INTEGER",
             )
 
             await database.execute(
@@ -119,15 +140,21 @@ class ApplicationStore:
                 """
             )
 
+            await database.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_applications_questioning_thread
+                ON applications (questioning_thread_id)
+                """
+            )
+
             await database.commit()
 
-    
     async def create_application(
-            self,
-            application_id: str,
-            guild_id: int,
-            user_id: int,
-            answers: list[FormAnswer],
+        self,
+        application_id: str,
+        guild_id: int,
+        user_id: int,
+        answers: list[FormAnswer],
     ) -> None:
         now = self._now()
 
@@ -159,10 +186,10 @@ class ApplicationStore:
             await database.commit()
 
     async def set_review_message(
-            self,
-            application_id: str,
-            review_channel_id: int,
-            review_message_id: int,
+        self,
+        application_id: str,
+        review_channel_id: int,
+        review_message_id: int,
     ) -> None:
         async with aiosqlite.connect(self.database_path) as database:
             await database.execute(
@@ -230,6 +257,28 @@ class ApplicationStore:
 
             await database.commit()
 
+    async def set_question_controls_message(
+        self,
+        application_id: str,
+        question_controls_message_id: int | None,
+    ) -> None:
+        async with aiosqlite.connect(self.database_path) as database:
+            await database.execute(
+                """
+                UPDATE applications
+                SET question_controls_message_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    question_controls_message_id,
+                    self._now(),
+                    application_id,
+                ),
+            )
+
+            await database.commit()
+
     async def get_application(
         self,
         application_id: str,
@@ -253,6 +302,91 @@ class ApplicationStore:
 
         return self._row_to_application(row)
 
+    async def get_pending_application_by_questioning_thread(
+        self,
+        questioning_thread_id: int,
+    ) -> StoredApplication | None:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE questioning_thread_id = ?
+                AND status = ?
+                LIMIT 1
+                """,
+                (questioning_thread_id, APPLICATION_STATUS_PENDING),
+            )
+
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return self._row_to_application(row)
+
+    async def get_active_questioning_application_for_user(
+        self,
+        user_id: int,
+    ) -> StoredApplication | None:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE user_id = ?
+                AND status = ?
+                AND questioning_thread_id IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (user_id, APPLICATION_STATUS_PENDING),
+            )
+
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return self._row_to_application(row)
+    
+
+    async def get_pending_application_for_user(
+        self,
+        guild_id: int,
+        user_id: int,
+    ) -> StoredApplication | None:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE guild_id = ?
+                AND user_id = ?
+                AND status = ?
+                ORDER BY submitted_at DESC
+                LIMIT 1
+                """,
+                (
+                    guild_id,
+                    user_id,
+                    APPLICATION_STATUS_PENDING,
+                ),
+            )
+
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return self._row_to_application(row)
+
     async def list_pending_applications(self) -> list[StoredApplication]:
         async with aiosqlite.connect(self.database_path) as database:
             database.row_factory = aiosqlite.Row
@@ -265,6 +399,23 @@ class ApplicationStore:
                 ORDER BY submitted_at ASC
                 """,
                 (APPLICATION_STATUS_PENDING,),
+            )
+
+            rows = await cursor.fetchall()
+
+        return [self._row_to_application(row) for row in rows]
+
+    async def list_applications_with_log_messages(self) -> list[StoredApplication]:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE log_message_id IS NOT NULL
+                ORDER BY actioned_at DESC, updated_at DESC
+                """
             )
 
             rows = await cursor.fetchall()
@@ -303,11 +454,25 @@ class ApplicationStore:
 
         applications = [self._row_to_application(row) for row in rows]
 
-        return [
-            application.best_message_url
-            for application in applications
-            if application.best_message_url is not None
-        ]
+        previous_lines: list[str] = []
+
+        for index, application in enumerate(applications, start=1):
+            message_url = application.best_message_url
+
+            if message_url is None:
+                continue
+
+            try:
+                submitted_at = datetime.fromisoformat(application.submitted_at)
+                submitted_text = f"<t:{int(submitted_at.timestamp())}:R>"
+            except ValueError:
+                submitted_text = "`Unknown date`"
+
+            previous_lines.append(
+                f"[Application {index}]({message_url}) - {submitted_text}"
+            )
+
+        return previous_lines
 
     async def mark_actioned(
         self,
@@ -343,6 +508,24 @@ class ApplicationStore:
             )
 
             await database.commit()
+
+    @staticmethod
+    async def _ensure_column(
+        database: aiosqlite.Connection,
+        table_name: str,
+        column_name: str,
+        column_definition: str,
+    ) -> None:
+        cursor = await database.execute(f"PRAGMA table_info({table_name})")
+        rows = await cursor.fetchall()
+        existing_columns = {row[1] for row in rows}
+
+        if column_name in existing_columns:
+            return
+
+        await database.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+        )
 
     @staticmethod
     def _now() -> str:
@@ -390,6 +573,8 @@ class ApplicationStore:
         return bool(value)
 
     def _row_to_application(self, row: aiosqlite.Row) -> StoredApplication:
+        row_keys = set(row.keys())
+
         return StoredApplication(
             id=row["id"],
             guild_id=row["guild_id"],
@@ -401,6 +586,11 @@ class ApplicationStore:
             log_channel_id=row["log_channel_id"],
             log_message_id=row["log_message_id"],
             questioning_thread_id=row["questioning_thread_id"],
+            question_controls_message_id=(
+                row["question_controls_message_id"]
+                if "question_controls_message_id" in row_keys
+                else None
+            ),
             moderator_id=row["moderator_id"],
             action_reason=row["action_reason"],
             dm_sent=self._int_to_bool(row["dm_sent"]),
