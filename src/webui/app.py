@@ -548,7 +548,7 @@ EMBED_FORM_HTML = """
 
                     <p class="hint">
                         Uploaded images can be selected below. When sent to Discord, they are attached to the message,
-                        so they do not need Imgur or another image host.
+                        so they do not need Imgur or another image host, or you can, idc.
                     </p>
 
                     <button type="submit">Upload Image</button>
@@ -1017,6 +1017,38 @@ ADMIN_PAGE_HTML = """
             border-radius: 12px;
         }
 
+        .warning-panel {
+            border-color: rgba(255, 204, 102, 0.42);
+            background: rgba(255, 204, 102, 0.04);
+        }
+
+        .warning-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .warning-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            background: var(--panel-2);
+            border: 1px solid var(--border-soft);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .warning-item strong {
+            font-size: 14px;
+        }
+
+        .warning-item span {
+            color: var(--muted);
+            font-size: 13px;
+            text-align: right;
+        }
+
         .hint { color: var(--muted); font-size: 13px; line-height: 1.45; }
 
         .grid-2 {
@@ -1266,7 +1298,141 @@ ADMIN_PAGE_HTML = """
             background: rgba(237, 66, 69, 0.08);
         }
 
-        .muted-link { color: var(--muted); }
+        .muted-link {
+            color: var(--muted);
+        }
+
+        .button-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            padding: 11px 15px;
+            background: var(--accent);
+            color: white !important;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            line-height: 1;
+        }
+
+        .button-link:hover {
+            background: var(--accent-hover);
+            color: white !important;
+        }
+
+        .button-link.secondary {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            color: var(--text) !important;
+        }
+
+        .button-link.secondary:hover {
+            background: #303747;
+        }
+
+        .page-intro {
+            display: grid;
+            gap: 10px;
+        }
+
+        .page-intro p {
+            margin: 0;
+        }
+
+        .section-note {
+            margin-top: 4px;
+            margin-bottom: 14px;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .inline-form {
+            display: inline;
+        }
+
+        .inline-form button {
+            width: auto;
+        }
+
+        .question-card {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+            margin-top: 14px;
+        }
+
+        .question-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .question-card-header h3 {
+            margin: 0;
+            font-size: 17px;
+        }
+
+        .question-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .inline-form {
+            display: inline;
+        }
+
+        .inline-form button {
+            width: auto;
+        }
+
+        .button-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            padding: 11px 15px;
+            background: var(--accent);
+            color: white !important;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            line-height: 1;
+        }
+
+        .button-link:hover {
+            background: var(--accent-hover);
+            color: white !important;
+        }
+
+        .button-link.secondary {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            color: var(--text) !important;
+        }
+
+        .button-link.secondary:hover {
+            background: #303747;
+        }
 
         @media (max-width: 800px) {
             .grid-2, .setting-grid, .stat-grid, .command-row, .overview-grid, .health-list { grid-template-columns: 1fr; }
@@ -1344,6 +1510,24 @@ OVERVIEW_BODY_HTML = """
 </div>
 
 {% if overview %}
+{% if overview.warning_items %}
+<div class="panel warning-panel">
+    <h2>{{ overview.warning_count }} issue(s) need attention</h2>
+    <p class="hint">
+        These are the setup items most likely to stop verification or WebUI management from working properly.
+    </p>
+
+    <div class="warning-list">
+        {% for item in overview.warning_items %}
+            <div class="warning-item">
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.value }}</span>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="panel">
     <h2>Setup Health</h2>
     <div class="health-list">
@@ -1357,7 +1541,7 @@ OVERVIEW_BODY_HTML = """
 </div>
 
 <div class="panel">
-    <h2>Today</h2>
+    <h2>Verification Activity Today</h2>
     <div class="overview-grid">
         <div class="overview-card"><strong>{{ overview.today.approved }}</strong><span>Approved</span></div>
         <div class="overview-card"><strong>{{ overview.today.rejected }}</strong><span>Rejected</span></div>
@@ -1802,62 +1986,82 @@ BACKUPS_BODY_HTML = """
 
 
 FORMS_BODY_HTML = """
-<div class="panel">
+<div class="panel page-intro">
     <h2>Forms</h2>
     <p class="hint">
-        Create and edit Discord modal forms from here. Question labels are limited by Discord.
+        Create and edit Discord modal forms from here. Changing the verification form affects newly opened forms; repost the verification panel after changing it.
     </p>
 
     <form method="get" action="{{ url_for('forms_page') }}">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-
-        {% if selected_guild_id %}
-            <label>Form</label>
-            <select name="form_key" onchange="this.form.submit()">
-                {% for form in forms %}
-                    <option value="{{ form.key }}" {{ 'selected' if form.key == selected_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
-                {% endfor %}
-            </select>
-        {% endif %}
-    </form>
-</div>
-
-{% if selected_guild_id %}
-<div class="panel">
-    <h2>Create Form</h2>
-    <form method="post" action="{{ url_for('forms_page') }}">
-        <input type="hidden" name="action" value="create_form">
-        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
-
         <div class="setting-grid">
             <div>
-                <label>Form key</label>
-                <input name="new_form_key" placeholder="staff_app" maxlength="40" required>
-                <p class="hint">Lowercase letters, numbers, and underscores only.</p>
+                <label>Server</label>
+                <select name="guild_id" onchange="this.form.submit()">
+                    {% for guild in guilds %}
+                        <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
-            <div>
-                <label>Title</label>
-                <input name="new_form_title" placeholder="Staff Application" maxlength="45" required>
-            </div>
-
-        </div>
-
-        <div class="button-row">
-            <button type="submit">Create Form</button>
+            {% if selected_guild_id %}
+                <div>
+                    <label>Form</label>
+                    <select name="form_key" onchange="this.form.submit()">
+                        {% for form in forms %}
+                            <option value="{{ form.key }}" {{ 'selected' if form.key == selected_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
         </div>
     </form>
 </div>
-{% endif %}
 
 {% if selected_form %}
 <div class="panel">
-    <h2>Edit Form</h2>
+    <h2>Selected Form</h2>
+
+    <div class="health-list">
+        <div class="health-item">
+            <small>Form Key</small>
+            <span><code>{{ selected_form_key }}</code></span>
+        </div>
+
+        <div class="health-item">
+            <small>Title</small>
+            <span>{{ selected_form.title }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Questions</small>
+            <span>{{ questions|length }} question(s), {{ modal_pages }} modal page(s)</span>
+        </div>
+
+        <div class="health-item">
+            <small>Verification Form</small>
+            <span class="pill {{ 'good' if selected_form_key == verification_form_key else 'warn' }}">
+                {{ 'Yes' if selected_form_key == verification_form_key else 'No' }}
+            </span>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="{{ url_for('forms_viewer_page', guild_id=selected_guild_id, form_key=selected_form_key) }}">Preview Form</a>
+
+        <form method="post" action="{{ url_for('forms_page') }}" class="inline-form">
+            <input type="hidden" name="action" value="set_verification_form">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+            <button type="submit" class="secondary-button">Set as Verification Form</button>
+        </form>
+
+        <a class="button-link secondary" href="#publish-form-panel">Publish Form Panel</a>
+        <a class="button-link secondary" href="#create-form-panel">Create New Form</a>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Edit Selected Form</h2>
 
     <form method="post" action="{{ url_for('forms_page') }}">
         <input type="hidden" name="action" value="save_form">
@@ -1888,7 +2092,7 @@ FORMS_BODY_HTML = """
 
         <div class="button-row">
             <button type="submit">Save Form</button>
-            <a class="muted-link" href="{{ url_for('forms_viewer_page', guild_id=selected_guild_id, form_key=selected_form_key) }}">Open Form Viewer</a>
+            <a class="button-link secondary" href="{{ url_for('forms_viewer_page', guild_id=selected_guild_id, form_key=selected_form_key) }}">Preview Form</a>
         </div>
     </form>
 </div>
@@ -1984,6 +2188,10 @@ FORMS_BODY_HTML = """
 <div class="panel">
     <h2>Questions</h2>
 
+    <p class="hint section-note">
+        Edit existing questions here. Use the order field to move questions around. Discord shows up to 5 questions per modal page.
+    </p>
+
     {% if questions %}
         <form method="post" action="{{ url_for('forms_page') }}">
             <input type="hidden" name="action" value="save_questions">
@@ -2066,7 +2274,7 @@ FORMS_BODY_HTML = """
 </div>
 {% endif %}
 
-<div class="panel">
+<div class="panel" id="publish-form-panel">
     <h2>Publish Form Panel</h2>
     <p class="hint">
         This posts a general form button panel. Verification panels are still posted from the Verification page.
@@ -2120,11 +2328,39 @@ FORMS_BODY_HTML = """
 {% else %}
 <div class="panel"><p>No servers available.</p></div>
 {% endif %}
+
+{% if selected_guild_id %}
+<div class="panel">
+    <h2>Create New Form</h2>
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="create_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Form key</label>
+                <input name="new_form_key" placeholder="staff_app" maxlength="40" required>
+                <p class="hint">Lowercase letters, numbers, and underscores only.</p>
+            </div>
+
+            <div>
+                <label>Title</label>
+                <input name="new_form_title" placeholder="Staff Application" maxlength="45" required>
+            </div>
+
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Create Form</button>
+        </div>
+    </form>
+</div>
+{% endif %}
 """
 
 FORM_VIEWER_BODY_HTML = """
 <div class="panel">
-    <h2>Form Viewer</h2>
+    <h2>Form Preview</h2>
     <p class="hint">
         Read-only view of the selected form. This does not edit, publish, duplicate, disable, export, or do any other surprise nonsense.
     </p>
@@ -2151,9 +2387,9 @@ FORM_VIEWER_BODY_HTML = """
         </div>
     </div>
 
-    <p class="hint" style="margin-top: 14px;">
-        <a class="muted-link" href="{{ url_for('forms_page', guild_id=selected_guild_id, form_key=form_key) }}">Back to Forms</a>
-    </p>
+    <div class="button-row">
+        <a class="button-link secondary" href="{{ url_for('forms_page', guild_id=selected_guild_id, form_key=form_key) }}">Back to Forms</a>
+    </div>
 </div>
 
 {% if pages %}
@@ -2288,7 +2524,7 @@ VERIFICATION_BODY_HTML = """
 
     <div class="panel">
         <h2>Approval Roles</h2>
-        <p class="hint">On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles, because Discord loves hierarchy more than sense.</p>
+        <p class="hint">On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles, because Discord loves hierarchy.</p>
 
         <div class="setting-grid">
             <div>
@@ -3534,7 +3770,22 @@ def create_webui(bot: discord.Client) -> Flask:
             },
         ]
 
+        ignored_warning_labels = {
+            "Automod",
+            "Server members",
+        }
+
+        warning_items = [
+            item
+            for item in health_items
+            if item.get("class") in {"bad", "warn"}
+            and item.get("label") not in ignored_warning_labels
+        ]
+
         app_stats["health_items"] = health_items
+        app_stats["warning_items"] = warning_items
+        app_stats["warning_count"] = len(warning_items)
+
         return app_stats
 
     @app.route("/uploads/<path:filename>")
