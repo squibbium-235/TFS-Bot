@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
+import secrets
 import sqlite3
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from collections.abc import Coroutine
 from pathlib import Path
@@ -69,7 +74,7 @@ LOGIN_HTML = """
             background: #1e2129;
             padding: 28px;
             border-radius: 16px;
-            width: 340px;
+            width: 360px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
         }
 
@@ -91,8 +96,35 @@ LOGIN_HTML = """
             font-weight: bold;
         }
 
+        .discord-button {
+            background: #5865f2;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #b5bac1;
+            font-size: 13px;
+            margin: 20px 0 12px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #3a3f4b;
+        }
+
         .error {
             color: #ff6b6b;
+        }
+
+        .hint {
+            color: #b5bac1;
+            font-size: 13px;
+            line-height: 1.45;
         }
     </style>
 </head>
@@ -100,15 +132,35 @@ LOGIN_HTML = """
     <div class="card">
         <h1>TFSBot Web UI</h1>
 
-        <form method="post">
-            <label>Username</label>
-            <input type="text" name="username" autocomplete="username" autofocus>
+        {% if discord_login_enabled %}
+            <form method="get" action="{{ url_for('discord_login_start') }}">
+                <button type="submit" class="discord-button">Login with Discord</button>
+            </form>
 
-            <label>Password</label>
-            <input type="password" name="password" autocomplete="current-password">
+            <p class="hint">
+                Access is granted only if your Discord account has an allowed server role.
+            </p>
+        {% endif %}
 
-            <button type="submit">Login</button>
-        </form>
+        {% if discord_login_enabled and password_login_enabled %}
+            <div class="divider">or emergency login</div>
+        {% endif %}
+
+        {% if password_login_enabled %}
+            <form method="post">
+                <label>Username</label>
+                <input type="text" name="username" autocomplete="username" {% if not discord_login_enabled %}autofocus{% endif %}>
+
+                <label>Password</label>
+                <input type="password" name="password" autocomplete="current-password">
+
+                <button type="submit">Login</button>
+            </form>
+        {% endif %}
+
+        {% if not discord_login_enabled and not password_login_enabled %}
+            <p class="error">No WebUI login methods are configured.</p>
+        {% endif %}
 
         {% if error %}
             <p class="error">{{ error }}</p>
@@ -156,17 +208,21 @@ EMBED_FORM_HTML = """
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 18px;
         }
 
         header h1 {
             margin: 0;
             font-size: 22px;
+            flex: 0 0 auto;
         }
 
         header nav {
             display: flex;
             gap: 14px;
             align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
         }
 
         header a {
@@ -285,6 +341,16 @@ EMBED_FORM_HTML = """
         .hint {
             color: var(--muted);
             font-size: 13px;
+        }
+
+        .badge {
+            border: 1px solid var(--border);
+            background: #151820;
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 12px;
+            white-space: nowrap;
         }
 
         .colour-input-wrap {
@@ -449,11 +515,14 @@ EMBED_FORM_HTML = """
         <h1>TFSBot Embed Builder</h1>
         <nav>
             <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
-            <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
-            <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
-            <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
-            <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
-            <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
+            {% if is_owner %}
+                <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
+                <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
+                <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
+                <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
+                <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
+            {% endif %}
+            <span class="badge">{{ display_name }} · {{ webui_role|title }}</span>
             <a href="{{ url_for('logout') }}">Logout</a>
         </nav>
     </header>
@@ -851,6 +920,7 @@ ADMIN_PAGE_HTML = """
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 18px;
             position: sticky;
             top: 0;
             z-index: 10;
@@ -860,9 +930,10 @@ ADMIN_PAGE_HTML = """
             margin: 0;
             font-size: 22px;
             letter-spacing: -0.02em;
+            flex: 0 0 auto;
         }
 
-        nav { display: flex; gap: 16px; align-items: center; }
+        nav { display: flex; gap: 16px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
         nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
         nav a:hover { color: var(--text); }
         nav a.active { color: var(--text); font-weight: 700; }
@@ -1208,11 +1279,14 @@ ADMIN_PAGE_HTML = """
         <h1>{{ title }}</h1>
         <nav>
             <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
-            <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
-            <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
-            <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
-            <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
-            <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
+            {% if is_owner %}
+                <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
+                <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
+                <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
+                <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
+                <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
+            {% endif %}
+            <span class="badge">{{ display_name }} · {{ webui_role|title }}</span>
             <a href="{{ url_for('logout') }}">Logout</a>
         </nav>
     </header>
@@ -1675,6 +1749,17 @@ BACKUPS_BODY_HTML = """
 """
 
 
+ACCESS_DENIED_BODY_HTML = """
+<div class="panel">
+    <h2>Access Denied</h2>
+    <p class="hint">
+        Your Discord login is valid, but your WebUI role is <code>{{ webui_role }}</code>.
+        This page is owner-only. Bureaucracy, but at least it is Discord bureaucracy.
+    </p>
+</div>
+"""
+
+
 VERIFICATION_BODY_HTML = """
 <div class="panel">
     <h2>Verification</h2>
@@ -1856,11 +1941,21 @@ VERIFICATION_BODY_HTML = """
 def create_webui(bot: discord.Client) -> Flask:
     app = Flask(__name__)
 
-    secret_source = "|".join(
+    secret_parts = [
         f"{credential.username}:{credential.password}"
         for credential in bot.config.webui_credentials
+    ]
+
+    discord_client_secret = getattr(
+        bot.config,
+        "discord_oauth_client_secret",
+        "",
     )
-    app.secret_key = secret_source or "tfsbot-dev-secret"
+
+    if discord_client_secret:
+        secret_parts.append(discord_client_secret)
+
+    app.secret_key = "|".join(secret_parts) or "tfsbot-dev-secret"
 
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
@@ -1868,6 +1963,148 @@ def create_webui(bot: discord.Client) -> Flask:
 
     def is_logged_in() -> bool:
         return session.get("logged_in") is True
+
+    def is_discord_login_enabled() -> bool:
+        return bool(getattr(bot.config, "webui_discord_auth_enabled", False))
+
+    def is_password_login_enabled() -> bool:
+        return bool(
+            getattr(bot.config, "webui_password_login_enabled", True)
+            and bot.config.webui_credentials
+        )
+
+    def render_login_page(error: str | None = None) -> str:
+        return render_template_string(
+            LOGIN_HTML,
+            error=error,
+            discord_login_enabled=is_discord_login_enabled(),
+            password_login_enabled=is_password_login_enabled(),
+        )
+
+    def get_discord_authorisation_url(state: str) -> str:
+        query = urllib.parse.urlencode(
+            {
+                "client_id": str(bot.config.discord_oauth_client_id),
+                "redirect_uri": bot.config.discord_oauth_redirect_uri,
+                "response_type": "code",
+                "scope": "identify guilds.members.read",
+                "state": state,
+            }
+        )
+
+        return f"https://discord.com/oauth2/authorize?{query}"
+
+    def discord_api_request(
+        url: str,
+        method: str = "GET",
+        data: dict[str, str] | None = None,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        body: bytes | None = None
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "User-Agent": "TFSBot WebUI",
+        }
+
+        if data is not None:
+            body = urllib.parse.urlencode(data).encode("utf-8")
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+        if access_token is not None:
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        request_object = urllib.request.Request(
+            url=url,
+            data=body,
+            headers=headers,
+            method=method,
+        )
+
+        try:
+            with urllib.request.urlopen(request_object, timeout=15) as response:
+                return json.loads(response.read().decode("utf-8"))
+
+        except urllib.error.HTTPError as error:
+            try:
+                error_body = error.read().decode("utf-8")
+            except Exception:
+                error_body = ""
+
+            raise RuntimeError(
+                f"Discord API request failed: HTTP {error.code} {error_body}"
+            ) from error
+
+        except urllib.error.URLError as error:
+            raise RuntimeError(f"Discord API request failed: {error}") from error
+
+    def exchange_discord_code_for_token(code: str) -> str:
+        token_data = discord_api_request(
+            url="https://discord.com/api/oauth2/token",
+            method="POST",
+            data={
+                "client_id": str(bot.config.discord_oauth_client_id),
+                "client_secret": bot.config.discord_oauth_client_secret,
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": bot.config.discord_oauth_redirect_uri,
+            },
+        )
+
+        access_token = token_data.get("access_token")
+
+        if not isinstance(access_token, str) or not access_token:
+            raise RuntimeError("Discord did not return an access token.")
+
+        return access_token
+
+    def fetch_discord_user(access_token: str) -> dict[str, Any]:
+        return discord_api_request(
+            url="https://discord.com/api/users/@me",
+            access_token=access_token,
+        )
+
+    def fetch_discord_member(access_token: str) -> dict[str, Any]:
+        guild_id = bot.config.webui_discord_guild_id
+
+        if guild_id is None:
+            raise RuntimeError("WEBUI_DISCORD_GUILD_ID is not configured.")
+
+        return discord_api_request(
+            url=f"https://discord.com/api/users/@me/guilds/{guild_id}/member",
+            access_token=access_token,
+        )
+
+    def get_matching_discord_webui_role(member_data: dict[str, Any]) -> str | None:
+        member_role_ids = {
+            str(role_id)
+            for role_id in member_data.get("roles", [])
+        }
+
+        owner_role_ids = {
+            str(role_id)
+            for role_id in getattr(bot.config, "webui_discord_owner_role_ids", ())
+        }
+
+        viewer_role_ids = {
+            str(role_id)
+            for role_id in getattr(bot.config, "webui_discord_viewer_role_ids", ())
+        }
+
+        legacy_allowed_role_ids = {
+            str(role_id)
+            for role_id in getattr(bot.config, "webui_discord_allowed_role_ids", ())
+        }
+
+        if owner_role_ids.intersection(member_role_ids):
+            return "owner"
+
+        if legacy_allowed_role_ids.intersection(member_role_ids):
+            return "owner"
+
+        if viewer_role_ids.intersection(member_role_ids):
+            return "viewer"
+
+        return None
 
     def validate_uploaded_image_filename(filename: str) -> str:
         safe_name = secure_filename(filename)
@@ -2035,7 +2272,66 @@ def create_webui(bot: discord.Client) -> Flask:
             body=body,
             message=message,
             error=error,
+            is_owner=is_webui_owner(),
+            webui_role=current_webui_role(),
+            display_name=get_session_display_name(),
         )
+
+    def render_embed_builder_page(
+        message: str | None = None,
+        error: str | None = None,
+    ) -> str:
+        return render_template_string(
+            EMBED_FORM_HTML,
+            channels=get_available_channels(),
+            uploaded_images=list_uploaded_images(),
+            message=message,
+            error=error,
+            active_page="embed_builder",
+            is_owner=is_webui_owner(),
+            webui_role=current_webui_role(),
+            display_name=get_session_display_name(),
+        )
+
+    def current_webui_role() -> str:
+        role = str(session.get("webui_role") or "").lower().strip()
+
+        if role in {"owner", "viewer"}:
+            return role
+
+        if session.get("logged_in") is True and session.get("auth_method") == "password":
+            return "owner"
+
+        return "viewer"
+
+    def is_webui_owner() -> bool:
+        return current_webui_role() == "owner"
+
+    def get_session_display_name() -> str:
+        return str(
+            session.get("display_name")
+            or session.get("discord_username")
+            or session.get("username")
+            or "WebUI user"
+        )
+
+    def render_owner_required_page() -> str:
+        return render_admin_page(
+            title="Access Denied",
+            active_page="overview",
+            body_template=ACCESS_DENIED_BODY_HTML,
+            webui_role=current_webui_role(),
+            error="You need the owner WebUI role to use that page.",
+        )
+
+    def require_owner_page() -> str | None:
+        if not is_logged_in():
+            return redirect(url_for("login"))
+
+        if not is_webui_owner():
+            return render_owner_required_page()
+
+        return None
 
     def get_template_store():
         template_store = getattr(bot, "dm_template_store", None)
@@ -2587,7 +2883,10 @@ def create_webui(bot: discord.Client) -> Flask:
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "GET":
-            return render_template_string(LOGIN_HTML, error=None)
+            return render_login_page(error=None)
+
+        if not is_password_login_enabled():
+            return render_login_page(error="Emergency username/password login is disabled.")
 
         username = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -2599,15 +2898,77 @@ def create_webui(bot: discord.Client) -> Flask:
         )
 
         if not login_ok:
-            return render_template_string(
-                LOGIN_HTML,
-                error="Incorrect username or password.",
-            )
+            return render_login_page(error="Incorrect username or password.")
 
+        session.clear()
         session["logged_in"] = True
+        session["auth_method"] = "password"
         session["username"] = username
+        session["display_name"] = username
+        session["webui_role"] = "owner"
 
         return redirect(url_for("index"))
+
+    @app.route("/auth/discord/start")
+    def discord_login_start():
+        if not is_discord_login_enabled():
+            return render_login_page(error="Discord login is not enabled.")
+
+        state = secrets.token_urlsafe(32)
+        session["discord_oauth_state"] = state
+
+        return redirect(get_discord_authorisation_url(state=state))
+
+    @app.route("/auth/discord/callback")
+    def discord_login_callback():
+        if not is_discord_login_enabled():
+            return render_login_page(error="Discord login is not enabled.")
+
+        oauth_error = request.args.get("error")
+
+        if oauth_error:
+            return render_login_page(error=f"Discord login failed: {oauth_error}")
+
+        code = request.args.get("code", "")
+        state = request.args.get("state", "")
+        expected_state = session.pop("discord_oauth_state", "")
+
+        if not code:
+            return render_login_page(error="Discord did not return an authorisation code.")
+
+        if not hmac.compare_digest(state, expected_state):
+            return render_login_page(error="Discord login state mismatch. Try again.")
+
+        try:
+            access_token = exchange_discord_code_for_token(code=code)
+            user_data = fetch_discord_user(access_token=access_token)
+            member_data = fetch_discord_member(access_token=access_token)
+
+            webui_role = get_matching_discord_webui_role(member_data)
+
+            if webui_role is None:
+                return render_login_page(
+                    error="Your Discord account does not have an allowed WebUI role."
+                )
+
+            username = str(user_data.get("username") or "Discord user")
+            global_name = str(user_data.get("global_name") or "").strip()
+            user_id = str(user_data.get("id") or "")
+
+            display_name = global_name or username
+
+            session.clear()
+            session["logged_in"] = True
+            session["auth_method"] = "discord"
+            session["discord_user_id"] = user_id
+            session["discord_username"] = username
+            session["display_name"] = display_name
+            session["webui_role"] = webui_role
+
+            return redirect(url_for("index"))
+
+        except Exception as error:
+            return render_login_page(error=str(error))
 
     @app.route("/logout")
     def logout():
@@ -2644,8 +3005,10 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/backups", methods=["GET", "POST"])
     def backups_page():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         message: str | None = None
         error: str | None = None
@@ -2755,13 +3118,12 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/embed-builder")
     def embed_builder():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
 
-        return render_template_string(
-            EMBED_FORM_HTML,
-            channels=get_available_channels(),
-            uploaded_images=list_uploaded_images(),
+        if owner_error is not None:
+            return owner_error
+
+        return render_embed_builder_page(
             message=None,
             error=None,
         )
@@ -2769,8 +3131,10 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/dm-templates", methods=["GET", "POST"])
     def dm_templates():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         message: str | None = None
         error: str | None = None
@@ -2852,8 +3216,10 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/verification", methods=["GET", "POST"])
     def verification_page():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         message: str | None = None
         error: str | None = None
@@ -3041,8 +3407,10 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/permissions", methods=["GET", "POST"])
     def permissions_page():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         message: str | None = None
         error: str | None = None
@@ -3151,8 +3519,10 @@ def create_webui(bot: discord.Client) -> Flask:
 
     @app.route("/upload", methods=["POST"])
     def upload_image():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         try:
             uploaded_file = request.files.get("image")
@@ -3174,27 +3544,23 @@ def create_webui(bot: discord.Client) -> Flask:
 
             uploaded_file.save(destination)
 
-            return render_template_string(
-                EMBED_FORM_HTML,
-                channels=get_available_channels(),
-                uploaded_images=list_uploaded_images(),
+            return render_embed_builder_page(
                 message=f"Uploaded {destination.name}.",
                 error=None,
             )
 
         except Exception as error:
-            return render_template_string(
-                EMBED_FORM_HTML,
-                channels=get_available_channels(),
-                uploaded_images=list_uploaded_images(),
+            return render_embed_builder_page(
                 message=None,
                 error=str(error),
             )
 
     @app.route("/send", methods=["POST"])
     def send_embed():
-        if not is_logged_in():
-            return redirect(url_for("login"))
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
 
         try:
             channel_id = int(request.form["channel_id"])
@@ -3239,19 +3605,13 @@ def create_webui(bot: discord.Client) -> Flask:
                 )
             )
 
-            return render_template_string(
-                EMBED_FORM_HTML,
-                channels=get_available_channels(),
-                uploaded_images=list_uploaded_images(),
+            return render_embed_builder_page(
                 message=f"Embed sent. Used {len(embeds)} embed(s).",
                 error=None,
             )
 
         except Exception as error:
-            return render_template_string(
-                EMBED_FORM_HTML,
-                channels=get_available_channels(),
-                uploaded_images=list_uploaded_images(),
+            return render_embed_builder_page(
                 message=None,
                 error=str(error),
             )
