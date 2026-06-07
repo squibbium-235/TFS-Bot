@@ -30,7 +30,11 @@ from src.services.dm_template_store import (
 )
 from src.services.forms.constants import FORM_KEY_VERIFICATION, VERIFICATION_FORM_PATH
 from src.services.backup_service import BackupError, BackupService
-from src.commands.verification.verification import VerifyView
+from src.commands.verification.verification import (
+    VerifyView,
+    cancel_all_pending_applications_for_guild,
+    cancel_pending_application_by_user_id,
+)
 from src.services.permission_store import (
     LEVEL_ADMIN,
     LEVEL_OWNER,
@@ -1577,7 +1581,7 @@ BACKUPS_BODY_HTML = """
 
     <p class="hint">
         Restoring replaces the current database with the uploaded backup.
-        The current database and uploads are copied to <code>data/restore_safety/</code> first, deleting the lifeboat before using the slide is generally frowned upon.
+        The current database and uploads are copied to <code>data/restore_safety/</code> first, because deleting the lifeboat before jumping is generally frowned upon.
     </p>
 
     <form method="post" enctype="multipart/form-data">
@@ -1799,6 +1803,37 @@ VERIFICATION_BODY_HTML = """
             <button type="submit" name="action" value="save_verification">Save Automod Terms</button>
             <button type="submit" name="action" value="add_default_terms" class="secondary-button">Add Default Terms</button>
             <button type="submit" name="action" value="clear_automod_terms" class="danger-button">Clear Automod Terms</button>
+        </div>
+    </div>
+
+    <div class="panel danger-panel">
+        <h2>Application Maintenance</h2>
+        <p class="hint">
+            Cancel/reset stuck active applications. This marks them as cancelled in SQLite, logs the cancellation, deletes the review message if possible,
+            and locks/archives any questioning thread. It does not delete application history.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Cancel by User ID</label>
+                <input name="cancel_user_id" placeholder="123456789012345678">
+            </div>
+
+
+            <div class="wide-field">
+                <label>Cancellation reason</label>
+                <input name="cancel_reason" placeholder="Optional reason for the cancellation log">
+            </div>
+
+            <div class="wide-field">
+                <label>Confirmation</label>
+                <input name="cancel_confirm" placeholder="Type CANCEL">
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="cancel_by_user" class="danger-button">Cancel by User ID</button>
+            <button type="submit" name="action" value="cancel_all_pending" class="danger-button">Cancel All Pending</button>
         </div>
     </div>
 
@@ -2274,249 +2309,6 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return ""
 
-    def make_health_item(
-        label: str,
-        value: str,
-        status_class: str,
-    ) -> dict[str, str]:
-        return {
-            "label": label,
-            "value": value,
-            "class": status_class,
-        }
-
-
-    def get_bot_member(guild: discord.Guild) -> discord.Member | None:
-        if bot.user is None:
-            return None
-
-        member = guild.me
-
-        if member is not None:
-            return member
-
-        return guild.get_member(bot.user.id)
-
-
-    def get_guild_permission_health_item(
-        guild: discord.Guild,
-        label: str,
-        permission_name: str,
-        friendly_name: str,
-    ) -> dict[str, str]:
-        member = get_bot_member(guild)
-
-        if member is None:
-            return make_health_item(
-                label=label,
-                value="Bot member unavailable",
-                status_class="warn",
-            )
-
-        has_permission = bool(
-            getattr(member.guild_permissions, permission_name, False)
-        )
-
-        if has_permission:
-            return make_health_item(
-                label=label,
-                value="OK",
-                status_class="good",
-            )
-
-        return make_health_item(
-            label=label,
-            value=f"Missing {friendly_name}",
-            status_class="bad",
-        )
-
-
-    def get_role_hierarchy_health_item(
-        guild: discord.Guild,
-        label: str,
-        role_id: int | None,
-    ) -> dict[str, str]:
-        if role_id is None:
-            return make_health_item(
-                label=label,
-                value="Not set",
-                status_class="warn",
-            )
-
-        role = guild.get_role(role_id)
-
-        if role is None:
-            return make_health_item(
-                label=label,
-                value=f"Unknown role {role_id}",
-                status_class="bad",
-            )
-
-        member = get_bot_member(guild)
-
-        if member is None:
-            return make_health_item(
-                label=label,
-                value="Bot member unavailable",
-                status_class="warn",
-            )
-
-        if not member.guild_permissions.manage_roles:
-            return make_health_item(
-                label=label,
-                value="Missing Manage Roles",
-                status_class="bad",
-            )
-
-        if role >= member.top_role:
-            return make_health_item(
-                label=label,
-                value=f"Bot role too low for {role.name}",
-                status_class="bad",
-            )
-
-        return make_health_item(
-            label=label,
-            value=f"OK - {role.name}",
-            status_class="good",
-        )
-
-
-    def get_channel_permission_health_item(
-        guild: discord.Guild,
-        label: str,
-        channel_id: int | None,
-        required_permissions: dict[str, str],
-        optional_permissions: dict[str, str] | None = None,
-    ) -> dict[str, str]:
-        optional_permissions = optional_permissions or {}
-
-        if channel_id is None:
-            return make_health_item(
-                label=label,
-                value="Not set",
-                status_class="warn",
-            )
-
-        channel = guild.get_channel(channel_id)
-
-        if not isinstance(channel, discord.TextChannel):
-            return make_health_item(
-                label=label,
-                value=f"Missing channel {channel_id}",
-                status_class="bad",
-            )
-
-        member = get_bot_member(guild)
-
-        if member is None:
-            return make_health_item(
-                label=label,
-                value="Bot member unavailable",
-                status_class="warn",
-            )
-
-        permissions = channel.permissions_for(member)
-
-        missing_required = [
-            friendly_name
-            for permission_name, friendly_name in required_permissions.items()
-            if not bool(getattr(permissions, permission_name, False))
-        ]
-
-        if missing_required:
-            return make_health_item(
-                label=label,
-                value="Missing " + ", ".join(missing_required),
-                status_class="bad",
-            )
-
-        missing_optional = [
-            friendly_name
-            for permission_name, friendly_name in optional_permissions.items()
-            if not bool(getattr(permissions, permission_name, False))
-        ]
-
-        if missing_optional:
-            return make_health_item(
-                label=label,
-                value="OK, but missing " + ", ".join(missing_optional),
-                status_class="warn",
-            )
-
-        return make_health_item(
-            label=label,
-            value="OK",
-            status_class="good",
-        )
-
-
-    def build_sanity_health_items(
-        guild: discord.Guild,
-        review_channel_id: int | None,
-        log_channel_id: int | None,
-        approved_add_role_id: int | None,
-        approved_remove_role_id: int | None,
-    ) -> list[dict[str, str]]:
-        return [
-            get_guild_permission_health_item(
-                guild=guild,
-                label="Role management",
-                permission_name="manage_roles",
-                friendly_name="Manage Roles",
-            ),
-            get_guild_permission_health_item(
-                guild=guild,
-                label="Ban permission",
-                permission_name="ban_members",
-                friendly_name="Ban Members",
-            ),
-            get_guild_permission_health_item(
-                guild=guild,
-                label="Invite tracking permission",
-                permission_name="manage_guild",
-                friendly_name="Manage Server",
-            ),
-            get_role_hierarchy_health_item(
-                guild=guild,
-                label="Give role hierarchy",
-                role_id=approved_add_role_id,
-            ),
-            get_role_hierarchy_health_item(
-                guild=guild,
-                label="Remove role hierarchy",
-                role_id=approved_remove_role_id,
-            ),
-            get_channel_permission_health_item(
-                guild=guild,
-                label="Review channel permissions",
-                channel_id=review_channel_id,
-                required_permissions={
-                    "view_channel": "View Channel",
-                    "send_messages": "Send Messages",
-                    "embed_links": "Embed Links",
-                    "attach_files": "Attach Files",
-                    "read_message_history": "Read Message History",
-                    "create_public_threads": "Create Public Threads",
-                    "send_messages_in_threads": "Send Messages in Threads",
-                },
-                optional_permissions={
-                    "manage_threads": "Manage Threads",
-                },
-            ),
-            get_channel_permission_health_item(
-                guild=guild,
-                label="Log channel permissions",
-                channel_id=log_channel_id,
-                required_permissions={
-                    "view_channel": "View Channel",
-                    "send_messages": "Send Messages",
-                    "embed_links": "Embed Links",
-                    "attach_files": "Attach Files",
-                },
-            ),
-        ]
-
     def display_status(status: str, questioning_thread_id: int | None = None) -> str:
         cleaned = status.lower().strip()
 
@@ -2781,16 +2573,6 @@ def create_webui(bot: discord.Client) -> Flask:
                 "class": "",
             },
         ]
-
-        health_items.extend(
-            build_sanity_health_items(
-                guild=guild,
-                review_channel_id=review_channel_id,
-                log_channel_id=log_channel_id,
-                approved_add_role_id=add_role_id,
-                approved_remove_role_id=remove_role_id,
-            )
-        )
 
         app_stats["health_items"] = health_items
         return app_stats
@@ -3089,7 +2871,52 @@ def create_webui(bot: discord.Client) -> Flask:
 
                 action = request.form.get("action", "save_verification")
 
-                if action == "refresh_invites":
+                if action in {"cancel_by_user", "cancel_all_pending"}:
+                    if bot.user is None:
+                        raise RuntimeError("Bot user is not available yet.")
+
+                    if request.form.get("cancel_confirm", "").strip() != "CANCEL":
+                        raise RuntimeError("Type CANCEL in the confirmation field to cancel applications.")
+
+                    cancellation_reason = request.form.get("cancel_reason", "").strip()
+
+                    if not cancellation_reason:
+                        cancellation_reason = "Manually cancelled from the WebUI."
+
+                    if action == "cancel_by_user":
+                        user_id_text = request.form.get("cancel_user_id", "").strip()
+
+                        if not user_id_text:
+                            raise RuntimeError("Enter a user ID to cancel by user.")
+
+                        try:
+                            user_id = int(user_id_text)
+                        except ValueError as error:
+                            raise RuntimeError("User ID must be a number.") from error
+
+                        result = run_coro_from_flask(
+                            cancel_pending_application_by_user_id(
+                                client=bot,
+                                guild_id=selected_guild.id,
+                                user_id=user_id,
+                                moderator=bot.user,
+                                reason=cancellation_reason,
+                            )
+                        )
+
+                    else:
+                        result = run_coro_from_flask(
+                            cancel_all_pending_applications_for_guild(
+                                client=bot,
+                                guild_id=selected_guild.id,
+                                moderator=bot.user,
+                                reason=cancellation_reason,
+                            )
+                        )
+
+                    message = result.detail
+
+                elif action == "refresh_invites":
                     refreshed = run_coro_from_flask(
                         get_invite_tracker_store().sync_guild_invites(selected_guild)
                     )

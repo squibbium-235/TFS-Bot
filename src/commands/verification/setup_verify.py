@@ -4,7 +4,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from src.commands.verification.verification import VerifyView
+from src.commands.verification.verification import (
+    VerifyView,
+    cancel_all_pending_applications_for_guild,
+    cancel_pending_application_by_user_id,
+)
 from src.services.forms.constants import FORM_KEY_VERIFICATION, VERIFICATION_FORM_PATH
 from src.services.forms.form_store import FormStore
 
@@ -430,6 +434,101 @@ class VerificationConfigCommand(commands.Cog):
             f"Verification automod is `{'enabled' if enabled else 'disabled'}`.\n\n{formatted_terms}",
             ephemeral=True,
         )
+
+
+    @verification_group.command(
+        name="cancel-user",
+        description="Cancel/reset a pending verification application by user ID.",
+    )
+    @app_commands.guild_only()
+    @app_commands.describe(
+        user_id="Discord user ID with a pending application.",
+        confirm="Type CANCEL to confirm.",
+        reason="Optional reason stored in the cancellation log.",
+    )
+    async def verification_cancel_user(
+        self,
+        interaction: discord.Interaction,
+        user_id: str,
+        confirm: str,
+        reason: str | None = None,
+    ) -> None:
+        assert interaction.guild is not None
+
+        if confirm.strip() != "CANCEL":
+            await interaction.response.send_message(
+                "Type `CANCEL` in the confirm field to cancel an application.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            parsed_user_id = int(user_id.strip())
+        except ValueError:
+            await interaction.response.send_message(
+                "That is not a valid Discord user ID.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        cancellation_reason = (
+            reason.strip()
+            if reason and reason.strip()
+            else f"Manually cancelled by {interaction.user}."
+        )
+
+        result = await cancel_pending_application_by_user_id(
+            client=interaction.client,
+            guild_id=interaction.guild.id,
+            user_id=parsed_user_id,
+            moderator=interaction.user,
+            reason=cancellation_reason,
+        )
+
+        await interaction.followup.send(result.detail, ephemeral=True)
+
+    @verification_group.command(
+        name="cancel-all",
+        description="Cancel/reset all pending verification applications in this server.",
+    )
+    @app_commands.guild_only()
+    @app_commands.describe(
+        confirm="Type CANCEL to confirm.",
+        reason="Optional reason stored in every cancellation log.",
+    )
+    async def verification_cancel_all(
+        self,
+        interaction: discord.Interaction,
+        confirm: str,
+        reason: str | None = None,
+    ) -> None:
+        assert interaction.guild is not None
+
+        if confirm.strip() != "CANCEL":
+            await interaction.response.send_message(
+                "Type `CANCEL` in the confirm field to cancel all pending applications.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        cancellation_reason = (
+            reason.strip()
+            if reason and reason.strip()
+            else f"All pending applications manually cancelled by {interaction.user}."
+        )
+
+        result = await cancel_all_pending_applications_for_guild(
+            client=interaction.client,
+            guild_id=interaction.guild.id,
+            moderator=interaction.user,
+            reason=cancellation_reason,
+        )
+
+        await interaction.followup.send(result.detail, ephemeral=True)
 
 
 

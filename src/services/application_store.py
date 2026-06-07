@@ -387,6 +387,28 @@ class ApplicationStore:
 
         return self._row_to_application(row)
 
+    async def list_pending_applications_for_guild(
+        self,
+        guild_id: int,
+    ) -> list[StoredApplication]:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE guild_id = ?
+                AND status = ?
+                ORDER BY submitted_at ASC
+                """,
+                (guild_id, APPLICATION_STATUS_PENDING),
+            )
+
+            rows = await cursor.fetchall()
+
+        return [self._row_to_application(row) for row in rows]
+
     async def list_pending_applications(self) -> list[StoredApplication]:
         async with aiosqlite.connect(self.database_path) as database:
             database.row_factory = aiosqlite.Row

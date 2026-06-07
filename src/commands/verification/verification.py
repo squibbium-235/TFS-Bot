@@ -493,6 +493,9 @@ def get_log_colour_for_status(status: str) -> discord.Colour:
     if cleaned == "left":
         return discord.Colour.dark_grey()
 
+    if cleaned == "cancelled":
+        return discord.Colour.dark_grey()
+
     return discord.Colour.blurple()
 
 
@@ -504,6 +507,7 @@ def should_show_log_reason(status: str, reason: str | None) -> bool:
         "denied",
         "kicked",
         "banned",
+        "cancelled",
     }
 
 
@@ -569,6 +573,13 @@ def build_application_log_embeds(
             inline=False,
         )
 
+    if status.lower().strip() == "cancelled":
+        first_embed.add_field(
+            name="Result",
+            value="Application was manually cancelled/reset before review completed.",
+            inline=False,
+        )
+
     if questioning_thread_url:
         first_embed.add_field(
             name="Questioning Thread",
@@ -577,7 +588,7 @@ def build_application_log_embeds(
         )
 
     first_embed.set_footer(
-        text=f"User ID: {user.id} | Application ID: {application_id}"
+        text=f"User ID: {user.id}"
     )
 
     embeds.append(first_embed)
@@ -1782,6 +1793,127 @@ async def handle_member_left_during_verification(
 
     await delete_review_message(client, application)
     await archive_question_thread(client, application, "Left")
+
+@dataclass(frozen=True)
+class ApplicationMaintenanceResult:
+    cancelled_count: int
+    inspected_count: int
+    detail: str
+
+
+async def cancel_pending_application(
+    client: discord.Client,
+    application: StoredApplication,
+    moderator: discord.User | discord.Member,
+    reason: str,
+) -> bool:
+    if application.status != APPLICATION_STATUS_PENDING:
+        return False
+
+    application_store = get_application_store(client)
+
+    if application_store is None:
+        return False
+
+    log_message = await log_application(
+        client=client,
+        application=application,
+        status="Cancelled",
+        moderator=moderator,
+        reason=reason,
+        dm_sent=None,
+    )
+
+    if log_message is not None:
+        await application_store.set_log_message(
+            application_id=application.id,
+            log_channel_id=log_message.channel.id,
+            log_message_id=log_message.id,
+        )
+
+    await application_store.mark_actioned(
+        application_id=application.id,
+        status=APPLICATION_STATUS_CANCELLED,
+        moderator_id=moderator.id,
+        reason=reason,
+        dm_sent=None,
+    )
+
+    await delete_review_message(client, application)
+    await archive_question_thread(client, application, "Cancelled")
+
+    return True
+
+
+async def cancel_pending_application_by_user_id(
+    client: discord.Client,
+    guild_id: int,
+    user_id: int,
+    moderator: discord.User | discord.Member,
+    reason: str,
+) -> ApplicationMaintenanceResult:
+    application_store = get_application_store(client)
+
+    if application_store is None:
+        return ApplicationMaintenanceResult(0, 0, "Application database is not available.")
+
+    application = await application_store.get_pending_application_for_user(
+        guild_id=guild_id,
+        user_id=user_id,
+    )
+
+    if application is None:
+        return ApplicationMaintenanceResult(0, 0, "No pending application found for that user ID.")
+
+    cancelled = await cancel_pending_application(
+        client=client,
+        application=application,
+        moderator=moderator,
+        reason=reason,
+    )
+
+    return ApplicationMaintenanceResult(
+        cancelled_count=1 if cancelled else 0,
+        inspected_count=1,
+        detail=(
+            f"Cancelled pending application for user `{user_id}`."
+            if cancelled
+            else f"No pending application needed cancelling for user `{user_id}`."
+        ),
+    )
+
+
+async def cancel_all_pending_applications_for_guild(
+    client: discord.Client,
+    guild_id: int,
+    moderator: discord.User | discord.Member,
+    reason: str,
+) -> ApplicationMaintenanceResult:
+    application_store = get_application_store(client)
+
+    if application_store is None:
+        return ApplicationMaintenanceResult(0, 0, "Application database is not available.")
+
+    applications = await application_store.list_pending_applications_for_guild(guild_id)
+    cancelled_count = 0
+
+    for application in applications:
+        cancelled = await cancel_pending_application(
+            client=client,
+            application=application,
+            moderator=moderator,
+            reason=reason,
+        )
+
+        if cancelled:
+            cancelled_count += 1
+
+    return ApplicationMaintenanceResult(
+        cancelled_count=cancelled_count,
+        inspected_count=len(applications),
+        detail=f"Cancelled {cancelled_count} of {len(applications)} pending application(s).",
+    )
+
 
 async def complete_application_action(
     interaction: discord.Interaction,
