@@ -1509,8 +1509,7 @@ PERMISSIONS_BODY_HTML = """
 <div class="panel">
     <h2>Permissions</h2>
     <p class="hint">
-        This mirrors the <code>/permissions</code> commands. The WebUI is just a less painful control panel,
-        because apparently slash commands were not invented for tables.
+        This mirrors the <code>/permissions</code> commands. The WebUI is just a less painful control panel.
     </p>
 
     <form method="get" action="{{ url_for('permissions_page') }}">
@@ -1532,7 +1531,7 @@ PERMISSIONS_BODY_HTML = """
         <p class="hint">
             Choose which Discord roles can access the WebUI. Owner roles can change settings, restore backups,
             manage permissions, and cancel active applications. Viewer roles can only view the Overview page.
-            If nothing is saved here yet, the bot falls back to the role IDs in <code>.env</code>.
+            If nothing is saved here, the bot falls back to the role IDs in <code>.env</code>.
         </p>
 
         <div class="stat-grid">
@@ -1708,7 +1707,7 @@ BACKUPS_BODY_HTML = """
 
     <p class="hint">
         Restoring replaces the current database with the uploaded backup.
-        The current database and uploads are copied to <code>data/restore_safety/</code> first, because deleting the lifeboat before jumping is generally frowned upon.
+        The current database and uploads are copied to <code>data/restore_safety/</code> first, because not testing the lifeboat before using that badass looking slide is generally a bad idea.
     </p>
 
     <form method="post" enctype="multipart/form-data">
@@ -1806,7 +1805,7 @@ FORMS_BODY_HTML = """
 <div class="panel">
     <h2>Forms</h2>
     <p class="hint">
-        Create and edit Discord modal forms from here. Question labels are limited by Discord, because apparently even a text box needs strict parenting.
+        Create and edit Discord modal forms from here. Question labels are limited by Discord.
     </p>
 
     <form method="get" action="{{ url_for('forms_page') }}">
@@ -1847,11 +1846,6 @@ FORMS_BODY_HTML = """
                 <input name="new_form_title" placeholder="Staff Application" maxlength="45" required>
             </div>
 
-            <div class="wide-field">
-                <label>Custom ID prefix</label>
-                <input name="new_custom_id_prefix" placeholder="Leave blank for form:&lt;key&gt;" maxlength="60">
-                <p class="hint">Most people should leave this blank unless they enjoy inventing future debugging tasks.</p>
-            </div>
         </div>
 
         <div class="button-row">
@@ -1894,6 +1888,7 @@ FORMS_BODY_HTML = """
 
         <div class="button-row">
             <button type="submit">Save Form</button>
+            <a class="muted-link" href="{{ url_for('forms_viewer_page', guild_id=selected_guild_id, form_key=selected_form_key) }}">Open Form Viewer</a>
         </div>
     </form>
 </div>
@@ -1902,7 +1897,7 @@ FORMS_BODY_HTML = """
     <h2>Verification Form</h2>
     <p class="hint">
         Current verification form: <code>{{ verification_form_key }}</code>.
-        The verification panel will use whichever form is selected here. Existing posted panels do not magically rewrite themselves, obviously.
+        The verification panel will use whichever form is selected here. Existing posted panels do not magically rewrite themselves.
     </p>
 
     <form method="post" action="{{ url_for('forms_page') }}">
@@ -2127,116 +2122,85 @@ FORMS_BODY_HTML = """
 {% endif %}
 """
 
-BACKUPS_BODY_HTML = """
+FORM_VIEWER_BODY_HTML = """
 <div class="panel">
-    <h2>Encrypted Backups</h2>
+    <h2>Form Viewer</h2>
     <p class="hint">
-        Create an encrypted <code>.tfsbackup</code> file containing the bot database and uploads.
-        The password is not stored, because storing the key beside the lock would be impressively stupid.
+        Read-only view of the selected form. This does not edit, publish, duplicate, disable, export, or do any other surprise nonsense.
     </p>
 
     <div class="health-list">
         <div class="health-item">
-            <small>Database</small>
-            <span>{{ database_path }}</span>
+            <small>Form</small>
+            <span><code>{{ form_key }}</code></span>
         </div>
 
         <div class="health-item">
-            <small>Database Size</small>
-            <span>{{ database_size }}</span>
+            <small>Title</small>
+            <span>{{ form_title }}</span>
         </div>
 
         <div class="health-item">
-            <small>Uploads Folder</small>
-            <span>{{ uploads_state }}</span>
+            <small>Custom ID Prefix</small>
+            <span><code>{{ custom_id_prefix }}</code></span>
         </div>
 
         <div class="health-item">
-            <small>Backup Extension</small>
-            <span><code>.tfsbackup</code></span>
+            <small>Questions</small>
+            <span>{{ question_count }} question(s), {{ page_count }} modal page(s)</span>
         </div>
     </div>
+
+    <p class="hint" style="margin-top: 14px;">
+        <a class="muted-link" href="{{ url_for('forms_page', guild_id=selected_guild_id, form_key=form_key) }}">Back to Forms</a>
+    </p>
 </div>
 
-<div class="panel">
-    <h2>Create Backup</h2>
+{% if pages %}
+    {% for page in pages %}
+        <div class="panel">
+            <h2>Modal Page {{ page.number }}</h2>
+            <p class="hint">
+                Discord modals can contain up to 5 questions, because apparently even questions need rationing.
+            </p>
 
-    <form method="post">
-        <input type="hidden" name="action" value="create_backup">
-
-        <label>Backup Password</label>
-        <input
-            type="password"
-            name="password"
-            autocomplete="new-password"
-            required
-            minlength="10"
-            placeholder="Use something long and not rubbish"
-        >
-
-        <label>Confirm Backup Password</label>
-        <input
-            type="password"
-            name="confirm_password"
-            autocomplete="new-password"
-            required
-            minlength="10"
-        >
-
-        <label>
-            <input
-                type="checkbox"
-                name="include_env"
-                value="1"
-                style="width: auto; margin-right: 8px;"
-            >
-            Include <code>.env</code> file
-        </label>
-
-        <p class="hint">
-            Including <code>.env</code> means the backup may contain the Discord bot token.
-            Only do this if the backup password is strong and the owner understands that losing the password means losing access to the backup.
-            Human civilisation really did build all this just to move one bot safely.
-        </p>
-
-        <div class="button-row">
-            <button type="submit">Create Encrypted Backup</button>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Key</th>
+                        <th>Question</th>
+                        <th>Style</th>
+                        <th>Required</th>
+                        <th>Limits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for question in page.questions %}
+                        <tr>
+                            <td>{{ question.number }}</td>
+                            <td><code>{{ question.key }}</code></td>
+                            <td>
+                                <strong>{{ question.label }}</strong>
+                                {% if question.placeholder %}
+                                    <br><span class="hint">Placeholder: {{ question.placeholder }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ question.style }}</td>
+                            <td><span class="pill {{ 'good' if question.required else 'warn' }}">{{ 'Yes' if question.required else 'No' }}</span></td>
+                            <td>{{ question.limits }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </form>
-</div>
-
-<div class="panel">
-    <h2>What This Backup Contains</h2>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Path</th>
-                <th>Included</th>
-                <th>Purpose</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>data/tfsbot.sqlite3</code></td>
-                <td><span class="pill good">Yes</span></td>
-                <td>Main bot database: applications, forms, permissions, settings, templates.</td>
-            </tr>
-            <tr>
-                <td><code>data/uploads/</code></td>
-                <td><span class="pill good">Yes, if it exists</span></td>
-                <td>Uploaded WebUI images and other stored files.</td>
-            </tr>
-            <tr>
-                <td><code>.env</code></td>
-                <td><span class="pill warn">Optional</span></td>
-                <td>Bot token and runtime config. Sensitive, obviously, because why make anything simple?</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+    {% endfor %}
+{% else %}
+    <div class="panel">
+        <p class="hint">This form has no questions yet.</p>
+    </div>
+{% endif %}
 """
-
 
 ACCESS_DENIED_BODY_HTML = """
 <div class="panel">
@@ -2254,7 +2218,7 @@ VERIFICATION_BODY_HTML = """
     <h2>Verification</h2>
     <p class="hint">
         Manage verification channels, approval roles, invite tracking, and application automod from here.
-        Slash commands can still do the same things, because apparently every admin panel needs two doors.
+        Slash commands can still do the same things, but this is cooler.
     </p>
 
     <form method="get" action="{{ url_for('verification_page') }}">
@@ -4258,6 +4222,95 @@ def create_webui(bot: discord.Client) -> Flask:
                 message=message,
                 error=error,
             )
+
+    @app.route("/forms/view", methods=["GET"])
+    def forms_viewer_page():
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
+
+        selected_guild = get_selected_guild(request.args.get("guild_id"))
+        selected_form_key = clean_form_key(request.args.get("form_key", ""))
+        error: str | None = None
+
+        try:
+            if selected_guild is None:
+                raise RuntimeError("No server selected.")
+
+            if not selected_form_key:
+                raise RuntimeError("No form selected.")
+
+            form_store = get_form_store()
+            form_config = run_coro_from_flask(
+                form_store.get_form_config(
+                    guild_id=selected_guild.id,
+                    form_key=selected_form_key,
+                    fallback_json_path=VERIFICATION_FORM_PATH,
+                )
+            )
+
+            pages: list[dict[str, Any]] = []
+
+            for page_index, page_questions in enumerate(form_config.pages(), start=1):
+                page_rows: list[dict[str, Any]] = []
+
+                for question_index, question in enumerate(page_questions, start=1):
+                    min_text = str(question.min_length) if question.min_length is not None else "No min"
+                    max_text = str(question.max_length) if question.max_length is not None else "No max"
+
+                    page_rows.append(
+                        {
+                            "number": question_index,
+                            "key": question.key,
+                            "label": question.label,
+                            "style": "Short answer" if question.style == discord.TextStyle.short else "Paragraph",
+                            "required": question.required,
+                            "placeholder": question.placeholder,
+                            "limits": f"{min_text} / {max_text}",
+                        }
+                    )
+
+                pages.append(
+                    {
+                        "number": page_index,
+                        "questions": page_rows,
+                    }
+                )
+
+            return render_admin_page(
+                title="TFSBot Form Viewer",
+                active_page="forms",
+                body_template=FORM_VIEWER_BODY_HTML,
+                selected_guild_id=str(selected_guild.id),
+                form_key=selected_form_key,
+                form_title=form_config.title,
+                custom_id_prefix=form_config.custom_id_prefix,
+                question_count=len(form_config.questions),
+                page_count=len(pages),
+                pages=pages,
+                message=None,
+                error=None,
+            )
+
+        except Exception as caught_error:
+            error = str(caught_error)
+
+            return render_admin_page(
+                title="TFSBot Form Viewer",
+                active_page="forms",
+                body_template=FORM_VIEWER_BODY_HTML,
+                selected_guild_id=str(selected_guild.id) if selected_guild else "",
+                form_key=selected_form_key,
+                form_title="Unknown",
+                custom_id_prefix="Unknown",
+                question_count=0,
+                page_count=0,
+                pages=[],
+                message=None,
+                error=error,
+            )
+
 
     @app.route("/verification", methods=["GET", "POST"])
     def verification_page():
