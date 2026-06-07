@@ -35,6 +35,7 @@ from src.services.dm_template_store import (
 )
 from src.services.forms.constants import FORM_KEY_VERIFICATION, VERIFICATION_FORM_PATH
 from src.services.backup_service import BackupError, BackupService
+from src.commands.forms.form_runtime import GenericFormStartView
 from src.commands.verification.verification import (
     VerifyView,
     cancel_all_pending_applications_for_guild,
@@ -518,6 +519,7 @@ EMBED_FORM_HTML = """
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
+                <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
                 <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
                 <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
@@ -1282,6 +1284,7 @@ ADMIN_PAGE_HTML = """
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
+                <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
                 <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
                 <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
@@ -1525,6 +1528,56 @@ PERMISSIONS_BODY_HTML = """
     <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
 
     <div class="panel">
+        <h2>WebUI Access</h2>
+        <p class="hint">
+            Choose which Discord roles can access the WebUI. Owner roles can change settings, restore backups,
+            manage permissions, and cancel active applications. Viewer roles can only view the Overview page.
+            If nothing is saved here yet, the bot falls back to the role IDs in <code>.env</code>.
+        </p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>Discord OAuth</strong>
+                <span class="pill {{ webui_access.discord_auth_class }}">{{ webui_access.discord_auth_status }}</span>
+            </div>
+            <div class="stat-card">
+                <strong>Password fallback</strong>
+                <span class="pill {{ webui_access.password_class }}">{{ webui_access.password_status }}</span>
+            </div>
+            <div class="stat-card">
+                <strong>Owner roles</strong>
+                {{ webui_access.owner_count }} configured via {{ webui_access.owner_source }}
+            </div>
+            <div class="stat-card">
+                <strong>Viewer roles</strong>
+                {{ webui_access.viewer_count }} configured via {{ webui_access.viewer_source }}
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>WebUI owner roles</label>
+                <select name="webui_owner_role_ids" multiple size="8">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.owner_role_ids else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="hint">Hold Ctrl to select more than one role. Owner access should be kept very limited, because buttons are powerful and humans are inventive.</p>
+            </div>
+
+            <div>
+                <label>WebUI viewer roles</label>
+                <select name="webui_viewer_role_ids" multiple size="8">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.viewer_role_ids else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="hint">Viewer access can see the Overview page but cannot change settings or use destructive tools.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
         <h2>Permission Roles</h2>
 
         <div class="grid-2">
@@ -1742,6 +1795,442 @@ BACKUPS_BODY_HTML = """
                 <td><code>.env</code></td>
                 <td><span class="pill warn">Optional</span></td>
                 <td>Bot token and runtime config. Sensitive, obviously!</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+"""
+
+
+FORMS_BODY_HTML = """
+<div class="panel">
+    <h2>Forms</h2>
+    <p class="hint">
+        Create and edit Discord modal forms from here. Question labels are limited by Discord, because apparently even a text box needs strict parenting.
+    </p>
+
+    <form method="get" action="{{ url_for('forms_page') }}">
+        <label>Server</label>
+        <select name="guild_id" onchange="this.form.submit()">
+            {% for guild in guilds %}
+                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
+            {% endfor %}
+        </select>
+
+        {% if selected_guild_id %}
+            <label>Form</label>
+            <select name="form_key" onchange="this.form.submit()">
+                {% for form in forms %}
+                    <option value="{{ form.key }}" {{ 'selected' if form.key == selected_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
+                {% endfor %}
+            </select>
+        {% endif %}
+    </form>
+</div>
+
+{% if selected_guild_id %}
+<div class="panel">
+    <h2>Create Form</h2>
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="create_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Form key</label>
+                <input name="new_form_key" placeholder="staff_app" maxlength="40" required>
+                <p class="hint">Lowercase letters, numbers, and underscores only.</p>
+            </div>
+
+            <div>
+                <label>Title</label>
+                <input name="new_form_title" placeholder="Staff Application" maxlength="45" required>
+            </div>
+
+            <div class="wide-field">
+                <label>Custom ID prefix</label>
+                <input name="new_custom_id_prefix" placeholder="Leave blank for form:&lt;key&gt;" maxlength="60">
+                <p class="hint">Most people should leave this blank unless they enjoy inventing future debugging tasks.</p>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Create Form</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{% if selected_form %}
+<div class="panel">
+    <h2>Edit Form</h2>
+
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="save_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Form key</label>
+                <input value="{{ selected_form_key }}" disabled>
+            </div>
+
+            <div>
+                <label>Question count</label>
+                <input value="{{ questions|length }} question(s), {{ modal_pages }} modal page(s)" disabled>
+            </div>
+
+            <div>
+                <label>Title</label>
+                <input name="form_title" value="{{ selected_form.title }}" maxlength="45" required>
+            </div>
+
+            <div>
+                <label>Custom ID prefix</label>
+                <input name="custom_id_prefix" value="{{ selected_form.custom_id_prefix }}" maxlength="60" required>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Save Form</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel">
+    <h2>Verification Form</h2>
+    <p class="hint">
+        Current verification form: <code>{{ verification_form_key }}</code>.
+        The verification panel will use whichever form is selected here. Existing posted panels do not magically rewrite themselves, obviously.
+    </p>
+
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="set_verification_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="button-row">
+            <button type="submit">Use This Form For Verification</button>
+        </div>
+    </form>
+
+    {% if selected_form_key == 'verification' %}
+        <form method="post" action="{{ url_for('forms_page') }}">
+            <input type="hidden" name="action" value="reset_verification_form">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+            <label>Reset confirmation</label>
+            <input name="reset_confirm" placeholder="Type RESET">
+
+            <div class="button-row">
+                <button type="submit" class="danger-button">Reset Built-In Verification Form</button>
+            </div>
+        </form>
+    {% endif %}
+</div>
+
+<div class="panel">
+    <h2>Add Question</h2>
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="add_question">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Question key</label>
+                <input name="question_key" placeholder="age" maxlength="80" required>
+            </div>
+
+            <div>
+                <label>Style</label>
+                <select name="question_style">
+                    <option value="short">Short answer</option>
+                    <option value="paragraph">Paragraph</option>
+                </select>
+            </div>
+
+            <div class="wide-field">
+                <label>Question label</label>
+                <input name="question_label" maxlength="45" required>
+            </div>
+
+            <div class="wide-field">
+                <label>Placeholder</label>
+                <input name="question_placeholder" maxlength="100">
+            </div>
+
+            <div>
+                <label>Minimum length</label>
+                <input type="number" name="question_min_length" min="0">
+            </div>
+
+            <div>
+                <label>Maximum length</label>
+                <input type="number" name="question_max_length" min="1" max="4000">
+            </div>
+
+            <div class="wide-field">
+                <label>
+                    <input type="checkbox" name="question_required" checked style="width: auto; margin-right: 8px;">
+                    Required
+                </label>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Add Question</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel">
+    <h2>Questions</h2>
+
+    {% if questions %}
+        <form method="post" action="{{ url_for('forms_page') }}">
+            <input type="hidden" name="action" value="save_questions">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Key</th>
+                        <th>Question</th>
+                        <th>Style</th>
+                        <th>Required</th>
+                        <th>Lengths</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for question in questions %}
+                        <tr>
+                            <td style="width: 90px;">
+                                <input type="hidden" name="question_key[]" value="{{ question.question_key }}">
+                                <input type="number" name="sort_order_{{ question.question_key }}" min="1" value="{{ question.sort_order }}">
+                            </td>
+                            <td><code>{{ question.question_key }}</code></td>
+                            <td>
+                                <input name="label_{{ question.question_key }}" value="{{ question.label }}" maxlength="45" required>
+                                <label>Placeholder</label>
+                                <input name="placeholder_{{ question.question_key }}" value="{{ question.placeholder or '' }}" maxlength="100">
+                            </td>
+                            <td>
+                                <select name="style_{{ question.question_key }}">
+                                    <option value="short" {{ 'selected' if question.style == 'short' else '' }}>Short</option>
+                                    <option value="paragraph" {{ 'selected' if question.style == 'paragraph' else '' }}>Paragraph</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="checkbox" name="required_{{ question.question_key }}" {{ 'checked' if question.required else '' }} style="width: auto;">
+                            </td>
+                            <td>
+                                <input type="number" name="min_length_{{ question.question_key }}" min="0" value="{{ question.min_length if question.min_length is not none else '' }}" placeholder="Min">
+                                <input type="number" name="max_length_{{ question.question_key }}" min="1" max="4000" value="{{ question.max_length if question.max_length is not none else '' }}" placeholder="Max" style="margin-top: 8px;">
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="button-row">
+                <button type="submit">Save Question Changes</button>
+            </div>
+        </form>
+    {% else %}
+        <p class="hint">This form has no questions yet. Peaceful, but not very useful.</p>
+    {% endif %}
+</div>
+
+{% if questions %}
+<div class="panel danger-panel">
+    <h2>Delete Question</h2>
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="delete_question">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Question</label>
+        <select name="delete_question_key">
+            {% for question in questions %}
+                <option value="{{ question.question_key }}">{{ question.question_key }} - {{ question.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Confirmation</label>
+        <input name="delete_question_confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Question</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="panel">
+    <h2>Publish Form Panel</h2>
+    <p class="hint">
+        This posts a general form button panel. Verification panels are still posted from the Verification page.
+    </p>
+
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="publish_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Channel</label>
+        <select name="publish_channel_id" required>
+            {% for channel in text_channels %}
+                <option value="{{ channel.id }}">#{{ channel.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Panel title</label>
+        <input name="publish_title" value="{{ selected_form.title }}" required>
+
+        <label>Panel description</label>
+        <textarea name="publish_description" rows="4" required>Click the button below to complete this form.</textarea>
+
+        <div class="button-row">
+            <button type="submit">Publish Form Panel</button>
+        </div>
+    </form>
+</div>
+
+{% if selected_form_key != 'verification' %}
+<div class="panel danger-panel">
+    <h2>Delete Form</h2>
+    <p class="hint">Deleting a form removes its questions and published panel registrations. Submissions may remain in history. Computers love half-memories.</p>
+
+    <form method="post" action="{{ url_for('forms_page') }}">
+        <input type="hidden" name="action" value="delete_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Confirmation</label>
+        <input name="delete_form_confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Form</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% elif selected_guild_id %}
+<div class="panel"><p class="hint">No form selected yet.</p></div>
+{% else %}
+<div class="panel"><p>No servers available.</p></div>
+{% endif %}
+"""
+
+BACKUPS_BODY_HTML = """
+<div class="panel">
+    <h2>Encrypted Backups</h2>
+    <p class="hint">
+        Create an encrypted <code>.tfsbackup</code> file containing the bot database and uploads.
+        The password is not stored, because storing the key beside the lock would be impressively stupid.
+    </p>
+
+    <div class="health-list">
+        <div class="health-item">
+            <small>Database</small>
+            <span>{{ database_path }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Database Size</small>
+            <span>{{ database_size }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Uploads Folder</small>
+            <span>{{ uploads_state }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Backup Extension</small>
+            <span><code>.tfsbackup</code></span>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Create Backup</h2>
+
+    <form method="post">
+        <input type="hidden" name="action" value="create_backup">
+
+        <label>Backup Password</label>
+        <input
+            type="password"
+            name="password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+            placeholder="Use something long and not rubbish"
+        >
+
+        <label>Confirm Backup Password</label>
+        <input
+            type="password"
+            name="confirm_password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+        >
+
+        <label>
+            <input
+                type="checkbox"
+                name="include_env"
+                value="1"
+                style="width: auto; margin-right: 8px;"
+            >
+            Include <code>.env</code> file
+        </label>
+
+        <p class="hint">
+            Including <code>.env</code> means the backup may contain the Discord bot token.
+            Only do this if the backup password is strong and the owner understands that losing the password means losing access to the backup.
+            Human civilisation really did build all this just to move one bot safely.
+        </p>
+
+        <div class="button-row">
+            <button type="submit">Create Encrypted Backup</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel">
+    <h2>What This Backup Contains</h2>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Path</th>
+                <th>Included</th>
+                <th>Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>data/tfsbot.sqlite3</code></td>
+                <td><span class="pill good">Yes</span></td>
+                <td>Main bot database: applications, forms, permissions, settings, templates.</td>
+            </tr>
+            <tr>
+                <td><code>data/uploads/</code></td>
+                <td><span class="pill good">Yes, if it exists</span></td>
+                <td>Uploaded WebUI images and other stored files.</td>
+            </tr>
+            <tr>
+                <td><code>.env</code></td>
+                <td><span class="pill warn">Optional</span></td>
+                <td>Bot token and runtime config. Sensitive, obviously, because why make anything simple?</td>
             </tr>
         </tbody>
     </table>
@@ -2074,7 +2563,206 @@ def create_webui(bot: discord.Client) -> Flask:
             access_token=access_token,
         )
 
+    def get_webui_access_database_path() -> Path:
+        application_store = getattr(bot, "application_store", None)
+
+        if application_store is not None:
+            raw_path = getattr(application_store, "database_path", None)
+
+            if raw_path is not None:
+                return Path(raw_path)
+
+        return Path(getattr(bot.config, "application_db_path", "data/tfsbot.sqlite3"))
+
+    def ensure_webui_access_tables() -> None:
+        database_path = get_webui_access_database_path()
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with sqlite3.connect(database_path) as database:
+            database.execute(
+                """
+                CREATE TABLE IF NOT EXISTS webui_access_roles (
+                    guild_id INTEGER NOT NULL,
+                    access_level TEXT NOT NULL,
+                    role_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (guild_id, access_level, role_id)
+                )
+                """
+            )
+
+    def get_stored_webui_access_role_ids(
+        guild_id: int,
+        access_level: str,
+    ) -> tuple[int, ...]:
+        ensure_webui_access_tables()
+
+        with sqlite3.connect(get_webui_access_database_path()) as database:
+            rows = database.execute(
+                """
+                SELECT role_id
+                FROM webui_access_roles
+                WHERE guild_id = ?
+                AND access_level = ?
+                ORDER BY role_id ASC
+                """,
+                (guild_id, access_level),
+            ).fetchall()
+
+        return tuple(int(row[0]) for row in rows)
+
+    def set_stored_webui_access_role_ids(
+        guild_id: int,
+        access_level: str,
+        role_ids: list[int],
+    ) -> None:
+        ensure_webui_access_tables()
+
+        cleaned_role_ids = sorted(set(role_ids))
+        now = datetime.now(timezone.utc).isoformat()
+
+        with sqlite3.connect(get_webui_access_database_path()) as database:
+            database.execute(
+                """
+                DELETE FROM webui_access_roles
+                WHERE guild_id = ?
+                AND access_level = ?
+                """,
+                (guild_id, access_level),
+            )
+
+            database.executemany(
+                """
+                INSERT INTO webui_access_roles (
+                    guild_id, access_level, role_id, created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (guild_id, access_level, role_id, now)
+                    for role_id in cleaned_role_ids
+                ],
+            )
+
+    def get_env_webui_owner_role_ids() -> tuple[int, ...]:
+        owner_role_ids = tuple(
+            getattr(bot.config, "webui_discord_owner_role_ids", ())
+        )
+
+        if owner_role_ids:
+            return owner_role_ids
+
+        return tuple(
+            getattr(bot.config, "webui_discord_allowed_role_ids", ())
+        )
+
+    def get_env_webui_viewer_role_ids() -> tuple[int, ...]:
+        return tuple(
+            getattr(bot.config, "webui_discord_viewer_role_ids", ())
+        )
+
+    def get_effective_webui_access_role_ids(
+        guild_id: int,
+        access_level: str,
+    ) -> tuple[int, ...]:
+        try:
+            stored_role_ids = get_stored_webui_access_role_ids(
+                guild_id=guild_id,
+                access_level=access_level,
+            )
+        except sqlite3.Error:
+            stored_role_ids = ()
+
+        if stored_role_ids:
+            return stored_role_ids
+
+        if access_level == "owner":
+            return get_env_webui_owner_role_ids()
+
+        if access_level == "viewer":
+            return get_env_webui_viewer_role_ids()
+
+        return ()
+
+    def get_effective_webui_access_source(
+        guild_id: int,
+        access_level: str,
+    ) -> str:
+        try:
+            stored_role_ids = get_stored_webui_access_role_ids(
+                guild_id=guild_id,
+                access_level=access_level,
+            )
+        except sqlite3.Error:
+            stored_role_ids = ()
+
+        if stored_role_ids:
+            return "SQLite"
+
+        if access_level == "owner" and get_env_webui_owner_role_ids():
+            return ".env fallback"
+
+        if access_level == "viewer" and get_env_webui_viewer_role_ids():
+            return ".env fallback"
+
+        return "Not set"
+
+    def parse_role_ids_from_form(field_name: str) -> list[int]:
+        role_ids: list[int] = []
+
+        for raw_role_id in request.form.getlist(field_name):
+            raw_role_id = raw_role_id.strip()
+
+            if not raw_role_id:
+                continue
+
+            role_ids.append(int(raw_role_id))
+
+        return sorted(set(role_ids))
+
+    def build_webui_access_context(guild: discord.Guild | None) -> dict[str, Any]:
+        if guild is None:
+            return {
+                "owner_role_ids": [],
+                "viewer_role_ids": [],
+                "owner_source": "Not set",
+                "viewer_source": "Not set",
+                "discord_auth_status": "Disabled",
+                "discord_auth_class": "warn",
+                "password_status": "Disabled",
+                "password_class": "warn",
+                "owner_count": 0,
+                "viewer_count": 0,
+            }
+
+        owner_role_ids = get_effective_webui_access_role_ids(
+            guild_id=guild.id,
+            access_level="owner",
+        )
+        viewer_role_ids = get_effective_webui_access_role_ids(
+            guild_id=guild.id,
+            access_level="viewer",
+        )
+
+        return {
+            "owner_role_ids": [str(role_id) for role_id in owner_role_ids],
+            "viewer_role_ids": [str(role_id) for role_id in viewer_role_ids],
+            "owner_source": get_effective_webui_access_source(guild.id, "owner"),
+            "viewer_source": get_effective_webui_access_source(guild.id, "viewer"),
+            "discord_auth_status": "Enabled" if is_discord_login_enabled() else "Disabled",
+            "discord_auth_class": "good" if is_discord_login_enabled() else "warn",
+            "password_status": "Enabled" if is_password_login_enabled() else "Disabled",
+            "password_class": "good" if is_password_login_enabled() else "warn",
+            "owner_count": len(owner_role_ids),
+            "viewer_count": len(viewer_role_ids),
+        }
+
     def get_matching_discord_webui_role(member_data: dict[str, Any]) -> str | None:
+        guild_id = bot.config.webui_discord_guild_id
+
+        if guild_id is None:
+            return None
+
         member_role_ids = {
             str(role_id)
             for role_id in member_data.get("roles", [])
@@ -2082,23 +2770,21 @@ def create_webui(bot: discord.Client) -> Flask:
 
         owner_role_ids = {
             str(role_id)
-            for role_id in getattr(bot.config, "webui_discord_owner_role_ids", ())
+            for role_id in get_effective_webui_access_role_ids(
+                guild_id=guild_id,
+                access_level="owner",
+            )
         }
 
         viewer_role_ids = {
             str(role_id)
-            for role_id in getattr(bot.config, "webui_discord_viewer_role_ids", ())
-        }
-
-        legacy_allowed_role_ids = {
-            str(role_id)
-            for role_id in getattr(bot.config, "webui_discord_allowed_role_ids", ())
+            for role_id in get_effective_webui_access_role_ids(
+                guild_id=guild_id,
+                access_level="viewer",
+            )
         }
 
         if owner_role_ids.intersection(member_role_ids):
-            return "owner"
-
-        if legacy_allowed_role_ids.intersection(member_role_ids):
             return "owner"
 
         if viewer_role_ids.intersection(member_role_ids):
@@ -2423,6 +3109,20 @@ def create_webui(bot: discord.Client) -> Flask:
             terms.append(stripped)
 
         return terms
+
+    def parse_optional_int(raw_value: str | None) -> int | None:
+        if raw_value is None:
+            return None
+
+        stripped = raw_value.strip()
+
+        if not stripped:
+            return None
+
+        return int(stripped)
+
+    def clean_form_key(raw_value: str) -> str:
+        return raw_value.lower().strip()
 
     async def get_guild_forms(guild: discord.Guild) -> list[dict[str, str]]:
         form_store = get_form_store()
@@ -3214,6 +3914,351 @@ def create_webui(bot: discord.Client) -> Flask:
                 error=error,
             )
 
+    @app.route("/forms", methods=["GET", "POST"])
+    def forms_page():
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
+
+        message: str | None = None
+        error: str | None = None
+
+        selected_guild = get_selected_guild(
+            request.form.get("guild_id") if request.method == "POST" else request.args.get("guild_id")
+        )
+
+        selected_form_key = clean_form_key(
+            request.form.get("form_key") if request.method == "POST" else request.args.get("form_key", "")
+        )
+
+        try:
+            form_store = get_form_store()
+            settings_store = get_guild_settings_store()
+
+            if request.method == "POST":
+                if selected_guild is None:
+                    raise RuntimeError("No server selected.")
+
+                action = request.form.get("action", "")
+
+                if action == "create_form":
+                    new_form_key = clean_form_key(request.form.get("new_form_key", ""))
+                    new_title = request.form.get("new_form_title", "").strip()
+                    new_prefix = request.form.get("new_custom_id_prefix", "").strip() or None
+
+                    run_coro_from_flask(
+                        form_store.create_form(
+                            guild_id=selected_guild.id,
+                            form_key=new_form_key,
+                            title=new_title,
+                            custom_id_prefix=new_prefix,
+                        )
+                    )
+
+                    selected_form_key = new_form_key
+                    message = f"Created form `{new_form_key}`."
+
+                elif action == "save_form":
+                    if not selected_form_key:
+                        raise RuntimeError("No form selected.")
+
+                    updated = run_coro_from_flask(
+                        form_store.update_form(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            title=request.form.get("form_title", ""),
+                            custom_id_prefix=request.form.get("custom_id_prefix", ""),
+                        )
+                    )
+
+                    if not updated:
+                        raise RuntimeError("Form was not found.")
+
+                    message = f"Saved form `{selected_form_key}`."
+
+                elif action == "set_verification_form":
+                    if not selected_form_key:
+                        raise RuntimeError("No form selected.")
+
+                    run_coro_from_flask(
+                        form_store.get_form_config(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    settings_store.set_verification_form_key(
+                        selected_guild.id,
+                        selected_form_key,
+                    )
+
+                    message = f"Verification form changed to `{selected_form_key}`. Repost the verification panel if needed."
+
+                elif action == "reset_verification_form":
+                    if request.form.get("reset_confirm", "").strip() != "RESET":
+                        raise RuntimeError("Type RESET to reset the built-in verification form.")
+
+                    run_coro_from_flask(
+                        form_store.reset_verification_form_from_json(
+                            guild_id=selected_guild.id,
+                            json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    selected_form_key = FORM_KEY_VERIFICATION
+                    message = "Built-in verification form reset."
+
+                elif action == "add_question":
+                    if not selected_form_key:
+                        raise RuntimeError("No form selected.")
+
+                    run_coro_from_flask(
+                        form_store.add_question(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            question_key=clean_form_key(request.form.get("question_key", "")),
+                            label=request.form.get("question_label", "").strip(),
+                            style=request.form.get("question_style", "paragraph"),
+                            required=request.form.get("question_required") == "on",
+                            placeholder=request.form.get("question_placeholder", "").strip() or None,
+                            min_length=parse_optional_int(request.form.get("question_min_length")),
+                            max_length=parse_optional_int(request.form.get("question_max_length")),
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    message = "Question added."
+
+                elif action == "save_questions":
+                    if not selected_form_key:
+                        raise RuntimeError("No form selected.")
+
+                    ordered_keys: list[tuple[int, str]] = []
+
+                    for question_key in request.form.getlist("question_key[]"):
+                        question_key = clean_form_key(question_key)
+
+                        run_coro_from_flask(
+                            form_store.update_question(
+                                guild_id=selected_guild.id,
+                                form_key=selected_form_key,
+                                question_key=question_key,
+                                label=request.form.get(f"label_{question_key}", "").strip(),
+                                style=request.form.get(f"style_{question_key}", "paragraph"),
+                                required=request.form.get(f"required_{question_key}") == "on",
+                                placeholder=request.form.get(f"placeholder_{question_key}", "").strip() or None,
+                                min_length=parse_optional_int(request.form.get(f"min_length_{question_key}")),
+                                max_length=parse_optional_int(request.form.get(f"max_length_{question_key}")),
+                                clear_placeholder=True,
+                                clear_lengths=True,
+                                fallback_json_path=VERIFICATION_FORM_PATH,
+                            )
+                        )
+
+                        ordered_keys.append(
+                            (
+                                parse_optional_int(request.form.get(f"sort_order_{question_key}")) or 9999,
+                                question_key,
+                            )
+                        )
+
+                    run_coro_from_flask(
+                        form_store.set_question_order(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            question_keys=[
+                                question_key
+                                for _, question_key in sorted(ordered_keys)
+                            ],
+                        )
+                    )
+
+                    message = "Question changes saved."
+
+                elif action == "delete_question":
+                    if request.form.get("delete_question_confirm", "").strip() != "DELETE":
+                        raise RuntimeError("Type DELETE to delete the question.")
+
+                    question_key = clean_form_key(request.form.get("delete_question_key", ""))
+
+                    deleted = run_coro_from_flask(
+                        form_store.delete_question(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            question_key=question_key,
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    if not deleted:
+                        raise RuntimeError("Question was not found.")
+
+                    message = f"Deleted question `{question_key}`."
+
+                elif action == "publish_form":
+                    if not selected_form_key:
+                        raise RuntimeError("No form selected.")
+
+                    channel_id = int(request.form.get("publish_channel_id", "0"))
+                    channel = selected_guild.get_channel(channel_id)
+
+                    if channel is None:
+                        channel = run_coro_from_flask(bot.fetch_channel(channel_id))
+
+                    if not isinstance(channel, discord.TextChannel):
+                        raise RuntimeError("Selected channel is not a text channel.")
+
+                    form_config = run_coro_from_flask(
+                        form_store.get_form_config(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    if not form_config.questions:
+                        raise RuntimeError("Add at least one question before publishing this form.")
+
+                    publish_title = request.form.get("publish_title", "").strip()
+                    publish_description = request.form.get("publish_description", "").strip()
+
+                    if not publish_title or not publish_description:
+                        raise RuntimeError("Publish title and description are required.")
+
+                    embed = discord.Embed(
+                        title=publish_title,
+                        description=publish_description,
+                        colour=discord.Colour.blurple(),
+                    )
+
+                    if selected_guild.icon is not None:
+                        embed.set_thumbnail(url=selected_guild.icon.url)
+
+                    embed.set_footer(text=f"Form: {form_config.title}")
+
+                    message_object = run_coro_from_flask(
+                        channel.send(
+                            embed=embed,
+                            view=GenericFormStartView(),
+                        )
+                    )
+
+                    run_coro_from_flask(
+                        form_store.save_published_form(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            channel_id=channel.id,
+                            message_id=message_object.id,
+                            title=publish_title,
+                            description=publish_description,
+                        )
+                    )
+
+                    message = f"Published form `{selected_form_key}` in #{channel.name}."
+
+                elif action == "delete_form":
+                    if request.form.get("delete_form_confirm", "").strip() != "DELETE":
+                        raise RuntimeError("Type DELETE to delete the form.")
+
+                    verification_form_key = settings_store.get_verification_form_key(selected_guild.id) or FORM_KEY_VERIFICATION
+
+                    if selected_form_key == verification_form_key:
+                        raise RuntimeError("Choose another verification form before deleting this one.")
+
+                    deleted = run_coro_from_flask(
+                        form_store.delete_form(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                        )
+                    )
+
+                    if not deleted:
+                        raise RuntimeError("Form was not found.")
+
+                    message = f"Deleted form `{selected_form_key}`."
+                    selected_form_key = ""
+
+                else:
+                    raise RuntimeError("Unknown forms action.")
+
+            forms: list[dict[str, str]] = []
+            text_channels: list[dict[str, str]] = []
+            selected_form = None
+            questions = []
+            verification_form_key = FORM_KEY_VERIFICATION
+            modal_pages = 0
+
+            if selected_guild is not None:
+                text_channels = get_guild_text_channels(selected_guild)
+                forms = run_coro_from_flask(get_guild_forms(selected_guild))
+                verification_form_key = settings_store.get_verification_form_key(selected_guild.id) or FORM_KEY_VERIFICATION
+
+                if not selected_form_key:
+                    selected_form_key = verification_form_key
+
+                if forms and not any(form["key"] == selected_form_key for form in forms):
+                    selected_form_key = forms[0]["key"]
+
+                if selected_form_key:
+                    selected_form = run_coro_from_flask(
+                        form_store.get_form_config(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    questions = run_coro_from_flask(
+                        form_store.list_questions(
+                            guild_id=selected_guild.id,
+                            form_key=selected_form_key,
+                            fallback_json_path=VERIFICATION_FORM_PATH,
+                        )
+                    )
+
+                    modal_pages = len(selected_form.pages()) if selected_form is not None else 0
+
+                    forms = run_coro_from_flask(get_guild_forms(selected_guild))
+
+            return render_admin_page(
+                title="TFSBot Forms",
+                active_page="forms",
+                body_template=FORMS_BODY_HTML,
+                guilds=get_available_guilds(),
+                selected_guild_id=str(selected_guild.id) if selected_guild else None,
+                forms=forms,
+                selected_form_key=selected_form_key,
+                selected_form=selected_form,
+                questions=questions,
+                text_channels=text_channels,
+                verification_form_key=verification_form_key,
+                modal_pages=modal_pages,
+                message=message,
+                error=error,
+            )
+
+        except Exception as caught_error:
+            error = str(caught_error)
+
+            return render_admin_page(
+                title="TFSBot Forms",
+                active_page="forms",
+                body_template=FORMS_BODY_HTML,
+                guilds=get_available_guilds(),
+                selected_guild_id=str(selected_guild.id) if selected_guild else None,
+                forms=[],
+                selected_form_key=selected_form_key,
+                selected_form=None,
+                questions=[],
+                text_channels=[],
+                verification_form_key=FORM_KEY_VERIFICATION,
+                modal_pages=0,
+                message=message,
+                error=error,
+            )
+
     @app.route("/verification", methods=["GET", "POST"])
     def verification_page():
         owner_error = require_owner_page()
@@ -3426,6 +4471,25 @@ def create_webui(bot: discord.Client) -> Flask:
                 if selected_guild is None:
                     raise RuntimeError("No server selected.")
 
+                webui_owner_role_ids = parse_role_ids_from_form("webui_owner_role_ids")
+                webui_viewer_role_ids = parse_role_ids_from_form("webui_viewer_role_ids")
+
+                if not webui_owner_role_ids and not get_env_webui_owner_role_ids():
+                    raise RuntimeError(
+                        "Choose at least one WebUI owner role, or set WEBUI_DISCORD_OWNER_ROLE_IDS in .env before clearing this."
+                    )
+
+                set_stored_webui_access_role_ids(
+                    guild_id=selected_guild.id,
+                    access_level="owner",
+                    role_ids=webui_owner_role_ids,
+                )
+                set_stored_webui_access_role_ids(
+                    guild_id=selected_guild.id,
+                    access_level="viewer",
+                    role_ids=webui_viewer_role_ids,
+                )
+
                 for level in [LEVEL_STAFF, LEVEL_ADMIN, LEVEL_OWNER]:
                     role_id_text = request.form.get(f"role_{level}", "").strip()
 
@@ -3457,7 +4521,7 @@ def create_webui(bot: discord.Client) -> Flask:
                         )
                     )
 
-                message = "Permissions saved."
+                message = "Permissions and WebUI access saved."
 
             role_settings = []
             commands = []
@@ -3496,6 +4560,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 role_settings=role_settings,
                 commands=commands,
                 levels=get_level_choices(),
+                webui_access=build_webui_access_context(selected_guild),
                 message=message,
                 error=error,
             )
@@ -3513,6 +4578,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 role_settings=[],
                 commands=[],
                 levels=get_level_choices(),
+                webui_access=build_webui_access_context(selected_guild),
                 message=message,
                 error=error,
             )

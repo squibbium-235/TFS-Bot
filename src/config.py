@@ -139,15 +139,6 @@ class BotConfig:
             if webui_discord_guild_id is None:
                 missing_discord_settings.append("WEBUI_DISCORD_GUILD_ID")
 
-            if (
-                not webui_discord_allowed_role_ids
-                and not webui_discord_owner_role_ids
-                and not webui_discord_viewer_role_ids
-            ):
-                missing_discord_settings.append(
-                    "WEBUI_DISCORD_OWNER_ROLE_IDS or WEBUI_DISCORD_VIEWER_ROLE_IDS"
-                )
-
             if missing_discord_settings:
                 joined = ", ".join(missing_discord_settings)
                 raise RuntimeError(
