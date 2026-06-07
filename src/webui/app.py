@@ -2317,7 +2317,7 @@ VERIFICATION_BODY_HTML = """
         <h2>Verification Automod</h2>
         <p class="hint">
             If enabled, applications containing any blocked term are automatically logged and banned.
-            Keep one term per line. Terms are stored in SQLite and matched case-insensitively.
+            Keep one term per line.
         </p>
 
         <label class="checkbox-row">
@@ -2347,7 +2347,7 @@ VERIFICATION_BODY_HTML = """
     <div class="panel danger-panel">
         <h2>Application Maintenance</h2>
         <p class="hint">
-            Cancel/reset stuck active applications. This marks them as cancelled in SQLite, logs the cancellation, deletes the review message if possible,
+            Cancel/reset stuck active applications. This marks them as cancelled, logs it, deletes the review message if possible,
             and locks/archives any questioning thread. It does not delete application history.
         </p>
 
