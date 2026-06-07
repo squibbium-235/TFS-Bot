@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hmac
 import json
 import secrets
@@ -529,6 +530,7 @@ EMBED_FORM_HTML = """
             border-left: 4px solid #5865f2;
             border-radius: 4px;
             padding: 12px;
+            width: 100%;
             max-width: 560px;
             overflow: hidden;
         }
@@ -546,6 +548,7 @@ EMBED_FORM_HTML = """
             width: 20px;
             height: 20px;
             border-radius: 50%;
+            object-fit: cover;
         }
 
         .embed-title {
@@ -586,23 +589,54 @@ EMBED_FORM_HTML = """
             font-size: 13px;
         }
 
+        .embed-body-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .embed-main-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .embed-thumbnail-wrap {
+            flex: 0 0 auto;
+        }
+
         .embed-image,
         .embed-thumbnail {
-            max-width: 100%;
             border-radius: 8px;
+            background: #1e1f22;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .embed-image {
+            display: block;
+            width: 100%;
+            max-height: 260px;
+            object-fit: contain;
             margin-top: 10px;
         }
 
         .embed-thumbnail {
-            max-width: 90px;
-            float: right;
-            margin-left: 10px;
+            display: block;
+            width: 90px;
+            height: 90px;
+            object-fit: cover;
         }
 
         .embed-footer {
             margin-top: 10px;
             font-size: 12px;
             color: var(--muted);
+        }
+
+        .image-preview-error {
+            display: none;
+            color: #ff8587;
+            font-size: 12px;
+            margin-top: 6px;
         }
 
        @media (max-width: 980px) {
@@ -626,6 +660,7 @@ EMBED_FORM_HTML = """
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
+                <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
                 <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
                 <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
                 <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
@@ -664,6 +699,17 @@ EMBED_FORM_HTML = """
 
             <div class="upload-details-inner">
                 <form method="post" action="{{ url_for('upload_image') }}" enctype="multipart/form-data">
+                    <label>Folder</label>
+                    <select name="folder">
+                        <option value="">Root</option>
+                        {% for folder in upload_folders %}
+                            <option value="{{ folder.path }}">{{ folder.label }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label>Or new folder</label>
+                    <input name="new_folder" placeholder="author-icons">
+
                     <label>Image file</label>
                     <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required>
 
@@ -726,7 +772,7 @@ EMBED_FORM_HTML = """
                     <select name="image_upload_filename" id="image_upload_filename">
                         <option value="">No uploaded image</option>
                         {% for image in uploaded_images %}
-                            <option value="{{ image.filename }}" data-url="{{ image.url }}">{{ image.filename }}</option>
+                            <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
                         {% endfor %}
                     </select>
 
@@ -737,7 +783,7 @@ EMBED_FORM_HTML = """
                     <select name="thumbnail_upload_filename" id="thumbnail_upload_filename">
                         <option value="">No uploaded thumbnail</option>
                         {% for image in uploaded_images %}
-                            <option value="{{ image.filename }}" data-url="{{ image.url }}">{{ image.filename }}</option>
+                            <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
                         {% endfor %}
                     </select>
 
@@ -747,7 +793,15 @@ EMBED_FORM_HTML = """
                     <label>Author name</label>
                     <input name="author_name" id="author_name" maxlength="256">
 
-                    <label>Author icon URL</label>
+                    <label>Uploaded author icon</label>
+                    <select name="author_icon_upload_filename" id="author_icon_upload_filename">
+                        <option value="">No uploaded author icon</option>
+                        {% for image in uploaded_images %}
+                            <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label>Or external author icon URL</label>
                     <input name="author_icon_url" id="author_icon_url">
 
                     <label>Footer</label>
@@ -755,7 +809,7 @@ EMBED_FORM_HTML = """
 
                     <h2 id="embed-fields" class="form-section-title">Fields</h2>
                     <p class="hint section-note">
-                        Add optional embed fields. Inline fields try to sit beside each other, assuming Discord feels cooperative.
+                        Add optional embed fields. Inline fields try to sit beside each other.
                     </p>
 
                     <div id="fields"></div>
@@ -775,7 +829,7 @@ EMBED_FORM_HTML = """
                     <div>
                         <h2>Live Preview</h2>
                         <p class="hint">
-                            Approximate Discord preview. Final spacing may still vary, because Discord enjoys little surprises.
+                            Approximate Discord preview :)
                         </p>
                     </div>
                 </div>
@@ -789,19 +843,27 @@ EMBED_FORM_HTML = """
                             <span class="bot-tag">BOT</span>
 
                             <div class="embed-preview" id="preview-embed">
-                                <img class="embed-thumbnail" id="preview-thumbnail" style="display: none;">
+                                <div class="embed-body-row">
+                                    <div class="embed-main-content">
+                                        <div class="embed-author" id="preview-author-wrap" style="display: none;">
+                                            <img id="preview-author-icon" style="display: none;">
+                                            <span id="preview-author"></span>
+                                        </div>
 
-                                <div class="embed-author" id="preview-author-wrap" style="display: none;">
-                                    <img id="preview-author-icon" style="display: none;">
-                                    <span id="preview-author"></span>
+                                        <div class="embed-title" id="preview-title">Embed title</div>
+                                        <div class="embed-description" id="preview-description">Embed description will appear here.</div>
+
+                                        <div class="embed-fields" id="preview-fields"></div>
+                                    </div>
+
+                                    <div class="embed-thumbnail-wrap">
+                                        <img class="embed-thumbnail" id="preview-thumbnail" style="display: none;">
+                                        <div class="image-preview-error" id="preview-thumbnail-error">Thumbnail could not be loaded in the browser preview.</div>
+                                    </div>
                                 </div>
 
-                                <div class="embed-title" id="preview-title">Embed title</div>
-                                <div class="embed-description" id="preview-description">Embed description will appear here.</div>
-
-                                <div class="embed-fields" id="preview-fields"></div>
-
                                 <img class="embed-image" id="preview-image" style="display: none;">
+                                <div class="image-preview-error" id="preview-image-error">Image could not be loaded in the browser preview.</div>
 
                                 <div class="embed-footer" id="preview-footer">TFSBot</div>
                             </div>
@@ -930,15 +992,48 @@ EMBED_FORM_HTML = """
 
         function setImage(id, url) {
             const image = document.getElementById(id);
+            const error = document.getElementById(id + "-error");
+
+            image.onload = null;
+            image.onerror = null;
+            image.style.display = "none";
+            image.removeAttribute("src");
+
+            if (error) {
+                error.style.display = "none";
+            }
 
             if (!url) {
-                image.style.display = "none";
-                image.removeAttribute("src");
                 return;
             }
 
+            image.dataset.previewUrl = url;
+
+            image.onload = function () {
+                if (image.dataset.previewUrl !== url) {
+                    return;
+                }
+
+                image.style.display = "block";
+
+                if (error) {
+                    error.style.display = "none";
+                }
+            };
+
+            image.onerror = function () {
+                if (image.dataset.previewUrl !== url) {
+                    return;
+                }
+
+                image.style.display = "none";
+
+                if (error) {
+                    error.style.display = "block";
+                }
+            };
+
             image.src = url;
-            image.style.display = "block";
         }
 
         function clearEmbedForm() {
@@ -953,6 +1048,7 @@ EMBED_FORM_HTML = """
             document.getElementById("author_name").value = "";
             document.getElementById("author_icon_url").value = "";
             document.getElementById("footer").value = "TFSBot";
+            document.getElementById("author_icon_upload_filename").value = "";
 
             document.getElementById("fields").innerHTML = "";
             fieldCount = 0;
@@ -968,7 +1064,7 @@ EMBED_FORM_HTML = """
             const imageUrl = getImagePreviewUrl("image_upload_filename", "image_url");
             const thumbnailUrl = getImagePreviewUrl("thumbnail_upload_filename", "thumbnail_url");
             const authorName = getValue("author_name");
-            const authorIconUrl = getValue("author_icon_url");
+            const authorIconUrl = getImagePreviewUrl("author_icon_upload_filename", "author_icon_url");
             const footer = getValue("footer");
 
             document.getElementById("preview-title").textContent = title;
@@ -984,9 +1080,9 @@ EMBED_FORM_HTML = """
             const author = document.getElementById("preview-author");
             const authorIcon = document.getElementById("preview-author-icon");
 
-            if (authorName) {
+            if (authorName || authorIconUrl) {
                 authorWrap.style.display = "flex";
-                author.textContent = authorName;
+                author.textContent = authorName || "Author";
 
                 if (authorIconUrl) {
                     authorIcon.src = authorIconUrl;
@@ -997,6 +1093,9 @@ EMBED_FORM_HTML = """
                 }
             } else {
                 authorWrap.style.display = "none";
+                author.textContent = "";
+                authorIcon.style.display = "none";
+                authorIcon.removeAttribute("src");
             }
 
             const previewFields = document.getElementById("preview-fields");
@@ -1598,6 +1697,7 @@ ADMIN_PAGE_HTML = """
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
+                <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
                 <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
                 <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
                 <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
@@ -2145,6 +2245,132 @@ BACKUPS_BODY_HTML = """
 
         <div class="button-row">
             <button type="submit" class="danger-button">Restore Backup</button>
+        </div>
+    </form>
+</div>
+"""
+
+
+UPLOADS_MANAGER_BODY_HTML = """
+<div class="panel page-intro">
+    <h2>Uploads</h2>
+    <p class="hint">
+        Manage uploaded images used by the Embed Builder. Folders keep author icons, thumbnails, and random server images from being mixed into one big stew.
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="#upload-file">Upload File</a>
+        <a class="button-link secondary" href="#create-folder">Create Folder</a>
+        <a class="button-link secondary" href="#uploaded-files">Uploaded Files</a>
+    </div>
+</div>
+
+<div class="panel" id="upload-file">
+    <h2>Upload File</h2>
+
+    <form method="post" action="{{ url_for('uploads_manager_page') }}" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload_file">
+
+        <label>Folder</label>
+        <select name="folder">
+            <option value="">Root</option>
+            {% for folder in folders %}
+                <option value="{{ folder.path }}" {{ 'selected' if folder.path == selected_folder else '' }}>{{ folder.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Or new folder</label>
+        <input name="new_folder" placeholder="author-icons">
+
+        <label>Image file</label>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required>
+
+        <div class="button-row">
+            <button type="submit">Upload Image</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel" id="create-folder">
+    <h2>Create Folder</h2>
+
+    <form method="post" action="{{ url_for('uploads_manager_page') }}">
+        <input type="hidden" name="action" value="create_folder">
+
+        <label>Folder name</label>
+        <input name="folder" placeholder="author-icons" required>
+
+        <p class="hint">
+            Use simple names like <code>author-icons</code>, <code>thumbnails</code>, or <code>events</code>.
+        </p>
+
+        <div class="button-row">
+            <button type="submit">Create Folder</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel" id="uploaded-files">
+    <h2>Uploaded Files</h2>
+
+    {% if uploaded_images %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Preview</th>
+                    <th>File</th>
+                    <th>Folder</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for image in uploaded_images %}
+                    <tr>
+                        <td>
+                            <img src="{{ image.url }}" style="width: 54px; height: 54px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
+                        </td>
+                        <td><code>{{ image.filename }}</code></td>
+                        <td>{{ image.folder_label }}</td>
+                        <td>{{ image.size }}</td>
+                        <td>{{ image.modified }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('uploads_manager_page') }}">
+                                <input type="hidden" name="action" value="delete_file">
+                                <input type="hidden" name="file_reference" value="{{ image.reference }}">
+                                <button type="submit" class="danger-button">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="hint">No uploaded images yet. Suspiciously clean.</p>
+    {% endif %}
+</div>
+
+<div class="panel danger-panel">
+    <h2>Delete Empty Folder</h2>
+    <p class="hint">
+        Only empty folders can be deleted.
+    </p>
+
+    <form method="post" action="{{ url_for('uploads_manager_page') }}">
+        <input type="hidden" name="action" value="delete_folder">
+
+        <label>Folder</label>
+        <select name="folder" required>
+            {% for folder in folders %}
+                <option value="{{ folder.path }}">{{ folder.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Confirmation</label>
+        <input name="confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Empty Folder</button>
         </div>
     </form>
 </div>
@@ -3246,32 +3472,177 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return safe_name
 
-    def get_uploaded_image_path(filename: str) -> Path:
-        safe_name = validate_uploaded_image_filename(filename)
-        return UPLOAD_DIR / safe_name
+
+    def validate_upload_folder(folder: str | None) -> str:
+        folder = (folder or "").strip().replace("\\", "/")
+
+        if not folder:
+            return ""
+
+        parts: list[str] = []
+
+        for raw_part in folder.split("/"):
+            raw_part = raw_part.strip()
+
+            if not raw_part:
+                continue
+
+            safe_part = secure_filename(raw_part)
+
+            if not safe_part:
+                raise ValueError("Invalid folder name.")
+
+            if safe_part in {".", ".."}:
+                raise ValueError("Invalid folder name.")
+
+            parts.append(safe_part)
+
+        if not parts:
+            return ""
+
+        return "/".join(parts)
+
+
+    def get_upload_folder_path(folder: str | None) -> Path:
+        safe_folder = validate_upload_folder(folder)
+        folder_path = UPLOAD_DIR / safe_folder if safe_folder else UPLOAD_DIR
+
+        resolved_upload_root = UPLOAD_DIR.resolve()
+        resolved_folder_path = folder_path.resolve()
+
+        if resolved_upload_root not in [resolved_folder_path, *resolved_folder_path.parents]:
+            raise ValueError("Invalid upload folder.")
+
+        return folder_path
+
+
+    def validate_uploaded_image_reference(reference: str) -> str:
+        reference = reference.strip().replace("\\", "/")
+
+        if not reference:
+            raise ValueError("Invalid uploaded image reference.")
+
+        folder = validate_upload_folder(str(Path(reference).parent))
+        filename = validate_uploaded_image_filename(Path(reference).name)
+
+        if folder in {".", ""}:
+            return filename
+
+        return f"{folder}/{filename}"
+
+
+    def get_uploaded_image_path(reference: str) -> Path:
+        safe_reference = validate_uploaded_image_reference(reference)
+        return UPLOAD_DIR / safe_reference
+
+
+    def get_uploaded_image_preview_url(path: Path) -> str:
+        mime_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+
+        mime_type = mime_types.get(path.suffix.lower())
+
+        if mime_type is None:
+            raise ValueError(f"Unsupported preview image type: {path.suffix}")
+
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:{mime_type};base64,{encoded}"
+
+
+    def format_upload_size(size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+
+        if size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+    def get_attachment_filename_for_reference(reference: str) -> str:
+        safe_reference = validate_uploaded_image_reference(reference)
+        path = Path(safe_reference)
+
+        if str(path.parent) in {".", ""}:
+            return path.name
+
+        folder_prefix = "__".join(path.parent.parts)
+        return f"{folder_prefix}__{path.name}"
+
+
+    def list_upload_folders() -> list[dict[str, str]]:
+        folders: list[dict[str, str]] = []
+
+        if not UPLOAD_DIR.exists():
+            return folders
+
+        for path in sorted(UPLOAD_DIR.rglob("*"), key=lambda item: item.as_posix().lower()):
+            if not path.is_dir():
+                continue
+
+            relative_path = path.relative_to(UPLOAD_DIR).as_posix()
+
+            if not relative_path or relative_path == ".":
+                continue
+
+            folders.append(
+                {
+                    "path": relative_path,
+                    "label": relative_path,
+                }
+            )
+
+        return folders
+
 
     def list_uploaded_images() -> list[dict[str, str]]:
         images: list[dict[str, str]] = []
 
-        for path in sorted(
-            UPLOAD_DIR.iterdir(),
-            key=lambda item: item.stat().st_mtime,
-            reverse=True,
-        ):
-            if not path.is_file():
-                continue
+        if not UPLOAD_DIR.exists():
+            return images
 
-            if path.suffix.lower() not in ALLOWED_IMAGE_EXTENSIONS:
-                continue
+        image_paths = [
+            path
+            for path in UPLOAD_DIR.rglob("*")
+            if path.is_file()
+            and path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+        ]
+
+        image_paths.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+
+        for path in image_paths:
+            relative_path = path.relative_to(UPLOAD_DIR)
+            reference = relative_path.as_posix()
+            folder = relative_path.parent.as_posix()
+
+            if folder == ".":
+                folder = ""
+
+            stat = path.stat()
 
             images.append(
                 {
+                    "reference": reference,
                     "filename": path.name,
-                    "url": url_for("uploaded_image", filename=path.name),
+                    "label": reference,
+                    "folder": folder,
+                    "folder_label": folder or "Root",
+                    "url": get_uploaded_image_preview_url(path),
+                    "size": format_upload_size(stat.st_size),
+                    "modified": datetime.fromtimestamp(
+                        stat.st_mtime,
+                        timezone.utc,
+                    ).strftime("%Y-%m-%d %H:%M UTC"),
                 }
             )
 
         return images
+
 
     def get_available_channels() -> list[dict[str, str]]:
         channels: list[dict[str, str]] = []
@@ -3300,39 +3671,45 @@ def create_webui(bot: discord.Client) -> Flask:
     def build_selected_attachment_files(
         image_upload_filename: str | None,
         thumbnail_upload_filename: str | None,
-    ) -> tuple[str | None, str | None, list[discord.File]]:
+        author_icon_upload_filename: str | None = None,
+    ) -> tuple[str | None, str | None, str | None, list[discord.File]]:
         files: list[discord.File] = []
-        attached_filenames: set[str] = set()
+        attached_references: set[str] = set()
 
         image_url: str | None = None
         thumbnail_url: str | None = None
+        author_icon_url: str | None = None
 
-        for selected_filename, target in [
+        for selected_reference, target in [
             (image_upload_filename, "image"),
             (thumbnail_upload_filename, "thumbnail"),
+            (author_icon_upload_filename, "author_icon"),
         ]:
-            if not selected_filename:
+            if not selected_reference:
                 continue
 
-            path = get_uploaded_image_path(selected_filename)
+            safe_reference = validate_uploaded_image_reference(selected_reference)
+            path = get_uploaded_image_path(safe_reference)
 
             if not path.exists():
-                raise FileNotFoundError(f"Uploaded image not found: {selected_filename}")
+                raise FileNotFoundError(f"Uploaded image not found: {selected_reference}")
 
-            filename = path.name
+            attachment_filename = get_attachment_filename_for_reference(safe_reference)
 
-            if filename not in attached_filenames:
-                files.append(discord.File(path, filename=filename))
-                attached_filenames.add(filename)
+            if safe_reference not in attached_references:
+                files.append(discord.File(path, filename=attachment_filename))
+                attached_references.add(safe_reference)
 
-            attachment_url = f"attachment://{filename}"
+            attachment_url = f"attachment://{attachment_filename}"
 
             if target == "image":
                 image_url = attachment_url
-            else:
+            elif target == "thumbnail":
                 thumbnail_url = attachment_url
+            else:
+                author_icon_url = attachment_url
 
-        return image_url, thumbnail_url, files
+        return image_url, thumbnail_url, author_icon_url, files
 
     async def send_embeds_to_channel(
         channel_id: int,
@@ -3410,6 +3787,7 @@ def create_webui(bot: discord.Client) -> Flask:
             EMBED_FORM_HTML,
             channels=get_available_channels(),
             uploaded_images=list_uploaded_images(),
+            upload_folders=list_upload_folders(),
             message=message,
             error=error,
             active_page="embed_builder",
@@ -4273,6 +4651,105 @@ def create_webui(bot: discord.Client) -> Flask:
             message=message,
             error=error,
         )
+
+
+    @app.route("/uploads-manager", methods=["GET", "POST"])
+    def uploads_manager_page():
+        owner_error = require_owner_page()
+
+        if owner_error is not None:
+            return owner_error
+
+        message: str | None = None
+        error: str | None = None
+        selected_folder = ""
+
+        try:
+            if request.method == "POST":
+                action = request.form.get("action", "")
+
+                if action == "create_folder":
+                    folder = validate_upload_folder(request.form.get("folder"))
+                    folder_path = get_upload_folder_path(folder)
+                    folder_path.mkdir(parents=True, exist_ok=True)
+                    message = f"Created folder {folder}."
+
+                elif action == "upload_file":
+                    uploaded_file = request.files.get("image")
+
+                    if uploaded_file is None or not uploaded_file.filename:
+                        raise ValueError("No image selected.")
+
+                    folder = request.form.get("new_folder") or request.form.get("folder") or ""
+                    selected_folder = validate_upload_folder(folder)
+                    folder_path = get_upload_folder_path(selected_folder)
+                    folder_path.mkdir(parents=True, exist_ok=True)
+
+                    safe_name = validate_uploaded_image_filename(uploaded_file.filename)
+                    destination = folder_path / safe_name
+
+                    if destination.exists():
+                        stem = destination.stem
+                        suffix = destination.suffix
+                        counter = 1
+
+                        while destination.exists():
+                            destination = folder_path / f"{stem}_{counter}{suffix}"
+                            counter += 1
+
+                    uploaded_file.save(destination)
+                    message = f"Uploaded {destination.relative_to(UPLOAD_DIR).as_posix()}."
+
+                elif action == "delete_file":
+                    reference = validate_uploaded_image_reference(
+                        request.form.get("file_reference", "")
+                    )
+                    path = get_uploaded_image_path(reference)
+
+                    if not path.exists():
+                        raise FileNotFoundError(f"Uploaded image not found: {reference}")
+
+                    path.unlink()
+                    message = f"Deleted {reference}."
+
+                elif action == "delete_folder":
+                    confirm = request.form.get("confirm", "").strip()
+
+                    if confirm != "DELETE":
+                        raise RuntimeError("Type DELETE to confirm folder deletion.")
+
+                    folder = validate_upload_folder(request.form.get("folder"))
+                    folder_path = get_upload_folder_path(folder)
+
+                    if folder_path == UPLOAD_DIR:
+                        raise RuntimeError("Cannot delete the root uploads folder.")
+
+                    if not folder_path.exists():
+                        raise FileNotFoundError(f"Folder not found: {folder}")
+
+                    if any(folder_path.iterdir()):
+                        raise RuntimeError("Folder is not empty.")
+
+                    folder_path.rmdir()
+                    message = f"Deleted folder {folder}."
+
+                else:
+                    raise RuntimeError("Unknown uploads action.")
+
+        except Exception as caught_error:
+            error = str(caught_error)
+
+        return render_admin_page(
+            title="TFSBot Uploads",
+            active_page="uploads",
+            body_template=UPLOADS_MANAGER_BODY_HTML,
+            folders=list_upload_folders(),
+            uploaded_images=list_uploaded_images(),
+            selected_folder=selected_folder,
+            message=message,
+            error=error,
+        )
+
 
     @app.route("/embed-builder")
     def embed_builder():
@@ -5143,8 +5620,12 @@ def create_webui(bot: discord.Client) -> Flask:
             if uploaded_file is None or not uploaded_file.filename:
                 raise ValueError("No image selected.")
 
+            folder = request.form.get("new_folder") or request.form.get("folder") or ""
+            folder_path = get_upload_folder_path(folder)
+            folder_path.mkdir(parents=True, exist_ok=True)
+
             safe_name = validate_uploaded_image_filename(uploaded_file.filename)
-            destination = UPLOAD_DIR / safe_name
+            destination = folder_path / safe_name
 
             if destination.exists():
                 stem = destination.stem
@@ -5152,13 +5633,13 @@ def create_webui(bot: discord.Client) -> Flask:
                 counter = 1
 
                 while destination.exists():
-                    destination = UPLOAD_DIR / f"{stem}_{counter}{suffix}"
+                    destination = folder_path / f"{stem}_{counter}{suffix}"
                     counter += 1
 
             uploaded_file.save(destination)
 
             return render_embed_builder_page(
-                message=f"Uploaded {destination.name}.",
+                message=f"Uploaded {destination.relative_to(UPLOAD_DIR).as_posix()}.",
                 error=None,
             )
 
@@ -5190,13 +5671,15 @@ def create_webui(bot: discord.Client) -> Flask:
                 if name.strip() and value.strip():
                     fields.append((name, value, inline))
 
-            image_attachment_url, thumbnail_attachment_url, files = build_selected_attachment_files(
+            image_attachment_url, thumbnail_attachment_url, author_icon_attachment_url, files = build_selected_attachment_files(
                 image_upload_filename=request.form.get("image_upload_filename") or None,
                 thumbnail_upload_filename=request.form.get("thumbnail_upload_filename") or None,
+                author_icon_upload_filename=request.form.get("author_icon_upload_filename") or None,
             )
 
             image_url = image_attachment_url or request.form.get("image_url") or None
             thumbnail_url = thumbnail_attachment_url or request.form.get("thumbnail_url") or None
+            author_icon_url = author_icon_attachment_url or request.form.get("author_icon_url") or None
 
             embeds = EmbedFactory.from_web_form_embeds(
                 title=request.form.get("title", ""),
@@ -5205,7 +5688,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 image_url=image_url,
                 thumbnail_url=thumbnail_url,
                 author_name=request.form.get("author_name") or None,
-                author_icon_url=request.form.get("author_icon_url") or None,
+                author_icon_url=author_icon_url,
                 footer=request.form.get("footer") or None,
                 fields=fields,
             )
