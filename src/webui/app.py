@@ -232,10 +232,16 @@ EMBED_FORM_HTML = """
         }
 
         main {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .embed-builder-grid {
             display: grid;
             grid-template-columns: minmax(420px, 700px) minmax(360px, 1fr);
             gap: 24px;
-            padding: 24px;
+            align-items: start;
         }
 
         .panel {
@@ -245,6 +251,106 @@ EMBED_FORM_HTML = """
             padding: 20px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
             margin-bottom: 18px;
+        }
+
+        .page-intro {
+            display: grid;
+            gap: 10px;
+        }
+
+        .page-intro p {
+            margin: 0;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .button-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            padding: 11px 14px;
+            background: var(--panel-2);
+            color: var(--text) !important;
+            border: 1px solid var(--border);
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            line-height: 1;
+        }
+
+        .button-link:hover {
+            background: #303747;
+        }
+
+        .section-note {
+            margin-top: 4px;
+            margin-bottom: 14px;
+        }
+
+        .upload-details {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 0;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+            margin-bottom: 18px;
+            overflow: hidden;
+        }
+
+        .upload-details summary {
+            cursor: pointer;
+            padding: 18px 20px;
+            font-weight: bold;
+            color: var(--text);
+            background: var(--panel);
+        }
+
+        .upload-details summary:hover {
+            background: var(--panel-2);
+        }
+
+        .upload-details-inner {
+            border-top: 1px solid var(--border);
+            padding: 20px;
+        }
+
+        .form-section-title {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+        }
+
+        .form-section-title:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .preview-heading {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .preview-heading p {
+            margin: 4px 0 0;
+        }
+
+        .clear-button {
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .clear-button:hover {
+            background: #303747;
         }
 
         h2 {
@@ -499,8 +605,8 @@ EMBED_FORM_HTML = """
             color: var(--muted);
         }
 
-        @media (max-width: 980px) {
-            main {
+       @media (max-width: 980px) {
+            .embed-builder-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -530,18 +636,33 @@ EMBED_FORM_HTML = """
     </header>
 
     <main>
-        <section>
-            <div class="panel">
-                {% if message %}
-                    <p class="message">{{ message }}</p>
-                {% endif %}
+        <div class="panel page-intro">
+            <h2>Embed Builder</h2>
+            <p class="hint">
+                Build and send Discord embeds from the WebUI. Upload images here if you want Discord-hosted attachments instead of external image links.
+            </p>
 
-                {% if error %}
-                    <p class="error">{{ error }}</p>
-                {% endif %}
+            <div class="quick-actions">
+                <a class="button-link" href="#embed-destination">Destination</a>
+                <a class="button-link" href="#embed-content">Embed Content</a>
+                <a class="button-link" href="#embed-images">Images</a>
+                <a class="button-link" href="#embed-fields">Fields</a>
+                <a class="button-link" href="#embed-preview">Preview</a>
+            </div>
+        </div>
 
-                <h2>Upload Image</h2>
+        {% if message %}
+            <p class="message">{{ message }}</p>
+        {% endif %}
 
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        <details class="upload-details">
+            <summary>Upload Image</summary>
+
+            <div class="upload-details-inner">
                 <form method="post" action="{{ url_for('upload_image') }}" enctype="multipart/form-data">
                     <label>Image file</label>
                     <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required>
@@ -554,10 +675,16 @@ EMBED_FORM_HTML = """
                     <button type="submit">Upload Image</button>
                 </form>
             </div>
+        </details>
 
-            <div class="panel">
-                <form method="post" action="{{ url_for('send_embed') }}" id="embed-form">
-                    <h2>Destination</h2>
+        <div class="embed-builder-grid">
+            <section>
+                <div class="panel">
+                    <form method="post" action="{{ url_for('send_embed') }}" id="embed-form">
+                        <h2 id="embed-destination">Destination</h2>
+                        <p class="hint section-note">
+                            Choose where the embed should be sent. This sends immediately.
+                        </p>
 
                     <label>Channel</label>
                     <select name="channel_id" required>
@@ -566,7 +693,7 @@ EMBED_FORM_HTML = """
                         {% endfor %}
                     </select>
 
-                    <h2>Embed</h2>
+                    <h2 id="embed-content" class="form-section-title">Embed Content</h2>
 
                     <label>Title</label>
                     <input name="title" id="title" maxlength="256" required>
@@ -592,6 +719,8 @@ EMBED_FORM_HTML = """
                             aria-label="Pick embed colour"
                         >
                     </div>
+
+                    <h2 id="embed-images" class="form-section-title">Images</h2>
 
                     <label>Uploaded image</label>
                     <select name="image_upload_filename" id="image_upload_filename">
@@ -624,21 +753,32 @@ EMBED_FORM_HTML = """
                     <label>Footer</label>
                     <input name="footer" id="footer" maxlength="2048" value="TFSBot">
 
-                    <h2>Fields</h2>
+                    <h2 id="embed-fields" class="form-section-title">Fields</h2>
+                    <p class="hint section-note">
+                        Add optional embed fields. Inline fields try to sit beside each other, assuming Discord feels cooperative.
+                    </p>
 
                     <div id="fields"></div>
 
                     <div class="actions">
-                        <button type="button" class="secondary" onclick="addField()">Add field</button>
-                        <button type="submit">Send Embed</button>
+                        <button type="button" class="secondary" onclick="addField()">Add Field</button>
+                        <button type="button" class="clear-button" onclick="clearEmbedForm()">Clear Form</button>
+                        <button type="submit">Send Embed to Channel</button>
                     </div>
                 </form>
             </div>
         </section>
 
-        <section class="preview-wrap">
+        <section class="preview-wrap" id="embed-preview">
             <div class="panel">
-                <h2>Preview</h2>
+                <div class="preview-heading">
+                    <div>
+                        <h2>Live Preview</h2>
+                        <p class="hint">
+                            Approximate Discord preview. Final spacing may still vary, because Discord enjoys little surprises.
+                        </p>
+                    </div>
+                </div>
 
                 <div class="discord-preview">
                     <div class="discord-message">
@@ -799,6 +939,26 @@ EMBED_FORM_HTML = """
 
             image.src = url;
             image.style.display = "block";
+        }
+
+        function clearEmbedForm() {
+            document.getElementById("title").value = "";
+            document.getElementById("description").value = "";
+            document.getElementById("colour").value = "#5865F2";
+            document.getElementById("colour_picker").value = "#5865F2";
+            document.getElementById("image_upload_filename").value = "";
+            document.getElementById("image_url").value = "";
+            document.getElementById("thumbnail_upload_filename").value = "";
+            document.getElementById("thumbnail_url").value = "";
+            document.getElementById("author_name").value = "";
+            document.getElementById("author_icon_url").value = "";
+            document.getElementById("footer").value = "TFSBot";
+
+            document.getElementById("fields").innerHTML = "";
+            fieldCount = 0;
+            addField();
+
+            updatePreview();
         }
 
         function updatePreview() {
@@ -1462,7 +1622,7 @@ OVERVIEW_BODY_HTML = """
 <div class="panel">
     <h2>Overview</h2>
     <p class="hint">
-        Quick state of the bot, verification queue, and setup. A dashboard, because apparently staring at logs is not a personality.
+        Quick state of the bot, verification queue, and setup. A dashboard if you will
     </p>
 
     <form method="get">
@@ -2403,7 +2563,7 @@ FORM_VIEWER_BODY_HTML = """
         <div class="panel">
             <h2>Modal Page {{ page.number }}</h2>
             <p class="hint">
-                Discord modals can contain up to 5 questions, because apparently even questions need rationing.
+                Discord modals can contain up to 5 questions.
             </p>
 
             <table class="data-table">
