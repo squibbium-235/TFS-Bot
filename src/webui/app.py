@@ -1172,6 +1172,33 @@ ADMIN_PAGE_HTML = """
             border-color: rgba(237, 66, 69, 0.55);
         }
 
+        .restore-warning {
+            border-color: rgba(237, 66, 69, 0.65);
+            background: rgba(237, 66, 69, 0.07);
+        }
+
+        .restore-warning strong {
+            color: #ff8587;
+        }
+
+        .backup-steps {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .backup-step {
+            background: var(--panel-2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .backup-step strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1186,7 +1213,10 @@ ADMIN_PAGE_HTML = """
             padding: 14px;
         }
 
-        .stat-card strong { display: block; margin-bottom: 4px; }
+        .stat-card strong {
+            display: block;
+            margin-bottom: 4px;
+        }
 
         code {
             background: var(--panel-3);
@@ -1195,7 +1225,6 @@ ADMIN_PAGE_HTML = """
             padding: 2px 5px;
             color: #d7dcff;
         }
-
 
         .overview-grid {
             display: grid;
@@ -1252,7 +1281,8 @@ ADMIN_PAGE_HTML = """
             border-radius: 12px;
         }
 
-        .data-table th, .data-table td {
+        .data-table th,
+        .data-table td {
             border-bottom: 1px solid var(--border-soft);
             padding: 10px 8px;
             text-align: left;
@@ -1267,7 +1297,9 @@ ADMIN_PAGE_HTML = """
             letter-spacing: 0.04em;
         }
 
-        .data-table tr:last-child td { border-bottom: 0; }
+        .data-table tr:last-child td {
+            border-bottom: 0;
+        }
 
         .pill {
             display: inline-block;
@@ -1354,7 +1386,7 @@ ADMIN_PAGE_HTML = """
         }
 
         .inline-form {
-            display: inline;
+            display: inline-flex;
         }
 
         .inline-form button {
@@ -1387,51 +1419,6 @@ ADMIN_PAGE_HTML = """
             flex-wrap: wrap;
             gap: 8px;
             margin-top: 8px;
-        }
-
-        .quick-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        .inline-form {
-            display: inline;
-        }
-
-        .inline-form button {
-            width: auto;
-        }
-
-        .button-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 10px;
-            padding: 11px 15px;
-            background: var(--accent);
-            color: white !important;
-            font-weight: 800;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            line-height: 1;
-        }
-
-        .button-link:hover {
-            background: var(--accent-hover);
-            color: white !important;
-        }
-
-        .button-link.secondary {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            color: var(--text) !important;
-        }
-
-        .button-link.secondary:hover {
-            background: #303747;
         }
 
         @media (max-width: 800px) {
@@ -1624,11 +1611,13 @@ OVERVIEW_BODY_HTML = """
 
 
 DM_TEMPLATES_BODY_HTML = """
-<div class="panel">
+<div class="panel page-intro">
     <h2>DM Templates</h2>
     <p class="hint">
-        These messages are sent to users during verification actions. Available variables:
+        These messages are sent to users during verification actions. Edit the wording here, then save at the bottom.
+        Available variables:
     </p>
+
     <div class="variable-list">
         <code>{user}</code>
         <code>{user_name}</code>
@@ -1656,28 +1645,126 @@ DM_TEMPLATES_BODY_HTML = """
 <form method="post" action="{{ url_for('dm_templates') }}">
     <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
 
-    {% for template in templates %}
-        <div class="template-card">
-            <div class="card-header">
-                <div>
-                    <h3>{{ template.label }}</h3>
-                    <p class="template-meta">Key: <code>{{ template.key }}</code></p>
-                </div>
-                {% if template.is_custom %}
-                    <span class="badge custom">Custom</span>
-                {% else %}
-                    <span class="badge">Default</span>
-                {% endif %}
-            </div>
+    <div class="panel">
+        <h2>Quick Actions</h2>
+        <p class="hint section-note">
+            Jump to the template group you want, because scrolling through text boxes is not a personality trait.
+        </p>
 
-            <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
-
-            <details class="default-details">
-                <summary>Show default text</summary>
-                <pre>{{ template.default }}</pre>
-            </details>
+        <div class="quick-actions">
+            <a class="button-link secondary" href="#dm-success">Successful Outcomes</a>
+            <a class="button-link secondary" href="#dm-rejections">Rejected Outcomes</a>
+            <a class="button-link secondary" href="#dm-conversation">Conversation</a>
         </div>
-    {% endfor %}
+    </div>
+
+    <div class="panel" id="dm-success">
+        <h2>Successful Outcomes</h2>
+        <p class="hint section-note">
+            Sent when an application is approved.
+        </p>
+
+        {% for template in templates %}
+            {% if template.key in ['approved'] %}
+                <div class="template-card">
+                    <div class="card-header">
+                        <div>
+                            <h3>{{ template.label }}</h3>
+                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
+                        </div>
+                    </div>
+
+                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
+
+                    <details class="default-details">
+                        <summary>Show default text</summary>
+                        <pre>{{ template.default }}</pre>
+                    </details>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="panel" id="dm-rejections">
+        <h2>Rejected Outcomes</h2>
+        <p class="hint section-note">
+            Sent when an application is denied, kicked, or banned.
+        </p>
+
+        {% for template in templates %}
+            {% if template.key in ['denied', 'rejected', 'kicked', 'banned'] %}
+                <div class="template-card">
+                    <div class="card-header">
+                        <div>
+                            <h3>{{ template.label }}</h3>
+                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
+                        </div>
+                    </div>
+
+                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
+
+                    <details class="default-details">
+                        <summary>Show default text</summary>
+                        <pre>{{ template.default }}</pre>
+                    </details>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="panel" id="dm-conversation">
+        <h2>Conversation</h2>
+        <p class="hint section-note">
+            Sent when staff need to ask the user a question during verification.
+        </p>
+
+        {% for template in templates %}
+            {% if template.key in ['questioning', 'question'] %}
+                <div class="template-card">
+                    <div class="card-header">
+                        <div>
+                            <h3>{{ template.label }}</h3>
+                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
+                        </div>
+                    </div>
+
+                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
+
+                    <details class="default-details">
+                        <summary>Show default text</summary>
+                        <pre>{{ template.default }}</pre>
+                    </details>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="panel">
+        <h2>Other Templates</h2>
+        <p class="hint section-note">
+            Any template keys not recognised by the grouped layout appear here, because hiding unknown config would be a bit dum.
+        </p>
+
+        {% for template in templates %}
+            {% if template.key not in ['approved', 'denied', 'rejected', 'kicked', 'banned', 'questioning', 'question'] %}
+                <div class="template-card">
+                    <div class="card-header">
+                        <div>
+                            <h3>{{ template.label }}</h3>
+                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
+                        </div>
+                    </div>
+
+                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
+
+                    <details class="default-details">
+                        <summary>Show default text</summary>
+                        <pre>{{ template.default }}</pre>
+                    </details>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
 
     <div class="panel action-panel">
         <button type="submit">Save DM Templates</button>
@@ -1689,128 +1776,8 @@ DM_TEMPLATES_BODY_HTML = """
 """
 
 
-PERMISSIONS_BODY_HTML = """
-<div class="panel">
-    <h2>Permissions</h2>
-    <p class="hint">
-        This mirrors the <code>/permissions</code> commands. The WebUI is just a less painful control panel.
-    </p>
-
-    <form method="get" action="{{ url_for('permissions_page') }}">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-    </form>
-</div>
-
-{% if selected_guild_id %}
-<form method="post" action="{{ url_for('permissions_page') }}">
-    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
-
-    <div class="panel">
-        <h2>WebUI Access</h2>
-        <p class="hint">
-            Choose which Discord roles can access the WebUI. Owner roles can change settings, restore backups,
-            manage permissions, and cancel active applications. Viewer roles can only view the Overview page.
-            If nothing is saved here, the bot falls back to the role IDs in <code>.env</code>.
-        </p>
-
-        <div class="stat-grid">
-            <div class="stat-card">
-                <strong>Discord OAuth</strong>
-                <span class="pill {{ webui_access.discord_auth_class }}">{{ webui_access.discord_auth_status }}</span>
-            </div>
-            <div class="stat-card">
-                <strong>Password fallback</strong>
-                <span class="pill {{ webui_access.password_class }}">{{ webui_access.password_status }}</span>
-            </div>
-            <div class="stat-card">
-                <strong>Owner roles</strong>
-                {{ webui_access.owner_count }} configured via {{ webui_access.owner_source }}
-            </div>
-            <div class="stat-card">
-                <strong>Viewer roles</strong>
-                {{ webui_access.viewer_count }} configured via {{ webui_access.viewer_source }}
-            </div>
-        </div>
-
-        <div class="grid-2">
-            <div>
-                <label>WebUI owner roles</label>
-                <select name="webui_owner_role_ids" multiple size="8">
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.owner_role_ids else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-                <p class="hint">Hold Ctrl to select more than one role. Owner access should be kept very limited, because buttons are powerful and humans are inventive.</p>
-            </div>
-
-            <div>
-                <label>WebUI viewer roles</label>
-                <select name="webui_viewer_role_ids" multiple size="8">
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.viewer_role_ids else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-                <p class="hint">Viewer access can see the Overview page but cannot change settings or use destructive tools.</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel">
-        <h2>Permission Roles</h2>
-
-        <div class="grid-2">
-            {% for role_setting in role_settings %}
-                <div>
-                    <label>{{ role_setting.label }}</label>
-                    <select name="role_{{ role_setting.level }}">
-                        <option value="">Not set</option>
-                        {% for role in roles %}
-                            <option value="{{ role.id }}" {{ 'selected' if role.id == role_setting.role_id else '' }}>{{ role.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="panel">
-        <h2>Command Levels</h2>
-
-        {% for command in commands %}
-            <div class="command-row">
-                <div>
-                    <h3><code>{{ command.key }}</code></h3>
-                </div>
-
-                <div>
-                    <input type="hidden" name="command_key[]" value="{{ command.key }}">
-                    <select name="command_level_{{ command.safe_key }}">
-                        {% for level in levels %}
-                            <option value="{{ level.value }}" {{ 'selected' if level.value == command.level else '' }}>{{ level.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-
-    <div class="panel">
-        <button type="submit">Save Permissions</button>
-    </div>
-</form>
-{% else %}
-<div class="panel"><p>No servers available.</p></div>
-{% endif %}
-"""
-
-
 BACKUPS_BODY_HTML = """
-<div class="panel">
+<div class="panel page-intro">
     <h2>Encrypted Backups</h2>
     <p class="hint">
         Create or restore an encrypted <code>.tfsbackup</code> file containing the bot database and uploads.
@@ -1838,10 +1805,63 @@ BACKUPS_BODY_HTML = """
             <span><code>.tfsbackup</code></span>
         </div>
     </div>
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="#create-backup">Create Backup</a>
+        <a class="button-link secondary" href="#restore-backup">Restore Backup</a>
+        <a class="button-link secondary" href="#backup-contents">Backup Contents</a>
+    </div>
 </div>
 
-<div class="panel">
+{% if restore_completed %}
+<div class="panel restore-warning">
+    <h2>Restart Required</h2>
+    <p class="hint">
+        <strong>Backup restored successfully. Restart the bot now.</strong>
+        Do not keep using the WebUI until the bot has restarted, because the database has been replaced underneath the running process.
+        That is useful, but also deeply cursed.
+    </p>
+</div>
+{% endif %}
+
+
+<div class="panel" id="backup-contents">
+    <h2>What This Backup Contains</h2>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Path</th>
+                <th>Included</th>
+                <th>Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>data/tfsbot.sqlite3</code></td>
+                <td><span class="pill good">Yes</span></td>
+                <td>Main bot database: applications, forms, permissions, settings, templates.</td>
+            </tr>
+            <tr>
+                <td><code>data/uploads/</code></td>
+                <td><span class="pill good">Yes, if it exists</span></td>
+                <td>Uploaded WebUI images and other stored files.</td>
+            </tr>
+            <tr>
+                <td><code>.env</code></td>
+                <td><span class="pill warn">Optional</span></td>
+                <td>Bot token and runtime config. Sensitive, obviously!</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<div class="panel" id="create-backup">
     <h2>Create Backup</h2>
+    <p class="hint section-note">
+        Creates an encrypted backup containing the SQLite database and uploads folder. Save the file somewhere safe and keep the password somewhere safer.
+    </p>
 
     <form method="post">
         <input type="hidden" name="action" value="create_backup">
@@ -1886,13 +1906,30 @@ BACKUPS_BODY_HTML = """
     </form>
 </div>
 
-<div class="panel danger-panel">
+<div class="panel danger-panel" id="restore-backup">
     <h2>Restore Backup</h2>
 
-    <p class="hint">
+    <p class="hint section-note">
         Restoring replaces the current database with the uploaded backup.
         The current database and uploads are copied to <code>data/restore_safety/</code> first, because not testing the lifeboat before using that badass looking slide is generally a bad idea.
     </p>
+
+    <div class="backup-steps">
+        <div class="backup-step">
+            <strong>Before restoring</strong>
+            Make sure this is the backup you actually want. The password must match the backup file.
+        </div>
+
+        <div class="backup-step">
+            <strong>During restore</strong>
+            The WebUI will replace <code>data/tfsbot.sqlite3</code> and optionally restore uploads and <code>.env</code>.
+        </div>
+
+        <div class="backup-step">
+            <strong>After restoring</strong>
+            Restart the bot immediately. Do not keep using the WebUI until the restart is done.
+        </div>
+    </div>
 
     <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="action" value="restore_backup">
@@ -1951,37 +1988,6 @@ BACKUPS_BODY_HTML = """
         </div>
     </form>
 </div>
-
-<div class="panel">
-    <h2>What This Backup Contains</h2>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Path</th>
-                <th>Included</th>
-                <th>Purpose</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>data/tfsbot.sqlite3</code></td>
-                <td><span class="pill good">Yes</span></td>
-                <td>Main bot database: applications, forms, permissions, settings, templates.</td>
-            </tr>
-            <tr>
-                <td><code>data/uploads/</code></td>
-                <td><span class="pill good">Yes, if it exists</span></td>
-                <td>Uploaded WebUI images and other stored files.</td>
-            </tr>
-            <tr>
-                <td><code>.env</code></td>
-                <td><span class="pill warn">Optional</span></td>
-                <td>Bot token and runtime config. Sensitive, obviously!</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
 """
 
 
@@ -2021,24 +2027,24 @@ FORMS_BODY_HTML = """
 <div class="panel">
     <h2>Selected Form</h2>
 
-    <div class="health-list">
-        <div class="health-item">
-            <small>Form Key</small>
-            <span><code>{{ selected_form_key }}</code></span>
+    <div class="stat-grid">
+        <div class="stat-card">
+            <strong>Form Key</strong>
+            <code>{{ selected_form_key }}</code>
         </div>
 
-        <div class="health-item">
-            <small>Title</small>
-            <span>{{ selected_form.title }}</span>
+        <div class="stat-card">
+            <strong>Title</strong>
+            {{ selected_form.title }}
         </div>
 
-        <div class="health-item">
-            <small>Questions</small>
-            <span>{{ questions|length }} question(s), {{ modal_pages }} modal page(s)</span>
+        <div class="stat-card">
+            <strong>Questions</strong>
+            {{ questions|length }} question(s), {{ modal_pages }} modal page(s)
         </div>
 
-        <div class="health-item">
-            <small>Verification Form</small>
+        <div class="stat-card">
+            <strong>Verification Form</strong>
             <span class="pill {{ 'good' if selected_form_key == verification_form_key else 'warn' }}">
                 {{ 'Yes' if selected_form_key == verification_form_key else 'No' }}
             </span>
@@ -2450,10 +2456,10 @@ ACCESS_DENIED_BODY_HTML = """
 
 
 VERIFICATION_BODY_HTML = """
-<div class="panel">
+<div class="panel page-intro">
     <h2>Verification</h2>
     <p class="hint">
-        Manage verification channels, approval roles, invite tracking, and application automod from here.
+        Manage the verification panel, review channels, approval roles, invite tracking, and application automod from here.
         Slash commands can still do the same things, but this is cooler.
     </p>
 
@@ -2472,29 +2478,29 @@ VERIFICATION_BODY_HTML = """
     <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
 
     <div class="panel">
-        <h2>Channels and Panel</h2>
+        <h2>Quick Actions</h2>
+        <p class="hint section-note">
+            Jump to the main verification setup sections. No, this does not make Discord permissions less annoying, sadly.
+        </p>
+
+        <div class="quick-actions">
+            <a class="button-link secondary" href="#verification-panel-setup">Panel Setup</a>
+            <a class="button-link secondary" href="#review-log-channels">Review + Logs</a>
+            <a class="button-link secondary" href="#approval-roles">Approval Roles</a>
+            <a class="button-link secondary" href="#verification-automod">Automod</a>
+            <a class="button-link secondary" href="#invite-tracking">Invite Tracking</a>
+            <a class="button-link secondary" href="#application-maintenance">Application Maintenance</a>
+        </div>
+    </div>
+
+    <div class="panel" id="verification-panel-setup">
+        <h2>Verification Panel Setup</h2>
+        <p class="hint section-note">
+            Choose which form the verification panel should open, then optionally post or repost the panel to a channel.
+            Existing posted panels do not update themselves, because Discord messages are not psychic.
+        </p>
 
         <div class="setting-grid">
-            <div>
-                <label>Review channel</label>
-                <select name="review_channel_id">
-                    <option value="">Not set</option>
-                    {% for channel in text_channels %}
-                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.review_channel_id else '' }}>#{{ channel.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Log channel</label>
-                <select name="log_channel_id">
-                    <option value="">Not set</option>
-                    {% for channel in text_channels %}
-                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.log_channel_id else '' }}>#{{ channel.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
             <div>
                 <label>Verification form</label>
                 <select name="verification_form_key">
@@ -2518,13 +2524,48 @@ VERIFICATION_BODY_HTML = """
         <div class="button-row">
             <button type="submit" name="action" value="save_verification">Save Verification Settings</button>
             <button type="submit" name="action" value="save_and_post_panel" class="secondary-button">Save and Post Panel</button>
-            <button type="submit" name="action" value="refresh_invites" class="secondary-button">Refresh Invite Cache</button>
         </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="review-log-channels">
+        <h2>Review + Log Channels</h2>
+        <p class="hint section-note">
+            Review applications go to the review channel. Final outcomes go to the log channel.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Review channel</label>
+                <select name="review_channel_id">
+                    <option value="">Not set</option>
+                    {% for channel in text_channels %}
+                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.review_channel_id else '' }}>#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Log channel</label>
+                <select name="log_channel_id">
+                    <option value="">Not set</option>
+                    {% for channel in text_channels %}
+                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.log_channel_id else '' }}>#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Channel Settings</button>
+        </div>
+    </div>
+
+    <div class="panel" id="approval-roles">
         <h2>Approval Roles</h2>
-        <p class="hint">On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles, because Discord loves hierarchy.</p>
+        <p class="hint section-note">
+            On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles,
+            because Discord loves hierarchy more than sense.
+        </p>
 
         <div class="setting-grid">
             <div>
@@ -2547,13 +2588,34 @@ VERIFICATION_BODY_HTML = """
                 </select>
             </div>
         </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>When approved</strong>
+                User can receive the configured approval role.
+            </div>
+
+            <div class="stat-card">
+                <strong>Role removal</strong>
+                User can lose the configured pre-verification role.
+            </div>
+
+            <div class="stat-card">
+                <strong>Health check</strong>
+                Overview shows if the bot role is too low.
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Approval Roles</button>
+        </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="verification-automod">
         <h2>Verification Automod</h2>
-        <p class="hint">
+        <p class="hint section-note">
             If enabled, applications containing any blocked term are automatically logged and banned.
-            Keep one term per line.
+            Keep one term per line. Terms are stored in SQLite and matched case-insensitively.
         </p>
 
         <label class="checkbox-row">
@@ -2580,9 +2642,37 @@ VERIFICATION_BODY_HTML = """
         </div>
     </div>
 
-    <div class="panel danger-panel">
+    <div class="panel" id="invite-tracking">
+        <h2>Invite Tracking</h2>
+        <p class="hint section-note">
+            Invite tracking runs automatically when a member joins. Refreshing the cache is useful after restarting the bot or creating/deleting invites.
+        </p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>Status</strong>
+                {{ invite_tracking_status }}
+            </div>
+
+            <div class="stat-card">
+                <strong>Permission needed</strong>
+                Manage Server
+            </div>
+
+            <div class="stat-card">
+                <strong>Shown on apps</strong>
+                Invite code and inviter
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="refresh_invites" class="secondary-button">Refresh Invite Cache</button>
+        </div>
+    </div>
+
+    <div class="panel danger-panel" id="application-maintenance">
         <h2>Application Maintenance</h2>
-        <p class="hint">
+        <p class="hint section-note">
             Cancel/reset stuck active applications. This marks them as cancelled, logs it, deletes the review message if possible,
             and locks/archives any questioning thread. It does not delete application history.
         </p>
@@ -2592,7 +2682,6 @@ VERIFICATION_BODY_HTML = """
                 <label>Cancel by User ID</label>
                 <input name="cancel_user_id" placeholder="123456789012345678">
             </div>
-
 
             <div class="wide-field">
                 <label>Cancellation reason</label>
@@ -2608,16 +2697,6 @@ VERIFICATION_BODY_HTML = """
         <div class="button-row">
             <button type="submit" name="action" value="cancel_by_user" class="danger-button">Cancel by User ID</button>
             <button type="submit" name="action" value="cancel_all_pending" class="danger-button">Cancel All Pending</button>
-        </div>
-    </div>
-
-    <div class="panel">
-        <h2>Invite Tracking</h2>
-        <p class="hint">Invite tracking runs automatically on member join. Refreshing the cache is useful after restarting the bot or creating/deleting invites.</p>
-        <div class="stat-grid">
-            <div class="stat-card"><strong>Status</strong>{{ invite_tracking_status }}</div>
-            <div class="stat-card"><strong>Permission needed</strong>Manage Server</div>
-            <div class="stat-card"><strong>Shown on apps</strong>Invite code and inviter</div>
         </div>
     </div>
 </form>
@@ -3927,6 +4006,7 @@ def create_webui(bot: discord.Client) -> Flask:
 
         message: str | None = None
         error: str | None = None
+        restore_completed = False
 
         database_path = get_database_path() or Path("data/tfsbot.sqlite3")
         uploads_path = Path("data/uploads")
@@ -3997,10 +4077,12 @@ def create_webui(bot: discord.Client) -> Flask:
 
                     restored_text = ", ".join(restored_bits) or "nothing"
 
+                    restore_completed = True
+
                     message = (
                         f"Restored {restored_text}. "
                         f"Safety copy created at {restore_result.safety_backup_directory}. "
-                        "Restart the bot now."
+                        "Restart the bot now. Do not keep using the WebUI until the bot has restarted."
                     )
 
                 else:
@@ -4027,6 +4109,7 @@ def create_webui(bot: discord.Client) -> Flask:
             database_path=str(database_path),
             database_size=database_size,
             uploads_state=uploads_state,
+            restore_completed=restore_completed,
             message=message,
             error=error,
         )
