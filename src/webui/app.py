@@ -33,8 +33,6 @@ from src.webui.routes import (
 )
 
 from src.utils.embed_builder import EmbedFactory
-from src.webui.custom_commands import register_custom_command_webui
-
 
 LOGIN_HTML = """
 <!doctype html>
@@ -638,7 +636,7 @@ EMBED_FORM_HTML = """
             <a href="{{ url_for('overview.index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
-                <a href="{{ url_for('custom_commands_page') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
+                <a href="{{ url_for('custom_commands.index') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
                 <a href="{{ url_for('dm_templates.index') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms.index') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('uploads.index') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
@@ -1314,14 +1312,6 @@ def create_webui(bot: discord.Client) -> Flask:
         web_context.run_coro
     )
 
-    get_available_guilds = (
-        web_context.available_guilds
-    )
-
-    get_selected_guild = (
-        web_context.selected_guild
-    )
-
     def render_admin_page(
         title: str,
         active_page: str,
@@ -1707,17 +1697,6 @@ def create_webui(bot: discord.Client) -> Flask:
                 message=None,
                 error=str(error),
             )
-            
-    register_custom_command_webui(
-        app=app,
-        bot=bot,
-        require_owner_page=require_owner_page,
-        get_selected_guild=get_selected_guild,
-        get_available_guilds=get_available_guilds,
-        get_guild_roles=get_guild_roles,
-        render_admin_page=render_admin_page,
-        run_coro_from_flask=run_coro_from_flask,
-    )
     
     register_blueprints(
         app

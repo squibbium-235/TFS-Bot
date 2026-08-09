@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import discord
-from flask import Flask, redirect, render_template, request, session, url_for
+
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    session,
+)
+
+from src.webui.helpers import (
+    require_owner,
+    webui_context,
+)
 
 from src.services.custom_commands.store import (
     ADD_REACTION,
@@ -383,42 +393,55 @@ def build_default_action(
     )
 
 
-def register_custom_command_webui(
-    *,
-    app: Flask,
-    bot: discord.Client,
-    require_owner_page: Callable[[], Any],
-    get_selected_guild: Callable[
-        [str | None],
-        discord.Guild | None,
-    ],
-    get_available_guilds: Callable[
-        [],
-        list[dict[str, str]],
-    ],
-    get_guild_roles: Callable[
-        [discord.Guild],
-        list[dict[str, str]],
-    ],
-    render_admin_page: Callable[..., str],
-    run_coro_from_flask: Callable[
-        [Any],
-        Any,
-    ],
-) -> None:
+def create_custom_commands_blueprint(
+) -> Blueprint:
+    blueprint = Blueprint(
+        "custom_commands",
+        __name__,
+    )
+
     def get_store():
-        store = getattr(
-            bot,
-            "custom_command_store",
-            None,
+        return (
+            webui_context()
+            .custom_command_store()
         )
 
-        if store is None:
-            raise RuntimeError(
-                "Custom command store is not available."
+    def get_selected_guild(
+        guild_id_text: str | None,
+    ) -> discord.Guild | None:
+        return (
+            webui_context()
+            .selected_guild(
+                guild_id_text
             )
+        )
 
-        return store
+    def get_available_guilds(
+    ) -> list[dict[str, str]]:
+        return (
+            webui_context()
+            .available_guilds()
+        )
+
+    def get_guild_roles(
+        guild: discord.Guild,
+    ) -> list[dict[str, str]]:
+        return (
+            webui_context()
+            .guild_roles(
+                guild
+            )
+        )
+
+    def run_coro_from_flask(
+        coro,
+    ):
+        return (
+            webui_context()
+            .run_coro(
+                coro
+            )
+        )
 
     def render_page(
         *,
@@ -427,8 +450,11 @@ def register_custom_command_webui(
         message: str | None = None,
         error: str | None = None,
     ) -> str:
+        context = webui_context()
+
         commands = []
         selected_command = None
+
         roles: list[
             dict[str, str]
         ] = []
@@ -436,9 +462,11 @@ def register_custom_command_webui(
         if selected_guild is not None:
             store = get_store()
 
-            commands = run_coro_from_flask(
-                store.list(
-                    selected_guild.id
+            commands = (
+                run_coro_from_flask(
+                    store.list(
+                        selected_guild.id
+                    )
                 )
             )
 
@@ -460,52 +488,63 @@ def register_custom_command_webui(
                 selected_command is None
                 and commands
             ):
-                selected_command = commands[0]
+                selected_command = (
+                    commands[0]
+                )
 
-        body = render_template(
-            "custom_commands.html",
-            guilds=get_available_guilds(),
-            selected_guild_id=(
-                str(
-                    selected_guild.id
-                )
-                if selected_guild
-                else None
-            ),
-            commands=commands,
-            selected_command=selected_command,
-            roles=roles,
-            levels=LEVELS,
-            action_labels=ACTION_LABELS,
-            action_types=list(
-                ACTION_LABELS.items()
-            ),
-            prefix=str(
-                getattr(
-                    bot.config,
-                    "prefix",
-                    "!",
-                )
+        return render_template(
+            "custom_commands/index.html",
+            **context.template_context(
+                title=(
+                    "TFSBot Custom Commands"
+                ),
+                active_page=(
+                    "custom_commands"
+                ),
+                guilds=(
+                    get_available_guilds()
+                ),
+                selected_guild_id=(
+                    str(
+                        selected_guild.id
+                    )
+                    if selected_guild
+                    else None
+                ),
+                commands=commands,
+                selected_command=(
+                    selected_command
+                ),
+                roles=roles,
+                levels=LEVELS,
+                action_labels=(
+                    ACTION_LABELS
+                ),
+                action_types=list(
+                    ACTION_LABELS.items()
+                ),
+                prefix=str(
+                    getattr(
+                        context.bot.config,
+                        "prefix",
+                        "!",
+                    )
+                ),
+                message=message,
+                error=error,
             ),
         )
 
-        return render_admin_page(
-            title="TFSBot Custom Commands",
-            active_page="custom_commands",
-            body_template=body,
-            message=message,
-            error=error,
-        )
-
-    @app.route(
+    @blueprint.route(
         "/custom-commands",
         methods=[
             "GET",
             "POST",
         ],
     )
-    def custom_commands_page():
-        owner_error = require_owner_page()
+    
+    def index():
+        owner_error = require_owner()
 
         if owner_error is not None:
             return owner_error
@@ -599,7 +638,7 @@ def register_custom_command_webui(
                             name=new_name,
                             description=description,
                             created_by=get_creator_id(
-                                bot
+                                webui_context().bot
                             ),
                             required_level=level,
                             cooldown_seconds=cooldown,
@@ -974,3 +1013,10 @@ def register_custom_command_webui(
             message=message,
             error=error,
         )
+
+    return blueprint
+
+
+blueprint = (
+    create_custom_commands_blueprint()
+)
