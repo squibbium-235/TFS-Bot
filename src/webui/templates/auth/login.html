@@ -1,0 +1,126 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        TFSBot Login
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/login.css') }}"
+    >
+</head>
+
+<body>
+
+    <div class="login-card">
+
+        <h1>
+            TFSBot WebUI
+        </h1>
+
+        {% if discord_login_enabled %}
+
+            <form
+                method="get"
+                action="{{ url_for('auth.discord_login_start') }}"
+            >
+
+                <button
+                    type="submit"
+                    class="discord-button"
+                >
+                    Login with Discord
+                </button>
+
+            </form>
+
+            <p class="hint">
+                Access is granted only if your
+                Discord account has an allowed
+                server role.
+            </p>
+
+        {% endif %}
+
+
+        {% if discord_login_enabled and password_login_enabled %}
+
+            <div class="divider">
+                or emergency login
+            </div>
+
+        {% endif %}
+
+
+        {% if password_login_enabled %}
+
+            <form
+                method="post"
+                action="{{ url_for('auth.login') }}"
+            >
+
+                <label>
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    name="username"
+                    autocomplete="username"
+                    {% if not discord_login_enabled %}
+                        autofocus
+                    {% endif %}
+                >
+
+                <label>
+                    Password
+                </label>
+
+                <input
+                    type="password"
+                    name="password"
+                    autocomplete="current-password"
+                >
+
+                <button type="submit">
+                    Login
+                </button>
+
+            </form>
+
+        {% endif %}
+
+
+        {% if not discord_login_enabled and not password_login_enabled %}
+
+            <p class="error">
+                No WebUI login methods
+                are configured.
+            </p>
+
+        {% endif %}
+
+
+        {% if error %}
+
+            <p class="error">
+                {{ error }}
+            </p>
+
+        {% endif %}
+
+    </div>
+
+</body>
+
+</html>

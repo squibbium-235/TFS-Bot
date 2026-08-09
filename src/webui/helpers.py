@@ -32,13 +32,26 @@ def webui_context() -> WebUIContext:
 
     return context
 
+def require_login():
+    context = webui_context()
+
+    if context.is_logged_in():
+        return None
+
+    return redirect(
+        url_for(
+            "auth.login"
+        )
+    )
+
+
 def require_owner():
     context = webui_context()
 
-    if not context.is_logged_in():
-        return redirect(
-            url_for("login")
-        )
+    login_error = require_login()
+
+    if login_error is not None:
+        return login_error
 
     if context.is_owner():
         return None

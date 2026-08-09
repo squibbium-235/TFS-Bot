@@ -37,10 +37,18 @@ from src.webui.routes.embed_builder import (
     blueprint as embed_builder_blueprint,
 )
 
+from src.webui.routes.auth import (
+    blueprint as auth_blueprint,
+)
+
 
 def register_blueprints(
     app: Flask,
 ) -> None:
+    app.register_blueprint(
+        auth_blueprint
+    )
+    
     app.register_blueprint(
         overview_blueprint
     )

@@ -12,6 +12,7 @@ from flask import (
 from src.webui.helpers import (
     require_owner,
     webui_context,
+    require_login,
 )
 
 
@@ -181,10 +182,12 @@ def file(
 ):
     context = webui_context()
 
-    if not context.is_logged_in():
-        return redirect(
-            url_for("login")
-        )
+    login_error = (
+        require_login()
+    )
+
+    if login_error is not None:
+        return login_error
 
     try:
         path = (

@@ -13,16 +13,16 @@ import discord
 
 from flask import (
     Blueprint,
-    redirect,
     render_template,
     request,
-    url_for,
 )
 
 from src.services.forms.constants import (
     FORM_KEY_VERIFICATION,
 )
+
 from src.webui.helpers import (
+    require_login,
     webui_context,
 )
 
@@ -885,10 +885,12 @@ def build_overview_context(
 def index():
     context = webui_context()
 
-    if not context.is_logged_in():
-        return redirect(
-            url_for("login")
-        )
+    login_error = (
+        require_login()
+    )
+
+    if login_error is not None:
+        return login_error
 
     selected_guild = (
         context.selected_guild(
