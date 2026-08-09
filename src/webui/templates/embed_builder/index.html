@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+
+{% block head %}
+
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/embed_builder.css') }}"
+>
+
+{% endblock %}
+
+
+{% block content %}
+
+<div class="panel page-intro">
+    <h2>Embed Builder</h2>
+    <p class="hint">
+        Build and send Discord embeds from the WebUI. Upload images here if you want Discord-hosted attachments instead of external image links.
+    </p>
+
+    <div class="quick-actions">
+        <a class="button-link" href="#embed-destination">Destination</a>
+        <a class="button-link" href="#embed-content">Embed Content</a>
+        <a class="button-link" href="#embed-images">Images</a>
+        <a class="button-link" href="#embed-fields">Fields</a>
+        <a class="button-link" href="#embed-preview">Preview</a>
+    </div>
+</div>
+
+{% if message %}
+    <p class="message">{{ message }}</p>
+{% endif %}
+
+{% if error %}
+    <p class="error">{{ error }}</p>
+{% endif %}
+
+<details class="upload-details">
+    <summary>Upload Image</summary>
+
+    <div class="upload-details-inner">
+        <form
+            method="post"
+            action="{{ url_for('embed_builder.upload_image') }}"
+            enctype="multipart/form-data"
+        >
+            <label>Folder</label>
+            <select name="folder">
+                <option value="">Root</option>
+                {% for folder in upload_folders %}
+                    <option value="{{ folder.path }}">{{ folder.label }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Or new folder</label>
+            <input name="new_folder" placeholder="author-icons">
+
+            <label>Image file</label>
+            <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required>
+
+            <p class="hint">
+                Uploaded images can be selected below. When sent to Discord, they are attached to the message,
+                so they do not need Imgur or another image host, or you can, idc.
+            </p>
+
+            <button type="submit">Upload Image</button>
+        </form>
+    </div>
+</details>
+
+<div class="embed-builder-grid">
+    <section>
+        <div class="panel">
+            <form
+                method="post"
+                action="{{ url_for('embed_builder.send_embed') }}"
+                id="embed-form"
+            >
+                <h2 id="embed-destination">Destination</h2>
+                <p class="hint section-note">
+                    Choose where the embed should be sent. This sends immediately.
+                </p>
+
+            <label>Channel</label>
+            <select name="channel_id" required>
+                {% for channel in channels %}
+                    <option value="{{ channel.id }}">{{ channel.label }}</option>
+                {% endfor %}
+            </select>
+
+            <h2 id="embed-content" class="form-section-title">Embed Content</h2>
+
+            <label>Title</label>
+            <input name="title" id="title" maxlength="256" required>
+
+            <label>Description</label>
+            <textarea name="description" id="description" maxlength="4000" rows="6"></textarea>
+
+            <label>Colour</label>
+            <div class="colour-input-wrap">
+                <input
+                    type="text"
+                    name="colour"
+                    id="colour"
+                    placeholder="#5865F2"
+                    value="#5865F2"
+                    autocomplete="off"
+                >
+
+                <input
+                    type="color"
+                    id="colour_picker"
+                    value="#5865F2"
+                    aria-label="Pick embed colour"
+                >
+            </div>
+
+            <h2 id="embed-images" class="form-section-title">Images</h2>
+
+            <label>Uploaded image</label>
+            <select name="image_upload_filename" id="image_upload_filename">
+                <option value="">No uploaded image</option>
+                {% for image in uploaded_images %}
+                    <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Or external image URL</label>
+            <input name="image_url" id="image_url" placeholder="https://example.com/image.png">
+
+            <label>Uploaded thumbnail</label>
+            <select name="thumbnail_upload_filename" id="thumbnail_upload_filename">
+                <option value="">No uploaded thumbnail</option>
+                {% for image in uploaded_images %}
+                    <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Or external thumbnail URL</label>
+            <input name="thumbnail_url" id="thumbnail_url" placeholder="https://example.com/thumb.png">
+
+            <label>Author name</label>
+            <input name="author_name" id="author_name" maxlength="256">
+
+            <label>Uploaded author icon</label>
+            <select name="author_icon_upload_filename" id="author_icon_upload_filename">
+                <option value="">No uploaded author icon</option>
+                {% for image in uploaded_images %}
+                    <option value="{{ image.reference }}" data-url="{{ image.url }}">{{ image.label }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Or external author icon URL</label>
+            <input name="author_icon_url" id="author_icon_url">
+
+            <label>Footer</label>
+            <input name="footer" id="footer" maxlength="2048" value="TFSBot">
+
+            <h2 id="embed-fields" class="form-section-title">Fields</h2>
+            <p class="hint section-note">
+                Add optional embed fields. Inline fields try to sit beside each other, assuming Discord feels cooperative.
+            </p>
+
+            <div id="fields"></div>
+
+            <div class="actions">
+                <button type="button" class="secondary" onclick="addField()">Add Field</button>
+                <button type="button" class="clear-button" onclick="clearEmbedForm()">Clear Form</button>
+                <button type="submit">Send Embed to Channel</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="preview-wrap" id="embed-preview">
+    <div class="panel">
+        <div class="preview-heading">
+            <div>
+                <h2>Live Preview</h2>
+                <p class="hint">
+                    Approximate Discord preview. Final spacing may still vary, because Discord enjoys little surprises.
+                </p>
+            </div>
+        </div>
+
+        <div class="discord-preview">
+            <div class="discord-message">
+                <div class="avatar">T</div>
+
+                <div class="message-body">
+                    <span class="bot-name">TFSBot</span>
+                    <span class="bot-tag">BOT</span>
+
+                    <div class="embed-preview" id="preview-embed">
+                        <div class="embed-body-row">
+                            <div class="embed-main-content">
+                                <div class="embed-author" id="preview-author-wrap" style="display: none;">
+                                    <img id="preview-author-icon" style="display: none;">
+                                    <span id="preview-author"></span>
+                                </div>
+
+                                <div class="embed-title" id="preview-title">Embed title</div>
+                                <div class="embed-description" id="preview-description">Embed description will appear here.</div>
+
+                                <div class="embed-fields" id="preview-fields"></div>
+                            </div>
+
+                            <div class="embed-thumbnail-wrap">
+                                <img class="embed-thumbnail" id="preview-thumbnail" style="display: none;">
+                                <div class="image-preview-error" id="preview-thumbnail-error">Thumbnail could not be loaded in the browser preview.</div>
+                            </div>
+                        </div>
+
+                        <img class="embed-image" id="preview-image" style="display: none;">
+                        <div class="image-preview-error" id="preview-image-error">Image could not be loaded in the browser preview.</div>
+
+                        <div class="embed-footer" id="preview-footer">TFSBot</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script
+    src="{{ url_for('static', filename='js/embed_builder.js') }}"
+></script>
+
+{% endblock %}

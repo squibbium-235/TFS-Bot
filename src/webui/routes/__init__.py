@@ -33,6 +33,10 @@ from src.webui.routes.custom_commands import (
     blueprint as custom_commands_blueprint,
 )
 
+from src.webui.routes.embed_builder import (
+    blueprint as embed_builder_blueprint,
+)
+
 
 def register_blueprints(
     app: Flask,
@@ -67,4 +71,8 @@ def register_blueprints(
     
     app.register_blueprint(
         custom_commands_blueprint
+    )
+    
+    app.register_blueprint(
+        embed_builder_blueprint
     )
