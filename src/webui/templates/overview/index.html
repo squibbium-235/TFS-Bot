@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel">
+    <h2>Overview</h2>
+
+    <p class="hint">
+        Quick state of the bot, verification queue, and setup. A dashboard if you will.
+    </p>
+
+    <form method="get">
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+            {% for guild in guilds %}
+                <option
+                    value="{{ guild.id }}"
+                    {% if guild.id == selected_guild_id %}
+                        selected
+                    {% endif %}
+                >
+                    {{ guild.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if overview %}
+        <div class="overview-grid">
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.pending_count }}
+                </strong>
+
+                <span>
+                    Pending applications
+                </span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.questioning_count }}
+                </strong>
+
+                <span>
+                    Being questioned
+                </span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today_total }}
+                </strong>
+
+                <span>
+                    Actioned today
+                </span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.total_count }}
+                </strong>
+
+                <span>
+                    Total applications
+                </span>
+            </div>
+
+        </div>
+    {% endif %}
+</div>
+
+
+{% if overview %}
+
+    {% if overview.warning_items %}
+
+        <div class="panel warning-panel">
+
+            <h2>
+                {{ overview.warning_count }}
+                issue(s) need attention
+            </h2>
+
+            <p class="hint">
+                These are the setup items most likely to stop verification or WebUI management from working properly.
+            </p>
+
+            <div class="warning-list">
+
+                {% for item in overview.warning_items %}
+
+                    <div class="warning-item">
+                        <strong>
+                            {{ item.label }}
+                        </strong>
+
+                        <span>
+                            {{ item.value }}
+                        </span>
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    {% endif %}
+
+
+    <div class="panel">
+
+        <h2>Setup Health</h2>
+
+        <div class="health-list">
+
+            {% for item in overview.health_items %}
+
+                <div class="health-item">
+
+                    <small>
+                        {{ item.label }}
+                    </small>
+
+                    <span
+                        class="pill {{ item.class }}"
+                    >
+                        {{ item.value }}
+                    </span>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Verification Activity Today
+        </h2>
+
+        <div class="overview-grid">
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today.approved }}
+                </strong>
+                <span>Approved</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today.rejected }}
+                </strong>
+                <span>Rejected</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today.kicked }}
+                </strong>
+                <span>Kicked</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today.banned }}
+                </strong>
+                <span>Banned</span>
+            </div>
+
+        </div>
+
+        <div class="overview-grid">
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.today.left }}
+                </strong>
+                <span>Left before review</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.status_counts.approved }}
+                </strong>
+                <span>Total approved</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.status_counts.rejected }}
+                </strong>
+                <span>Total rejected</span>
+            </div>
+
+            <div class="overview-card">
+                <strong>
+                    {{ overview.status_counts.banned }}
+                </strong>
+                <span>Total banned</span>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Pending Applications
+        </h2>
+
+        {% if overview.pending_applications %}
+
+            <table class="data-table">
+
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>State</th>
+                        <th>Submitted</th>
+                        <th>Links</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for application in overview.pending_applications %}
+
+                        <tr>
+
+                            <td>
+                                {{ application.user }}
+                            </td>
+
+                            <td>
+                                <span
+                                    class="pill {{ application.state_class }}"
+                                >
+                                    {{ application.state }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {{ application.submitted_at }}
+                            </td>
+
+                            <td>
+
+                                {% if application.review_url %}
+                                    <a
+                                        class="muted-link"
+                                        href="{{ application.review_url }}"
+                                        target="_blank"
+                                    >
+                                        Review
+                                    </a>
+                                {% endif %}
+
+                                {% if application.thread_url %}
+
+                                    {% if application.review_url %}
+                                        ·
+                                    {% endif %}
+
+                                    <a
+                                        class="muted-link"
+                                        href="{{ application.thread_url }}"
+                                        target="_blank"
+                                    >
+                                        Thread
+                                    </a>
+
+                                {% endif %}
+
+                                {% if not application.review_url and not application.thread_url %}
+                                    <span class="hint">
+                                        No links
+                                    </span>
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        {% else %}
+
+            <p class="hint">
+                No pending applications. Suspiciously peaceful.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>
+            Recent Outcomes
+        </h2>
+
+        {% if overview.recent_outcomes %}
+
+            <table class="data-table">
+
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Status</th>
+                        <th>When</th>
+                        <th>Links</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for application in overview.recent_outcomes %}
+
+                        <tr>
+
+                            <td>
+                                {{ application.user }}
+                            </td>
+
+                            <td>
+                                <span
+                                    class="pill {{ application.state_class }}"
+                                >
+                                    {{ application.state }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {{ application.actioned_at }}
+                            </td>
+
+                            <td>
+
+                                {% if application.log_url %}
+                                    <a
+                                        class="muted-link"
+                                        href="{{ application.log_url }}"
+                                        target="_blank"
+                                    >
+                                        Log
+                                    </a>
+                                {% endif %}
+
+                                {% if application.thread_url %}
+
+                                    {% if application.log_url %}
+                                        ·
+                                    {% endif %}
+
+                                    <a
+                                        class="muted-link"
+                                        href="{{ application.thread_url }}"
+                                        target="_blank"
+                                    >
+                                        Thread
+                                    </a>
+
+                                {% endif %}
+
+                                {% if not application.log_url and not application.thread_url %}
+                                    <span class="hint">
+                                        No links
+                                    </span>
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        {% else %}
+
+            <p class="hint">
+                No recent outcomes yet.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+{% endif %}
+
+{% endblock %}

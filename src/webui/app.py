@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import hmac
 import json
@@ -11,7 +10,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any
 from io import BytesIO
@@ -20,6 +18,7 @@ import discord
 from flask import (
     Flask,
     redirect,
+    render_template,
     render_template_string,
     request,
     send_from_directory,
@@ -49,6 +48,18 @@ from src.services.permission_store import (
     LEVEL_STAFF,
     LEVEL_VALUES,
 )
+
+from src.webui.context import (
+    WebUIContext,
+)
+from src.webui.helpers import (
+    WEBUI_CONTEXT_KEY,
+)
+
+from src.webui.routes import (
+    register_blueprints,
+)
+
 from src.utils.embed_builder import EmbedFactory
 from src.webui.custom_commands import register_custom_command_webui
 
@@ -656,7 +667,7 @@ EMBED_FORM_HTML = """
     <header>
         <h1>TFSBot Embed Builder</h1>
         <nav>
-            <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
+            <a href="{{ url_for('overview.index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('custom_commands_page') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
@@ -1142,736 +1153,6 @@ EMBED_FORM_HTML = """
 </body>
 </html>
 """
-
-
-ADMIN_PAGE_HTML = """
-<!doctype html>
-<html>
-<head>
-    <title>TFSBot Admin</title>
-    <style>
-        :root {
-            --bg: #0f1117;
-            --header: #141822;
-            --panel: #1b1f2a;
-            --panel-2: #242936;
-            --panel-3: #11151f;
-            --text: #f2f3f5;
-            --muted: #b5bac1;
-            --muted-2: #8e95a3;
-            --border: #363d4f;
-            --border-soft: #2a3040;
-            --accent: #5865f2;
-            --accent-hover: #4752c4;
-            --danger: #ed4245;
-            --success: #57f287;
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        header {
-            padding: 18px 34px;
-            border-bottom: 1px solid var(--border-soft);
-            background: var(--header);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 18px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        header h1 {
-            margin: 0;
-            font-size: 22px;
-            letter-spacing: -0.02em;
-            flex: 0 0 auto;
-        }
-
-        nav { display: flex; gap: 16px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
-        nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
-        nav a:hover { color: var(--text); }
-        nav a.active { color: var(--text); font-weight: 700; }
-
-        main {
-            max-width: 1120px;
-            margin: 0 auto;
-            padding: 28px 24px 60px;
-        }
-
-        h2 {
-            margin: 0 0 10px;
-            font-size: 24px;
-            letter-spacing: -0.02em;
-        }
-
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 22px;
-            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
-            margin-bottom: 18px;
-        }
-
-        label {
-            display: block;
-            margin-top: 16px;
-            margin-bottom: 7px;
-            color: var(--muted);
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        input, textarea, select {
-            width: 100%;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 11px 12px;
-            background: var(--panel-3);
-            color: var(--text);
-            font: inherit;
-            outline: none;
-        }
-
-        input:focus, textarea:focus, select:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.18);
-        }
-
-        textarea { resize: vertical; min-height: 108px; line-height: 1.45; }
-
-        button {
-            border: 0;
-            border-radius: 10px;
-            padding: 11px 15px;
-            background: var(--accent);
-            color: white;
-            font-weight: 800;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        button:hover { background: var(--accent-hover); }
-
-        .message {
-            color: var(--success);
-            background: rgba(87, 242, 135, 0.08);
-            border: 1px solid rgba(87, 242, 135, 0.24);
-            padding: 12px 14px;
-            border-radius: 12px;
-        }
-
-        .error {
-            color: #ff8587;
-            background: rgba(237, 66, 69, 0.08);
-            border: 1px solid rgba(237, 66, 69, 0.24);
-            padding: 12px 14px;
-            border-radius: 12px;
-        }
-
-        .warning-panel {
-            border-color: rgba(255, 204, 102, 0.42);
-            background: rgba(255, 204, 102, 0.04);
-        }
-
-        .warning-list {
-            display: grid;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .warning-item {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-            background: var(--panel-2);
-            border: 1px solid var(--border-soft);
-            border-radius: 12px;
-            padding: 10px 12px;
-        }
-
-        .warning-item strong {
-            font-size: 14px;
-        }
-
-        .warning-item span {
-            color: var(--muted);
-            font-size: 13px;
-            text-align: right;
-        }
-
-        .hint { color: var(--muted); font-size: 13px; line-height: 1.45; }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-        }
-
-        .template-card, .command-row {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 18px;
-            margin-top: 16px;
-        }
-
-        .template-card h3, .command-row h3 { margin: 0; font-size: 16px; }
-        .template-card textarea { margin-top: 12px; }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            align-items: flex-start;
-            margin-bottom: 8px;
-        }
-
-        .template-meta {
-            margin: 6px 0 0;
-            color: var(--muted-2);
-            font-size: 13px;
-        }
-
-        .badge {
-            border: 1px solid var(--border);
-            background: var(--panel-3);
-            color: var(--muted);
-            border-radius: 999px;
-            padding: 4px 8px;
-            font-size: 12px;
-            white-space: nowrap;
-        }
-
-        .badge.custom {
-            color: var(--success);
-            border-color: rgba(87, 242, 135, 0.28);
-            background: rgba(87, 242, 135, 0.08);
-        }
-
-        .variable-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 10px;
-        }
-
-        .default-details {
-            margin-top: 10px;
-            border-top: 1px solid var(--border-soft);
-            padding-top: 10px;
-        }
-
-        .default-details summary { cursor: pointer; color: var(--muted); }
-
-        .default-details pre {
-            margin: 10px 0 0;
-            white-space: pre-wrap;
-            color: var(--muted);
-            background: var(--panel-3);
-            border: 1px solid var(--border-soft);
-            border-radius: 10px;
-            padding: 12px;
-        }
-
-        .action-panel {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-        }
-
-        .command-row {
-            display: grid;
-            grid-template-columns: minmax(220px, 1fr) 220px;
-            gap: 14px;
-            align-items: center;
-        }
-
-        .setting-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-        }
-
-        .wide-field { grid-column: 1 / -1; }
-
-        .terms-box {
-            min-height: 220px;
-            font-family: Consolas, monospace;
-            font-size: 13px;
-        }
-
-        .button-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        .secondary-button {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
-
-        .secondary-button:hover { background: #303747; }
-
-        .danger-button { background: var(--danger); }
-        .danger-button:hover { background: #c73538; }
-
-        .danger-panel {
-            border-color: rgba(237, 66, 69, 0.55);
-        }
-
-        .restore-warning {
-            border-color: rgba(237, 66, 69, 0.65);
-            background: rgba(237, 66, 69, 0.07);
-        }
-
-        .restore-warning strong {
-            color: #ff8587;
-        }
-
-        .backup-steps {
-            display: grid;
-            gap: 10px;
-            margin-top: 14px;
-        }
-
-        .backup-step {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-        }
-
-        .backup-step strong {
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .stat-card {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px;
-        }
-
-        .stat-card strong {
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        code {
-            background: var(--panel-3);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 2px 5px;
-            color: #d7dcff;
-        }
-
-        .overview-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .overview-card {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px;
-        }
-
-        .overview-card strong {
-            display: block;
-            font-size: 24px;
-            line-height: 1.1;
-            margin-bottom: 6px;
-        }
-
-        .overview-card span {
-            color: var(--muted);
-            font-size: 13px;
-        }
-
-        .health-list {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 14px;
-        }
-
-        .health-item {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-        }
-
-        .health-item small {
-            display: block;
-            color: var(--muted);
-            margin-bottom: 5px;
-            font-weight: 700;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 14px;
-            overflow: hidden;
-            border-radius: 12px;
-        }
-
-        .data-table th,
-        .data-table td {
-            border-bottom: 1px solid var(--border-soft);
-            padding: 10px 8px;
-            text-align: left;
-            vertical-align: top;
-            font-size: 14px;
-        }
-
-        .data-table th {
-            color: var(--muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .data-table tr:last-child td {
-            border-bottom: 0;
-        }
-
-        .pill {
-            display: inline-block;
-            border-radius: 999px;
-            padding: 4px 8px;
-            font-size: 12px;
-            font-weight: 800;
-            border: 1px solid var(--border);
-            background: var(--panel-3);
-            color: var(--muted);
-        }
-
-        .pill.good {
-            color: var(--success);
-            border-color: rgba(87, 242, 135, 0.28);
-            background: rgba(87, 242, 135, 0.08);
-        }
-
-        .pill.warn {
-            color: #ffcc66;
-            border-color: rgba(255, 204, 102, 0.28);
-            background: rgba(255, 204, 102, 0.08);
-        }
-
-        .pill.bad {
-            color: #ff8587;
-            border-color: rgba(237, 66, 69, 0.28);
-            background: rgba(237, 66, 69, 0.08);
-        }
-
-        .muted-link {
-            color: var(--muted);
-        }
-
-        .button-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 10px;
-            padding: 11px 15px;
-            background: var(--accent);
-            color: white !important;
-            font-weight: 800;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            line-height: 1;
-        }
-
-        .button-link:hover {
-            background: var(--accent-hover);
-            color: white !important;
-        }
-
-        .button-link.secondary {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            color: var(--text) !important;
-        }
-
-        .button-link.secondary:hover {
-            background: #303747;
-        }
-
-        .page-intro {
-            display: grid;
-            gap: 10px;
-        }
-
-        .page-intro p {
-            margin: 0;
-        }
-
-        .section-note {
-            margin-top: 4px;
-            margin-bottom: 14px;
-        }
-
-        .quick-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        .inline-form {
-            display: inline-flex;
-        }
-
-        .inline-form button {
-            width: auto;
-        }
-
-        .question-card {
-            background: var(--panel-2);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 18px;
-            margin-top: 14px;
-        }
-
-        .question-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .question-card-header h3 {
-            margin: 0;
-            font-size: 17px;
-        }
-
-        .question-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        @media (max-width: 800px) {
-            .grid-2, .setting-grid, .stat-grid, .command-row, .overview-grid, .health-list { grid-template-columns: 1fr; }
-            header { align-items: flex-start; gap: 12px; flex-direction: column; padding: 18px 22px; }
-            nav { flex-wrap: wrap; }
-            main { padding: 20px 16px 50px; }
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <h1>{{ title }}</h1>
-        <nav>
-            <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
-            {% if is_owner %}
-                <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
-                <a href="{{ url_for('custom_commands_page') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
-                <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
-                <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
-                <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
-                <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
-                <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
-                <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
-            {% endif %}
-            <span class="badge">{{ display_name }} · {{ webui_role|title }}</span>
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </nav>
-    </header>
-
-    <main>
-        {% if message %}<p class="message">{{ message }}</p>{% endif %}
-        {% if error %}<p class="error">{{ error }}</p>{% endif %}
-
-        {{ body|safe }}
-    </main>
-</body>
-</html>
-"""
-
-
-OVERVIEW_BODY_HTML = """
-<div class="panel">
-    <h2>Overview</h2>
-    <p class="hint">
-        Quick state of the bot, verification queue, and setup. A dashboard if you will
-    </p>
-
-    <form method="get">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {% if guild.id == selected_guild_id %}selected{% endif %}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-    </form>
-
-    {% if overview %}
-        <div class="overview-grid">
-            <div class="overview-card">
-                <strong>{{ overview.pending_count }}</strong>
-                <span>Pending applications</span>
-            </div>
-            <div class="overview-card">
-                <strong>{{ overview.questioning_count }}</strong>
-                <span>Being questioned</span>
-            </div>
-            <div class="overview-card">
-                <strong>{{ overview.today_total }}</strong>
-                <span>Actioned today</span>
-            </div>
-            <div class="overview-card">
-                <strong>{{ overview.total_count }}</strong>
-                <span>Total applications</span>
-            </div>
-        </div>
-    {% endif %}
-</div>
-
-{% if overview %}
-{% if overview.warning_items %}
-<div class="panel warning-panel">
-    <h2>{{ overview.warning_count }} issue(s) need attention</h2>
-    <p class="hint">
-        These are the setup items most likely to stop verification or WebUI management from working properly.
-    </p>
-
-    <div class="warning-list">
-        {% for item in overview.warning_items %}
-            <div class="warning-item">
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.value }}</span>
-            </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-<div class="panel">
-    <h2>Setup Health</h2>
-    <div class="health-list">
-        {% for item in overview.health_items %}
-            <div class="health-item">
-                <small>{{ item.label }}</small>
-                <span class="pill {{ item.class }}">{{ item.value }}</span>
-            </div>
-        {% endfor %}
-    </div>
-</div>
-
-<div class="panel">
-    <h2>Verification Activity Today</h2>
-    <div class="overview-grid">
-        <div class="overview-card"><strong>{{ overview.today.approved }}</strong><span>Approved</span></div>
-        <div class="overview-card"><strong>{{ overview.today.rejected }}</strong><span>Rejected</span></div>
-        <div class="overview-card"><strong>{{ overview.today.kicked }}</strong><span>Kicked</span></div>
-        <div class="overview-card"><strong>{{ overview.today.banned }}</strong><span>Banned</span></div>
-    </div>
-    <div class="overview-grid">
-        <div class="overview-card"><strong>{{ overview.today.left }}</strong><span>Left before review</span></div>
-        <div class="overview-card"><strong>{{ overview.status_counts.approved }}</strong><span>Total approved</span></div>
-        <div class="overview-card"><strong>{{ overview.status_counts.rejected }}</strong><span>Total rejected</span></div>
-        <div class="overview-card"><strong>{{ overview.status_counts.banned }}</strong><span>Total banned</span></div>
-    </div>
-</div>
-
-<div class="panel">
-    <h2>Pending Applications</h2>
-    {% if overview.pending_applications %}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>State</th>
-                    <th>Submitted</th>
-                    <th>Links</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for application in overview.pending_applications %}
-                    <tr>
-                        <td>{{ application.user }}</td>
-                        <td><span class="pill {{ application.state_class }}">{{ application.state }}</span></td>
-                        <td>{{ application.submitted_at }}</td>
-                        <td>
-                            {% if application.review_url %}<a class="muted-link" href="{{ application.review_url }}" target="_blank">Review</a>{% endif %}
-                            {% if application.thread_url %} {% if application.review_url %} · {% endif %}<a class="muted-link" href="{{ application.thread_url }}" target="_blank">Thread</a>{% endif %}
-                            {% if not application.review_url and not application.thread_url %}<span class="hint">No links</span>{% endif %}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="hint">No pending applications. Suspiciously peaceful.</p>
-    {% endif %}
-</div>
-
-<div class="panel">
-    <h2>Recent Outcomes</h2>
-    {% if overview.recent_outcomes %}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>Status</th>
-                    <th>When</th>
-                    <th>Links</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for application in overview.recent_outcomes %}
-                    <tr>
-                        <td>{{ application.user }}</td>
-                        <td><span class="pill {{ application.state_class }}">{{ application.state }}</span></td>
-                        <td>{{ application.actioned_at }}</td>
-                        <td>
-                            {% if application.log_url %}<a class="muted-link" href="{{ application.log_url }}" target="_blank">Log</a>{% endif %}
-                            {% if application.thread_url %} {% if application.log_url %} · {% endif %}<a class="muted-link" href="{{ application.thread_url }}" target="_blank">Thread</a>{% endif %}
-                            {% if not application.log_url and not application.thread_url %}<span class="hint">No links</span>{% endif %}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="hint">No recent outcomes yet.</p>
-    {% endif %}
-</div>
-{% endif %}
-"""
-
 
 DM_TEMPLATES_BODY_HTML = """
 <div class="panel page-intro">
@@ -3303,6 +2584,14 @@ VERIFICATION_BODY_HTML = """
 
 def create_webui(bot: discord.Client) -> Flask:
     app = Flask(__name__)
+    
+    web_context = WebUIContext(
+        bot
+    )
+
+    app.extensions[
+        WEBUI_CONTEXT_KEY
+    ] = web_context
 
     secret_parts = [
         f"{credential.username}:{credential.password}"
@@ -3324,8 +2613,9 @@ def create_webui(bot: discord.Client) -> Flask:
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-    def is_logged_in() -> bool:
-        return session.get("logged_in") is True
+    is_logged_in = (
+        web_context.is_logged_in
+    )
 
     def is_discord_login_enabled() -> bool:
         return bool(getattr(bot.config, "webui_discord_auth_enabled", False))
@@ -3943,35 +3233,19 @@ def create_webui(bot: discord.Client) -> Flask:
         await channel.send(
             embeds=embeds,
             files=files if files else None,
-        )
+        ) 
+        
+    run_coro_from_flask = (
+        web_context.run_coro
+    )
 
-    def run_coro_from_flask(coro: Coroutine[Any, Any, Any]) -> Any:
-        future = asyncio.run_coroutine_threadsafe(coro, bot.loop)
-        return future.result(timeout=15)
+    get_available_guilds = (
+        web_context.available_guilds
+    )
 
-
-    def get_available_guilds() -> list[dict[str, str]]:
-        return [
-            {
-                "id": str(guild.id),
-                "name": guild.name,
-            }
-            for guild in sorted(bot.guilds, key=lambda item: item.name.lower())
-        ]
-
-    def get_selected_guild(guild_id_text: str | None) -> discord.Guild | None:
-        if guild_id_text:
-            try:
-                guild_id = int(guild_id_text)
-            except ValueError:
-                guild_id = 0
-
-            guild = bot.get_guild(guild_id)
-
-            if guild is not None:
-                return guild
-
-        return bot.guilds[0] if bot.guilds else None
+    get_selected_guild = (
+        web_context.selected_guild
+    )
 
     def render_admin_page(
         title: str,
@@ -3981,10 +3255,13 @@ def create_webui(bot: discord.Client) -> Flask:
         error: str | None = None,
         **context: Any,
     ) -> str:
-        body = render_template_string(body_template, **context)
+        body = render_template_string(
+            body_template,
+            **context,
+        )
 
-        return render_template_string(
-            ADMIN_PAGE_HTML,
+        return render_template(
+            "base.html",
             title=title,
             active_page=active_page,
             body=body,
@@ -4012,27 +3289,17 @@ def create_webui(bot: discord.Client) -> Flask:
             display_name=get_session_display_name(),
         )
 
-    def current_webui_role() -> str:
-        role = str(session.get("webui_role") or "").lower().strip()
+    current_webui_role = (
+        web_context.current_role
+    )
 
-        if role in {"owner", "viewer"}:
-            return role
+    is_webui_owner = (
+        web_context.is_owner
+    )
 
-        if session.get("logged_in") is True and session.get("auth_method") == "password":
-            return "owner"
-
-        return "viewer"
-
-    def is_webui_owner() -> bool:
-        return current_webui_role() == "owner"
-
-    def get_session_display_name() -> str:
-        return str(
-            session.get("display_name")
-            or session.get("discord_username")
-            or session.get("username")
-            or "WebUI user"
-        )
+    get_session_display_name = (
+        web_context.display_name
+    )
 
     def render_owner_required_page() -> str:
         return render_admin_page(
@@ -4052,71 +3319,33 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return None
 
-    def get_template_store():
-        template_store = getattr(bot, "dm_template_store", None)
+    get_template_store = (
+        web_context.template_store
+    )
 
-        if template_store is None:
-            raise RuntimeError("DM template store is not available.")
+    get_permission_store = (
+        web_context.permission_store
+    )
 
-        return template_store
+    get_guild_settings_store = (
+        web_context.guild_settings_store
+    )
 
-    def get_permission_store():
-        permission_store = getattr(bot, "permission_store", None)
+    get_form_store = (
+        web_context.form_store
+    )
 
-        if permission_store is None:
-            raise RuntimeError("Permission store is not available.")
+    get_invite_tracker_store = (
+        web_context.invite_tracker_store
+    )
 
-        return permission_store
+    get_guild_roles = (
+        web_context.guild_roles
+    )
 
-
-    def get_guild_settings_store():
-        settings_store = getattr(bot, "guild_settings", None)
-
-        if settings_store is None:
-            raise RuntimeError("Guild settings store is not available.")
-
-        return settings_store
-
-    def get_form_store():
-        form_store = getattr(bot, "form_store", None)
-
-        if form_store is None:
-            raise RuntimeError("Form store is not available.")
-
-        return form_store
-
-    def get_invite_tracker_store():
-        invite_tracker = getattr(bot, "invite_tracker", None)
-
-        if invite_tracker is None:
-            raise RuntimeError("Invite tracker is not available.")
-
-        return invite_tracker
-
-    def get_guild_roles(guild: discord.Guild) -> list[dict[str, str]]:
-        roles = [role for role in guild.roles if not role.is_default()]
-        roles.sort(key=lambda item: item.position, reverse=True)
-
-        return [
-            {
-                "id": str(role.id),
-                "name": role.name,
-            }
-            for role in roles
-        ]
-
-
-    def get_guild_text_channels(guild: discord.Guild) -> list[dict[str, str]]:
-        channels = list(guild.text_channels)
-        channels.sort(key=lambda item: (item.category.name if item.category else "", item.position, item.name.lower()))
-
-        return [
-            {
-                "id": str(channel.id),
-                "name": channel.name,
-            }
-            for channel in channels
-        ]
+    get_guild_text_channels = (
+        web_context.guild_text_channels
+    )
 
     def get_current_verification_settings(guild: discord.Guild) -> dict[str, str | bool]:
         settings_store = get_guild_settings_store()
@@ -4276,48 +3505,6 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return Path(raw_path)
 
-    def format_datetime_text(value: str | None) -> str:
-        if not value:
-            return "Unknown"
-
-        try:
-            parsed = datetime.fromisoformat(value)
-        except ValueError:
-            return value
-
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-
-        localish = parsed.astimezone()
-        return localish.strftime("%d %b %Y %H:%M")
-
-    def make_message_url(
-        guild_id: int,
-        channel_id: int | None,
-        message_id: int | None,
-    ) -> str | None:
-        if channel_id is None or message_id is None:
-            return None
-
-        return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
-
-    def make_thread_url(
-        guild_id: int,
-        thread_id: int | None,
-    ) -> str | None:
-        if thread_id is None:
-            return None
-
-        return f"https://discord.com/channels/{guild_id}/{thread_id}"
-
-    def get_user_display(user_id: int) -> str:
-        user = bot.get_user(user_id)
-
-        if user is not None:
-            return f"{user} ({user_id})"
-
-        return str(user_id)
-
     def get_channel_label(guild: discord.Guild, channel_id: int | None) -> str:
         if channel_id is None:
             return "Not set"
@@ -4339,303 +3526,6 @@ def create_webui(bot: discord.Client) -> Flask:
             return f"Unknown role {role_id}"
 
         return role.name
-
-    def get_status_class(status: str) -> str:
-        cleaned = status.lower().strip()
-
-        if cleaned in {"approved", "ready", "enabled", "set", "ok"}:
-            return "good"
-
-        if cleaned in {"pending", "questioning", "starting", "not set", "unknown"}:
-            return "warn"
-
-        if cleaned in {"rejected", "denied", "kicked", "banned", "left", "disabled", "missing"}:
-            return "bad"
-
-        return ""
-
-    def display_status(status: str, questioning_thread_id: int | None = None) -> str:
-        cleaned = status.lower().strip()
-
-        if cleaned == "pending" and questioning_thread_id is not None:
-            return "Questioning"
-
-        return {
-            "pending": "Pending",
-            "approved": "Approved",
-            "rejected": "Rejected",
-            "denied": "Rejected",
-            "kicked": "Kicked",
-            "banned": "Banned",
-            "left": "Left",
-            "cancelled": "Cancelled",
-        }.get(cleaned, status.title())
-
-    def count_applications_for_overview(guild: discord.Guild) -> dict[str, Any]:
-        database_path = get_database_path()
-
-        empty_today = {
-            "approved": 0,
-            "rejected": 0,
-            "kicked": 0,
-            "banned": 0,
-            "left": 0,
-        }
-
-        empty_counts = {
-            "pending": 0,
-            "approved": 0,
-            "rejected": 0,
-            "kicked": 0,
-            "banned": 0,
-            "left": 0,
-            "cancelled": 0,
-        }
-
-        if database_path is None or not database_path.exists():
-            return {
-                "status_counts": empty_counts,
-                "today": empty_today,
-                "today_total": 0,
-                "total_count": 0,
-                "pending_count": 0,
-                "questioning_count": 0,
-                "pending_applications": [],
-                "recent_outcomes": [],
-            }
-
-        today_key = datetime.now(timezone.utc).date().isoformat()
-
-        try:
-            with sqlite3.connect(database_path) as database:
-                database.row_factory = sqlite3.Row
-
-                status_rows = database.execute(
-                    """
-                    SELECT status, COUNT(*) AS total
-                    FROM applications
-                    WHERE guild_id = ?
-                    GROUP BY status
-                    """,
-                    (guild.id,),
-                ).fetchall()
-
-                today_rows = database.execute(
-                    """
-                    SELECT status, COUNT(*) AS total
-                    FROM applications
-                    WHERE guild_id = ?
-                    AND actioned_at IS NOT NULL
-                    AND substr(actioned_at, 1, 10) = ?
-                    GROUP BY status
-                    """,
-                    (guild.id, today_key),
-                ).fetchall()
-
-                total_row = database.execute(
-                    """
-                    SELECT COUNT(*) AS total
-                    FROM applications
-                    WHERE guild_id = ?
-                    """,
-                    (guild.id,),
-                ).fetchone()
-
-                questioning_row = database.execute(
-                    """
-                    SELECT COUNT(*) AS total
-                    FROM applications
-                    WHERE guild_id = ?
-                    AND status = 'pending'
-                    AND questioning_thread_id IS NOT NULL
-                    """,
-                    (guild.id,),
-                ).fetchone()
-
-                pending_rows = database.execute(
-                    """
-                    SELECT id, user_id, status, submitted_at, review_channel_id,
-                           review_message_id, questioning_thread_id
-                    FROM applications
-                    WHERE guild_id = ?
-                    AND status = 'pending'
-                    ORDER BY submitted_at ASC
-                    LIMIT 10
-                    """,
-                    (guild.id,),
-                ).fetchall()
-
-                outcome_rows = database.execute(
-                    """
-                    SELECT id, user_id, status, actioned_at, updated_at,
-                           log_channel_id, log_message_id, questioning_thread_id
-                    FROM applications
-                    WHERE guild_id = ?
-                    AND status != 'pending'
-                    ORDER BY COALESCE(actioned_at, updated_at) DESC
-                    LIMIT 10
-                    """,
-                    (guild.id,),
-                ).fetchall()
-
-        except sqlite3.Error:
-            return {
-                "status_counts": empty_counts,
-                "today": empty_today,
-                "today_total": 0,
-                "total_count": 0,
-                "pending_count": 0,
-                "questioning_count": 0,
-                "pending_applications": [],
-                "recent_outcomes": [],
-            }
-
-        status_counts = dict(empty_counts)
-
-        for row in status_rows:
-            key = str(row["status"]).lower()
-            if key == "denied":
-                key = "rejected"
-            status_counts[key] = int(row["total"])
-
-        today = dict(empty_today)
-
-        for row in today_rows:
-            key = str(row["status"]).lower()
-            if key == "denied":
-                key = "rejected"
-            if key in today:
-                today[key] = int(row["total"])
-
-        pending_applications = []
-
-        for row in pending_rows:
-            state = display_status(str(row["status"]), row["questioning_thread_id"])
-            pending_applications.append(
-                {
-                    "id": row["id"],
-                    "user": get_user_display(int(row["user_id"])),
-                    "state": state,
-                    "state_class": get_status_class(state),
-                    "submitted_at": format_datetime_text(row["submitted_at"]),
-                    "review_url": make_message_url(guild.id, row["review_channel_id"], row["review_message_id"]),
-                    "thread_url": make_thread_url(guild.id, row["questioning_thread_id"]),
-                }
-            )
-
-        recent_outcomes = []
-
-        for row in outcome_rows:
-            state = display_status(str(row["status"]), row["questioning_thread_id"])
-            recent_outcomes.append(
-                {
-                    "id": row["id"],
-                    "user": get_user_display(int(row["user_id"])),
-                    "state": state,
-                    "state_class": get_status_class(state),
-                    "actioned_at": format_datetime_text(row["actioned_at"] or row["updated_at"]),
-                    "log_url": make_message_url(guild.id, row["log_channel_id"], row["log_message_id"]),
-                    "thread_url": make_thread_url(guild.id, row["questioning_thread_id"]),
-                }
-            )
-
-        return {
-            "status_counts": status_counts,
-            "today": today,
-            "today_total": sum(today.values()),
-            "total_count": int(total_row["total"] if total_row else 0),
-            "pending_count": status_counts.get("pending", 0),
-            "questioning_count": int(questioning_row["total"] if questioning_row else 0),
-            "pending_applications": pending_applications,
-            "recent_outcomes": recent_outcomes,
-        }
-
-    def build_overview_context(guild: discord.Guild) -> dict[str, Any]:
-        settings_store = get_guild_settings_store()
-        app_stats = count_applications_for_overview(guild)
-
-        review_channel_id = settings_store.get_review_channel_id(guild.id)
-        log_channel_id = settings_store.get_application_log_channel_id(guild.id)
-        add_role_id = settings_store.get_approved_add_role_id(guild.id)
-        remove_role_id = settings_store.get_approved_remove_role_id(guild.id)
-        automod_enabled = settings_store.is_automod_enabled(guild.id)
-        automod_terms = settings_store.list_automod_terms(guild.id)
-        verification_form_key = settings_store.get_verification_form_key(guild.id) or FORM_KEY_VERIFICATION
-        database_path = get_database_path()
-        database_size = database_path.stat().st_size if database_path and database_path.exists() else 0
-
-        invite_ready = bool(getattr(bot, "invite_tracker_ready", False))
-
-        health_items = [
-            {
-                "label": "Bot",
-                "value": f"Online as {bot.user}" if bot.user else "Starting",
-                "class": "good" if bot.user else "warn",
-            },
-            {
-                "label": "Review channel",
-                "value": get_channel_label(guild, review_channel_id),
-                "class": "good" if review_channel_id else "warn",
-            },
-            {
-                "label": "Log channel",
-                "value": get_channel_label(guild, log_channel_id),
-                "class": "good" if log_channel_id else "warn",
-            },
-            {
-                "label": "Verification form",
-                "value": verification_form_key,
-                "class": "good" if verification_form_key else "warn",
-            },
-            {
-                "label": "Give role on approval",
-                "value": get_role_label(guild, add_role_id),
-                "class": "good" if add_role_id else "warn",
-            },
-            {
-                "label": "Remove role on approval",
-                "value": get_role_label(guild, remove_role_id),
-                "class": "good" if remove_role_id else "warn",
-            },
-            {
-                "label": "Automod",
-                "value": f"Enabled ({len(automod_terms)} terms)" if automod_enabled else f"Disabled ({len(automod_terms)} terms)",
-                "class": "good" if automod_enabled else "warn",
-            },
-            {
-                "label": "Invite tracking",
-                "value": "Ready" if invite_ready else "Not synced",
-                "class": "good" if invite_ready else "warn",
-            },
-            {
-                "label": "Database",
-                "value": format_file_size(database_size),
-                "class": "good" if database_size else "warn",
-            },
-            {
-                "label": "Server members",
-                "value": str(guild.member_count or "Unknown"),
-                "class": "",
-            },
-        ]
-
-        ignored_warning_labels = {
-            "Automod",
-            "Server members",
-        }
-
-        warning_items = [
-            item
-            for item in health_items
-            if item.get("class") in {"bad", "warn"}
-            and item.get("label") not in ignored_warning_labels
-        ]
-
-        app_stats["health_items"] = health_items
-        app_stats["warning_items"] = warning_items
-        app_stats["warning_count"] = len(warning_items)
-
-        return app_stats
 
     @app.route("/uploads/<path:filename>")
     def uploaded_image(filename: str):
@@ -4671,7 +3561,7 @@ def create_webui(bot: discord.Client) -> Flask:
         session["display_name"] = username
         session["webui_role"] = "owner"
 
-        return redirect(url_for("index"))
+        return redirect(url_for("overview.index"))
 
     @app.route("/auth/discord/start")
     def discord_login_start():
@@ -4738,34 +3628,6 @@ def create_webui(bot: discord.Client) -> Flask:
     def logout():
         session.clear()
         return redirect(url_for("login"))
-
-    @app.route("/")
-    def index():
-        if not is_logged_in():
-            return redirect(url_for("login"))
-
-        selected_guild = get_selected_guild(request.args.get("guild_id"))
-
-        overview = None
-        error = None
-
-        try:
-            if selected_guild is not None:
-                overview = build_overview_context(selected_guild)
-
-        except Exception as caught_error:
-            error = str(caught_error)
-
-        return render_admin_page(
-            title="TFSBot Overview",
-            active_page="overview",
-            body_template=OVERVIEW_BODY_HTML,
-            guilds=get_available_guilds(),
-            selected_guild_id=str(selected_guild.id) if selected_guild else None,
-            overview=overview,
-            error=error,
-        )
-    
 
     @app.route("/backups", methods=["GET", "POST"])
     def backups_page():
@@ -5974,6 +4836,12 @@ def create_webui(bot: discord.Client) -> Flask:
         render_admin_page=render_admin_page,
         run_coro_from_flask=run_coro_from_flask,
     )
+    
+    register_blueprints(
+        app
+    )
+
+    return app
 
     return app
 

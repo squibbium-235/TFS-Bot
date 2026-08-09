@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>{{ title }}</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/base.css') }}"
+    >
+
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+
+    <header>
+        <h1>{{ title }}</h1>
+
+        <nav>
+            <a
+                href="{{ url_for('overview.index') }}"
+                class="{{ 'active' if active_page == 'overview' else '' }}"
+            >
+                Overview
+            </a>
+
+            {% if is_owner %}
+
+                <a
+                    href="{{ url_for('embed_builder') }}"
+                    class="{{ 'active' if active_page == 'embed_builder' else '' }}"
+                >
+                    Embed Builder
+                </a>
+
+                <a
+                    href="{{ url_for('custom_commands_page') }}"
+                    class="{{ 'active' if active_page == 'custom_commands' else '' }}"
+                >
+                    Custom Commands
+                </a>
+
+                <a
+                    href="{{ url_for('dm_templates') }}"
+                    class="{{ 'active' if active_page == 'dm_templates' else '' }}"
+                >
+                    DM Templates
+                </a>
+
+                <a
+                    href="{{ url_for('forms_page') }}"
+                    class="{{ 'active' if active_page == 'forms' else '' }}"
+                >
+                    Forms
+                </a>
+
+                <a
+                    href="{{ url_for('uploads_manager_page') }}"
+                    class="{{ 'active' if active_page == 'uploads' else '' }}"
+                >
+                    Uploads
+                </a>
+
+                <a
+                    href="{{ url_for('verification_page') }}"
+                    class="{{ 'active' if active_page == 'verification' else '' }}"
+                >
+                    Verification
+                </a>
+
+                <a
+                    href="{{ url_for('permissions_page') }}"
+                    class="{{ 'active' if active_page == 'permissions' else '' }}"
+                >
+                    Permissions
+                </a>
+
+                <a
+                    href="{{ url_for('backups_page') }}"
+                    class="{{ 'active' if active_page == 'backups' else '' }}"
+                >
+                    Backups
+                </a>
+
+            {% endif %}
+
+            <span class="badge">
+                {{ display_name }} · {{ webui_role|title }}
+            </span>
+
+            <a href="{{ url_for('logout') }}">
+                Logout
+            </a>
+        </nav>
+    </header>
+
+    <main>
+
+        {% if message %}
+            <p class="message">
+                {{ message }}
+            </p>
+        {% endif %}
+
+        {% if error %}
+            <p class="error">
+                {{ error }}
+            </p>
+        {% endif %}
+
+        {% block content %}
+            {{ body|safe }}
+        {% endblock %}
+
+    </main>
+
+    {% block scripts %}{% endblock %}
+
+</body>
+
+</html>
