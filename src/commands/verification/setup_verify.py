@@ -56,6 +56,8 @@ async def form_key_autocomplete(
 def build_verify_embed(
     guild: discord.Guild,
     form_title: str,
+    image_url: str | None = None,
+    thumbnail_url: str | None = None,
 ) -> discord.Embed:
     embed = discord.Embed(
         title=f"{guild.name} Verification",
@@ -68,12 +70,60 @@ def build_verify_embed(
         colour=discord.Colour.blurple(),
     )
 
-    if guild.icon is not None:
+    if thumbnail_url:
+        embed.set_thumbnail(url=thumbnail_url)
+    elif guild.icon is not None:
         embed.set_thumbnail(url=guild.icon.url)
+
+    if image_url:
+        embed.set_image(url=image_url)
 
     embed.set_footer(text="TFSBot Verification")
 
     return embed
+
+
+def make_attachment_filename(prefix: str, attachment: discord.Attachment) -> str:
+    filename = attachment.filename or f"{prefix}.png"
+    filename = filename.replace("/", "_").replace("\\", "_")
+    return f"{prefix}_{filename}"
+
+
+async def build_panel_attachment_files(
+    image: discord.Attachment | None,
+    thumbnail: discord.Attachment | None,
+) -> tuple[str | None, str | None, list[discord.File]]:
+    files: list[discord.File] = []
+    image_url: str | None = None
+    thumbnail_url: str | None = None
+
+    for attachment, prefix in ((image, "panel_image"), (thumbnail, "panel_thumbnail")):
+        if attachment is None:
+            continue
+
+        if attachment.content_type and not attachment.content_type.startswith("image/"):
+            raise RuntimeError(f"{attachment.filename} is not an image attachment.")
+
+        filename = make_attachment_filename(prefix, attachment)
+        file = await attachment.to_file(filename=filename)
+        files.append(file)
+
+        attachment_url = f"attachment://{filename}"
+
+        if prefix == "panel_image":
+            image_url = attachment_url
+        else:
+            thumbnail_url = attachment_url
+
+    return image_url, thumbnail_url, files
+
+
+def close_discord_files(files: list[discord.File]) -> None:
+    for file in files:
+        try:
+            file.close()
+        except Exception:
+            pass
 
 
 class VerificationConfigCommand(commands.Cog):
@@ -96,6 +146,8 @@ class VerificationConfigCommand(commands.Cog):
         interaction: discord.Interaction,
         channel: discord.TextChannel,
         form: str = FORM_KEY_VERIFICATION,
+        image: discord.Attachment | None = None,
+        thumbnail: discord.Attachment | None = None,
     ) -> None:
         assert interaction.guild is not None
 
@@ -130,13 +182,30 @@ class VerificationConfigCommand(commands.Cog):
             form_key=form_key,
         )
 
-        await channel.send(
-            embed=build_verify_embed(
-                guild=interaction.guild,
-                form_title=form_config.title,
-            ),
-            view=VerifyView(),
-        )
+        try:
+            image_url, thumbnail_url, files = await build_panel_attachment_files(
+                image=image,
+                thumbnail=thumbnail,
+            )
+
+            await channel.send(
+                embed=build_verify_embed(
+                    guild=interaction.guild,
+                    form_title=form_config.title,
+                    image_url=image_url,
+                    thumbnail_url=thumbnail_url,
+                ),
+                view=VerifyView(),
+                files=files if files else None,
+            )
+        except Exception as error:
+            await interaction.response.send_message(
+                f"Could not post verification panel: `{error}`",
+                ephemeral=True,
+            )
+            return
+        finally:
+            close_discord_files(files if 'files' in locals() else [])
 
         await interaction.response.send_message(
             f"Verification panel posted in {channel.mention} using form `{form_key}`.",

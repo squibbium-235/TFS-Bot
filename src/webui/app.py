@@ -809,7 +809,7 @@ EMBED_FORM_HTML = """
 
                     <h2 id="embed-fields" class="form-section-title">Fields</h2>
                     <p class="hint section-note">
-                        Add optional embed fields. Inline fields try to sit beside each other.
+                        Add optional embed fields. Inline fields try to sit beside each other, assuming Discord feels cooperative.
                     </p>
 
                     <div id="fields"></div>
@@ -829,7 +829,7 @@ EMBED_FORM_HTML = """
                     <div>
                         <h2>Live Preview</h2>
                         <p class="hint">
-                            Approximate Discord preview :)
+                            Approximate Discord preview. Final spacing may still vary, because Discord enjoys little surprises.
                         </p>
                     </div>
                 </div>
@@ -1948,7 +1948,7 @@ DM_TEMPLATES_BODY_HTML = """
     <div class="panel" id="dm-rejections">
         <h2>Rejected Outcomes</h2>
         <p class="hint section-note">
-            Sent when an application is denied, kicked, or banned.
+            Sent when an application is rejected, kicked, or banned.
         </p>
 
         {% for template in templates %}
@@ -2028,6 +2028,175 @@ DM_TEMPLATES_BODY_HTML = """
 
     <div class="panel action-panel">
         <button type="submit">Save DM Templates</button>
+    </div>
+</form>
+{% else %}
+<div class="panel"><p>No servers available.</p></div>
+{% endif %}
+"""
+
+
+PERMISSIONS_BODY_HTML = """
+<div class="panel page-intro">
+    <h2>Permissions</h2>
+    <p class="hint">
+        Control who can access the WebUI and who can use Discord slash commands. WebUI access controls the website.
+        Slash command permissions control commands used inside Discord. Two doors, two locks, because apparently one permission system would have been too merciful.
+    </p>
+
+    <form method="get" action="{{ url_for('permissions_page') }}">
+        <label>Server</label>
+        <select name="guild_id" onchange="this.form.submit()">
+            {% for guild in guilds %}
+                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if selected_guild_id %}
+<form method="post" action="{{ url_for('permissions_page') }}">
+    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+
+    <div class="panel">
+        <h2>Quick Actions</h2>
+        <p class="hint section-note">
+            Jump to the permission area you actually care about, instead of scrolling around like a lost intern.
+        </p>
+
+        <div class="quick-actions">
+            <a class="button-link secondary" href="#webui-access">WebUI Access</a>
+            <a class="button-link secondary" href="#permission-roles">Permission Roles</a>
+            <a class="button-link secondary" href="#slash-command-permissions">Slash Commands</a>
+        </div>
+    </div>
+
+    <div class="panel" id="webui-access">
+        <h2>WebUI Access</h2>
+        <p class="hint section-note">
+            Choose which Discord roles can access this WebUI. Owner roles can change settings, restore backups,
+            manage permissions, and cancel active applications. Viewer roles can only view the Overview page.
+            If nothing is saved here, the bot falls back to the role IDs in <code>.env</code>.
+        </p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>Discord OAuth</strong>
+                <span class="pill {{ webui_access.discord_auth_class }}">{{ webui_access.discord_auth_status }}</span>
+            </div>
+
+            <div class="stat-card">
+                <strong>Password fallback</strong>
+                <span class="pill {{ webui_access.password_class }}">{{ webui_access.password_status }}</span>
+            </div>
+
+            <div class="stat-card">
+                <strong>Owner roles</strong>
+                {{ webui_access.owner_count }} configured via {{ webui_access.owner_source }}
+            </div>
+
+            <div class="stat-card">
+                <strong>Viewer roles</strong>
+                {{ webui_access.viewer_count }} configured via {{ webui_access.viewer_source }}
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>WebUI owner roles</label>
+                <select name="webui_owner_role_ids" multiple size="8">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.owner_role_ids else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="hint">
+                    Owner access should be kept very limited. Owners can touch backups, verification, permissions, and maintenance tools.
+                    Hold Ctrl to select more than one role.
+                </p>
+            </div>
+
+            <div>
+                <label>WebUI viewer roles</label>
+                <select name="webui_viewer_role_ids" multiple size="8">
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.viewer_role_ids else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="hint">
+                    Viewer access can only see the Overview page. Useful for people who need status visibility but should not be given buttons of doom.
+                    Hold Ctrl to select more than one role.
+                </p>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Save WebUI Access</button>
+        </div>
+    </div>
+
+    <div class="panel" id="permission-roles">
+        <h2>Discord Slash Command Permission Roles</h2>
+        <p class="hint section-note">
+            These roles decide what permission level someone has when using bot slash commands in Discord.
+            They do not control WebUI login. Yes, that distinction is annoying. It is also important.
+        </p>
+
+        <div class="grid-2">
+            {% for role_setting in role_settings %}
+                <div>
+                    <label>{{ role_setting.label }}</label>
+                    <select name="role_{{ role_setting.level }}">
+                        <option value="">Not set</option>
+                        {% for role in roles %}
+                            <option value="{{ role.id }}" {{ 'selected' if role.id == role_setting.role_id else '' }}>{{ role.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Save Permission Roles</button>
+        </div>
+    </div>
+
+    <div class="panel" id="slash-command-permissions">
+        <h2>Slash Command Levels</h2>
+        <p class="hint section-note">
+            Set the minimum permission level required for each slash command. Public means anyone can use it.
+            Owner means only owner-level users can use it. Try not to make destructive commands public.
+        </p>
+
+        {% for command in commands %}
+            <div class="command-row">
+                <div>
+                    <h3><code>{{ command.key }}</code></h3>
+                </div>
+
+                <div>
+                    <input type="hidden" name="command_key[]" value="{{ command.key }}">
+                    <select name="command_level_{{ command.safe_key }}">
+                        {% for level in levels %}
+                            <option value="{{ level.value }}" {{ 'selected' if level.value == command.level else '' }}>{{ level.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        {% endfor %}
+
+        <div class="button-row">
+            <button type="submit">Save Command Levels</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Save Everything</h2>
+        <p class="hint">
+            All sections on this page are part of the same form. Any save button should save the whole page,
+            but this one exists for people who like a big obvious final button. Humanity continues.
+        </p>
+
+        <button type="submit">Save Permissions</button>
     </div>
 </form>
 {% else %}
@@ -2255,7 +2424,8 @@ UPLOADS_MANAGER_BODY_HTML = """
 <div class="panel page-intro">
     <h2>Uploads</h2>
     <p class="hint">
-        Manage uploaded images used by the Embed Builder. Folders keep author icons, thumbnails, and random server images from being mixed into one big stew.
+        Manage uploaded images used by the Embed Builder. Folders keep author icons, thumbnails, and random server images from becoming one horrible image soup.
+    </p>
 
     <div class="quick-actions">
         <a class="button-link secondary" href="#upload-file">Upload File</a>
@@ -2353,7 +2523,7 @@ UPLOADS_MANAGER_BODY_HTML = """
 <div class="panel danger-panel">
     <h2>Delete Empty Folder</h2>
     <p class="hint">
-        Only empty folders can be deleted.
+        Only empty folders can be deleted. This prevents the classic admin mistake of deleting the entire cupboard because one shelf annoyed you.
     </p>
 
     <form method="post" action="{{ url_for('uploads_manager_page') }}">
@@ -2690,6 +2860,22 @@ FORMS_BODY_HTML = """
         <label>Panel description</label>
         <textarea name="publish_description" rows="4" required>Click the button below to complete this form.</textarea>
 
+        <label>Uploaded panel image</label>
+        <select name="publish_image_upload_filename">
+            <option value="">No panel image</option>
+            {% for image in uploaded_images %}
+                <option value="{{ image.reference }}">{{ image.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Uploaded panel thumbnail</label>
+        <select name="publish_thumbnail_upload_filename">
+            <option value="">Use server icon/default</option>
+            {% for image in uploaded_images %}
+                <option value="{{ image.reference }}">{{ image.label }}</option>
+            {% endfor %}
+        </select>
+
         <div class="button-row">
             <button type="submit">Publish Form Panel</button>
         </div>
@@ -2902,6 +3088,26 @@ VERIFICATION_BODY_HTML = """
                     <option value="">Do not post panel</option>
                     {% for channel in text_channels %}
                         <option value="{{ channel.id }}">#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Uploaded panel image</label>
+                <select name="panel_image_upload_filename">
+                    <option value="">No panel image</option>
+                    {% for image in uploaded_images %}
+                        <option value="{{ image.reference }}">{{ image.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Uploaded panel thumbnail</label>
+                <select name="panel_thumbnail_upload_filename">
+                    <option value="">Use server icon/default</option>
+                    {% for image in uploaded_images %}
+                        <option value="{{ image.reference }}">{{ image.label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -3711,6 +3917,13 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return image_url, thumbnail_url, author_icon_url, files
 
+    def close_discord_files(files: list[discord.File]) -> None:
+        for file in files:
+            try:
+                file.close()
+            except Exception:
+                pass
+
     async def send_embeds_to_channel(
         channel_id: int,
         embeds: list[discord.Embed],
@@ -3962,6 +4175,8 @@ def create_webui(bot: discord.Client) -> Flask:
         guild: discord.Guild,
         channel_id: int,
         form_key: str,
+        image_upload_filename: str | None = None,
+        thumbnail_upload_filename: str | None = None,
     ) -> None:
         channel = guild.get_channel(channel_id)
 
@@ -3991,15 +4206,29 @@ def create_webui(bot: discord.Client) -> Flask:
             colour=discord.Colour.blurple(),
         )
 
-        if guild.icon is not None:
+        image_attachment_url, thumbnail_attachment_url, _, files = build_selected_attachment_files(
+            image_upload_filename=image_upload_filename,
+            thumbnail_upload_filename=thumbnail_upload_filename,
+        )
+
+        if thumbnail_attachment_url:
+            embed.set_thumbnail(url=thumbnail_attachment_url)
+        elif guild.icon is not None:
             embed.set_thumbnail(url=guild.icon.url)
+
+        if image_attachment_url:
+            embed.set_image(url=image_attachment_url)
 
         embed.set_footer(text="TFSBot Verification")
 
-        await fetched_channel.send(
-            embed=embed,
-            view=VerifyView(),
-        )
+        try:
+            await fetched_channel.send(
+                embed=embed,
+                view=VerifyView(),
+                files=files if files else None,
+            )
+        finally:
+            close_discord_files(files)
 
     def make_safe_command_key(command_key: str) -> str:
         return (
@@ -5062,23 +5291,37 @@ def create_webui(bot: discord.Client) -> Flask:
                     if not publish_title or not publish_description:
                         raise RuntimeError("Publish title and description are required.")
 
+                    image_attachment_url, thumbnail_attachment_url, _, files = build_selected_attachment_files(
+                        image_upload_filename=request.form.get("publish_image_upload_filename") or None,
+                        thumbnail_upload_filename=request.form.get("publish_thumbnail_upload_filename") or None,
+                    )
+
                     embed = discord.Embed(
                         title=publish_title,
                         description=publish_description,
                         colour=discord.Colour.blurple(),
                     )
 
-                    if selected_guild.icon is not None:
+                    if thumbnail_attachment_url:
+                        embed.set_thumbnail(url=thumbnail_attachment_url)
+                    elif selected_guild.icon is not None:
                         embed.set_thumbnail(url=selected_guild.icon.url)
+
+                    if image_attachment_url:
+                        embed.set_image(url=image_attachment_url)
 
                     embed.set_footer(text=f"Form: {form_config.title}")
 
-                    message_object = run_coro_from_flask(
-                        channel.send(
-                            embed=embed,
-                            view=GenericFormStartView(),
+                    try:
+                        message_object = run_coro_from_flask(
+                            channel.send(
+                                embed=embed,
+                                view=GenericFormStartView(),
+                                files=files if files else None,
+                            )
                         )
-                    )
+                    finally:
+                        close_discord_files(files)
 
                     run_coro_from_flask(
                         form_store.save_published_form(
@@ -5170,6 +5413,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 text_channels=text_channels,
                 verification_form_key=verification_form_key,
                 modal_pages=modal_pages,
+                uploaded_images=list_uploaded_images(),
                 message=message,
                 error=error,
             )
@@ -5190,6 +5434,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 text_channels=[],
                 verification_form_key=FORM_KEY_VERIFICATION,
                 modal_pages=0,
+                uploaded_images=[],
                 message=message,
                 error=error,
             )
@@ -5413,6 +5658,8 @@ def create_webui(bot: discord.Client) -> Flask:
                                 guild=selected_guild,
                                 channel_id=int(panel_channel_id),
                                 form_key=verification_form_key,
+                                image_upload_filename=request.form.get("panel_image_upload_filename") or None,
+                                thumbnail_upload_filename=request.form.get("panel_thumbnail_upload_filename") or None,
                             )
                         )
 
@@ -5449,6 +5696,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 default_terms=default_terms,
                 default_terms_text="\n".join(default_terms),
                 invite_tracking_status=invite_tracking_status,
+                uploaded_images=list_uploaded_images(),
                 message=message,
                 error=error,
             )
@@ -5470,6 +5718,7 @@ def create_webui(bot: discord.Client) -> Flask:
                 default_terms=[],
                 default_terms_text="",
                 invite_tracking_status="Unknown",
+                uploaded_images=[],
                 message=message,
                 error=error,
             )

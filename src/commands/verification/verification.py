@@ -481,7 +481,7 @@ def get_log_colour_for_status(status: str) -> discord.Colour:
     if cleaned == "approved":
         return discord.Colour.green()
 
-    if cleaned == "denied":
+    if cleaned in {"denied", "rejected"}:
         return discord.Colour.orange()
 
     if cleaned == "kicked":
@@ -505,6 +505,7 @@ def should_show_log_reason(status: str, reason: str | None) -> bool:
 
     return status.lower().strip() in {
         "denied",
+        "rejected",
         "kicked",
         "banned",
         "cancelled",
@@ -1471,7 +1472,7 @@ async def handle_verify_complete(
         log_message = await log_application(
             client=bot,
             application=application,
-            status="Banned" if ban_ok else "Denied",
+            status="Banned" if ban_ok else "Rejected",
             moderator=moderator,
             reason=final_reason,
             dm_sent=dm_sent,
@@ -1597,7 +1598,7 @@ def action_to_status(action: str) -> tuple[str, str, str]:
         return APPLICATION_STATUS_APPROVED, "Approved", "approved"
 
     if action == "deny":
-        return APPLICATION_STATUS_REJECTED, "Denied", "denied"
+        return APPLICATION_STATUS_REJECTED, "Rejected", "rejected"
 
     if action == "kick":
         return APPLICATION_STATUS_KICKED, "Kicked", "kicked"
@@ -2019,15 +2020,11 @@ async def complete_application_action(
     await delete_review_message(interaction.client, application)
     await archive_question_thread(interaction.client, application, log_status)
 
-    confirmation_message = f"Application {human_status}."
-
     if role_failures:
-        confirmation_message += "\n" + "\n".join(f"Role warning: {failure}" for failure in role_failures)
-
-    await interaction.followup.send(
-        confirmation_message,
-        ephemeral=True,
-    )
+        await interaction.followup.send(
+            "\n".join(f"Role warning: {failure}" for failure in role_failures),
+            ephemeral=True,
+        )
 
     try:
         if interaction.message is not None:
@@ -2040,7 +2037,7 @@ async def complete_application_action(
 class ActionReasonModal(discord.ui.Modal):
     def __init__(self, application_id: str, action: str) -> None:
         action_title = {
-            "deny": "Deny Application",
+            "deny": "Reject Application",
             "kick": "Kick User",
             "ban": "Ban User",
         }.get(action, "Action Application")
@@ -2053,10 +2050,17 @@ class ActionReasonModal(discord.ui.Modal):
         self.application_id = application_id
         self.action = action
 
+        reason_label = "Rejection reason" if action == "deny" else "Reason"
+        reason_placeholder = (
+            "Explain why the application was rejected."
+            if action == "deny"
+            else "Explain the reason for this action."
+        )
+
         self.reason = discord.ui.TextInput(
-            label="Reason",
+            label=reason_label,
             style=discord.TextStyle.paragraph,
-            placeholder="Explain the reason for this action.",
+            placeholder=reason_placeholder,
             required=True,
             min_length=3,
             max_length=1000,
@@ -2117,7 +2121,7 @@ class DisabledApplicationReviewView(discord.ui.View):
 
         self.add_item(
             discord.ui.Button(
-                label="Deny",
+                label="Reject",
                 style=discord.ButtonStyle.danger,
                 custom_id=f"application_disabled:deny:{application_id}"[:100],
                 disabled=True,
@@ -2212,7 +2216,7 @@ class ApplicationQuestionControlsView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Deny",
+        label="Reject",
         style=discord.ButtonStyle.danger,
         custom_id="application_question:deny",
     )
@@ -2338,7 +2342,7 @@ class ApplicationReviewView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Deny",
+        label="Reject",
         style=discord.ButtonStyle.danger,
         custom_id="application:deny",
     )
