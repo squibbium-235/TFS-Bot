@@ -356,99 +356,99 @@ class CustomCommandStore:
 
             return cursor.rowcount > 0
 
-        async def rename(
-            self,
-            guild_id: int,
-            old_name: str,
-            new_name: str,
-        ) -> bool:
-            old_name = self.normalise_name(old_name)
-            new_name = self.normalise_name(new_name)
+    async def rename(
+        self,
+        guild_id: int,
+        old_name: str,
+        new_name: str,
+    ) -> bool:
+        old_name = self.normalise_name(old_name)
+        new_name = self.normalise_name(new_name)
 
-            if old_name == new_name:
-                return True
-
-            async with aiosqlite.connect(
-                self.db_path
-            ) as database:
-                cursor = await database.execute(
-                    """
-                    SELECT 1
-                    FROM custom_commands
-                    WHERE guild_id = ?
-                    AND name = ?
-                    """,
-                    (
-                        guild_id,
-                        new_name,
-                    ),
-                )
-
-                if await cursor.fetchone() is not None:
-                    raise ValueError(
-                        f"Custom command `{new_name}` already exists."
-                    )
-
-                cursor = await database.execute(
-                    """
-                    UPDATE custom_commands
-                    SET name = ?,
-                        updated_at = ?
-                    WHERE guild_id = ?
-                    AND name = ?
-                    """,
-                    (
-                        new_name,
-                        self._now(),
-                        guild_id,
-                        old_name,
-                    ),
-                )
-
-                await database.commit()
-
-                return cursor.rowcount > 0
-
-        async def update_action(
-            self,
-            guild_id: int,
-            name: str,
-            action_number: int,
-            action_type: str,
-            data: dict[str, Any],
-        ) -> bool:
-            if action_type not in VALID_ACTIONS:
-                raise ValueError(
-                    f"Unknown action type `{action_type}`."
-                )
-
-            command = await self.get(
-                guild_id,
-                name,
-            )
-
-            if command is None:
-                return False
-
-            if not (
-                1
-                <= action_number
-                <= len(command.actions)
-            ):
-                return False
-
-            command.actions[
-                action_number - 1
-            ] = {
-                "type": action_type,
-                "data": data,
-            }
-
-            await self._save_actions(
-                command
-            )
-
+        if old_name == new_name:
             return True
+
+        async with aiosqlite.connect(
+            self.db_path
+        ) as database:
+            cursor = await database.execute(
+                """
+                SELECT 1
+                FROM custom_commands
+                WHERE guild_id = ?
+                AND name = ?
+                """,
+                (
+                    guild_id,
+                    new_name,
+                ),
+            )
+
+            if await cursor.fetchone() is not None:
+                raise ValueError(
+                    f"Custom command `{new_name}` already exists."
+                )
+
+            cursor = await database.execute(
+                """
+                UPDATE custom_commands
+                SET name = ?,
+                    updated_at = ?
+                WHERE guild_id = ?
+                AND name = ?
+                """,
+                (
+                    new_name,
+                    self._now(),
+                    guild_id,
+                    old_name,
+                ),
+            )
+
+            await database.commit()
+
+            return cursor.rowcount > 0
+
+    async def update_action(
+        self,
+        guild_id: int,
+        name: str,
+        action_number: int,
+        action_type: str,
+        data: dict[str, Any],
+    ) -> bool:
+        if action_type not in VALID_ACTIONS:
+            raise ValueError(
+                f"Unknown action type `{action_type}`."
+            )
+
+        command = await self.get(
+            guild_id,
+            name,
+        )
+
+        if command is None:
+            return False
+
+        if not (
+            1
+            <= action_number
+            <= len(command.actions)
+        ):
+            return False
+
+        command.actions[
+            action_number - 1
+        ] = {
+            "type": action_type,
+            "data": data,
+        }
+
+        await self._save_actions(
+            command
+        )
+
+        return True
 
     async def add_action(
         self,
