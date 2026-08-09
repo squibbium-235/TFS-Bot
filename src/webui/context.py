@@ -7,6 +7,14 @@ from typing import Any
 import discord
 from flask import session
 
+from src.webui.access import (
+    WebUIAccessManager,
+)
+
+from src.webui.uploads import (
+    WebUIUploadManager,
+)
+
 
 class WebUIContext:
     def __init__(
@@ -14,6 +22,14 @@ class WebUIContext:
         bot: discord.Client,
     ) -> None:
         self.bot = bot
+
+        self.access = WebUIAccessManager(
+            bot
+        )
+        
+        self.uploads = (
+            WebUIUploadManager()
+        )
         
     def template_context(
         self,

@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+    <h2>Verification</h2>
+    <p class="hint">
+        Manage the verification panel, review channels, approval roles, invite tracking, and application automod from here.
+        Slash commands can still do the same things, but this is cooler.
+    </p>
+
+    <form
+        method="get"
+        action="{{ url_for('verification.index') }}"
+    >
+        <label>Server</label>
+        <select name="guild_id" onchange="this.form.submit()">
+            {% for guild in guilds %}
+                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if selected_guild_id %}
+<form
+    method="post"
+    action="{{ url_for('verification.index') }}"
+>
+    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+
+    <div class="panel">
+        <h2>Quick Actions</h2>
+        <p class="hint section-note">
+            Jump to the main verification setup sections. No, this does not make Discord permissions less annoying, sadly.
+        </p>
+
+        <div class="quick-actions">
+            <a class="button-link secondary" href="#verification-panel-setup">Panel Setup</a>
+            <a class="button-link secondary" href="#review-log-channels">Review + Logs</a>
+            <a class="button-link secondary" href="#approval-roles">Approval Roles</a>
+            <a class="button-link secondary" href="#verification-automod">Automod</a>
+            <a class="button-link secondary" href="#invite-tracking">Invite Tracking</a>
+            <a class="button-link secondary" href="#application-maintenance">Application Maintenance</a>
+        </div>
+    </div>
+
+    <div class="panel" id="verification-panel-setup">
+        <h2>Verification Panel Setup</h2>
+        <p class="hint section-note">
+            Choose which form the verification panel should open, then optionally post or repost the panel to a channel.
+            Existing posted panels do not update themselves, because Discord messages are not psychic.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Verification form</label>
+                <select name="verification_form_key">
+                    {% for form in forms %}
+                        <option value="{{ form.key }}" {{ 'selected' if form.key == settings.verification_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Post/repost verification panel to</label>
+                <select name="panel_channel_id">
+                    <option value="">Do not post panel</option>
+                    {% for channel in text_channels %}
+                        <option value="{{ channel.id }}">#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Uploaded panel image</label>
+                <select name="panel_image_upload_filename">
+                    <option value="">No panel image</option>
+                    {% for image in uploaded_images %}
+                        <option value="{{ image.reference }}">{{ image.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Uploaded panel thumbnail</label>
+                <select name="panel_thumbnail_upload_filename">
+                    <option value="">Use server icon/default</option>
+                    {% for image in uploaded_images %}
+                        <option value="{{ image.reference }}">{{ image.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Verification Settings</button>
+            <button type="submit" name="action" value="save_and_post_panel" class="secondary-button">Save and Post Panel</button>
+        </div>
+    </div>
+
+    <div class="panel" id="review-log-channels">
+        <h2>Review + Log Channels</h2>
+        <p class="hint section-note">
+            Review applications go to the review channel. Final outcomes go to the log channel.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Review channel</label>
+                <select name="review_channel_id">
+                    <option value="">Not set</option>
+                    {% for channel in text_channels %}
+                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.review_channel_id else '' }}>#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Log channel</label>
+                <select name="log_channel_id">
+                    <option value="">Not set</option>
+                    {% for channel in text_channels %}
+                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.log_channel_id else '' }}>#{{ channel.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Channel Settings</button>
+        </div>
+    </div>
+
+    <div class="panel" id="approval-roles">
+        <h2>Approval Roles</h2>
+        <p class="hint section-note">
+            On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles,
+            because Discord loves hierarchy more than sense.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Role to give on approval</label>
+                <select name="approved_add_role_id">
+                    <option value="">Not set</option>
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id == settings.approved_add_role_id else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Role to remove on approval</label>
+                <select name="approved_remove_role_id">
+                    <option value="">Not set</option>
+                    {% for role in roles %}
+                        <option value="{{ role.id }}" {{ 'selected' if role.id == settings.approved_remove_role_id else '' }}>{{ role.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>When approved</strong>
+                User can receive the configured approval role.
+            </div>
+
+            <div class="stat-card">
+                <strong>Role removal</strong>
+                User can lose the configured pre-verification role.
+            </div>
+
+            <div class="stat-card">
+                <strong>Health check</strong>
+                Overview shows if the bot role is too low.
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Approval Roles</button>
+        </div>
+    </div>
+
+    <div class="panel" id="verification-automod">
+        <h2>Verification Automod</h2>
+        <p class="hint section-note">
+            If enabled, applications containing any blocked term are automatically logged and banned.
+            Keep one term per line. Terms are stored in SQLite and matched case-insensitively.
+        </p>
+
+        <label class="checkbox-row">
+            <input type="checkbox" name="automod_enabled" {{ 'checked' if settings.automod_enabled else '' }}>
+            Enable automatic ban for blocked application terms
+        </label>
+
+        <label>Blocked terms</label>
+        <textarea name="automod_terms" class="terms-box" placeholder="one term per line">{{ automod_terms_text }}</textarea>
+
+        <details class="default-details">
+            <summary>Default automod list</summary>
+            {% if default_terms %}
+                <pre>{{ default_terms_text }}</pre>
+            {% else %}
+                <pre>No built-in default terms are bundled. Add one term per line to data/default_automod_terms.txt, then use “Add Default Terms”.</pre>
+            {% endif %}
+        </details>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="save_verification">Save Automod Terms</button>
+            <button type="submit" name="action" value="add_default_terms" class="secondary-button">Add Default Terms</button>
+            <button type="submit" name="action" value="clear_automod_terms" class="danger-button">Clear Automod Terms</button>
+        </div>
+    </div>
+
+    <div class="panel" id="invite-tracking">
+        <h2>Invite Tracking</h2>
+        <p class="hint section-note">
+            Invite tracking runs automatically when a member joins. Refreshing the cache is useful after restarting the bot or creating/deleting invites.
+        </p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <strong>Status</strong>
+                {{ invite_tracking_status }}
+            </div>
+
+            <div class="stat-card">
+                <strong>Permission needed</strong>
+                Manage Server
+            </div>
+
+            <div class="stat-card">
+                <strong>Shown on apps</strong>
+                Invite code and inviter
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="refresh_invites" class="secondary-button">Refresh Invite Cache</button>
+        </div>
+    </div>
+
+    <div class="panel danger-panel" id="application-maintenance">
+        <h2>Application Maintenance</h2>
+        <p class="hint section-note">
+            Cancel/reset stuck active applications. This marks them as cancelled, logs it, deletes the review message if possible,
+            and locks/archives any questioning thread. It does not delete application history.
+        </p>
+
+        <div class="setting-grid">
+            <div>
+                <label>Cancel by User ID</label>
+                <input name="cancel_user_id" placeholder="123456789012345678">
+            </div>
+
+            <div class="wide-field">
+                <label>Cancellation reason</label>
+                <input name="cancel_reason" placeholder="Optional reason for the cancellation log">
+            </div>
+
+            <div class="wide-field">
+                <label>Confirmation</label>
+                <input name="cancel_confirm" placeholder="Type CANCEL">
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" name="action" value="cancel_by_user" class="danger-button">Cancel by User ID</button>
+            <button type="submit" name="action" value="cancel_all_pending" class="danger-button">Cancel All Pending</button>
+        </div>
+    </div>
+</form>
+{% else %}
+<div class="panel"><p>No servers available.</p></div>
+{% endif %}
+
+{% endblock %}

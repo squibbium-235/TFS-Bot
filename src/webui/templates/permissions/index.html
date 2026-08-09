@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+
+    <h2>Permissions</h2>
+
+    <p class="hint">
+        Control who can access the WebUI and who can use Discord
+        slash commands. WebUI access controls the website.
+        Slash command permissions control commands used inside Discord.
+    </p>
+
+    <form
+        method="get"
+        action="{{ url_for('permissions.index') }}"
+    >
+
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+
+            {% for guild in guilds %}
+
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+    </form>
+
+</div>
+
+
+{% if selected_guild_id %}
+
+<form
+    method="post"
+    action="{{ url_for('permissions.index') }}"
+>
+
+    <input
+        type="hidden"
+        name="guild_id"
+        value="{{ selected_guild_id }}"
+    >
+
+
+    <div class="panel">
+
+        <h2>Quick Actions</h2>
+
+        <div class="quick-actions">
+
+            <a
+                class="button-link secondary"
+                href="#webui-access"
+            >
+                WebUI Access
+            </a>
+
+            <a
+                class="button-link secondary"
+                href="#permission-roles"
+            >
+                Permission Roles
+            </a>
+
+            <a
+                class="button-link secondary"
+                href="#slash-command-permissions"
+            >
+                Slash Commands
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="webui-access"
+    >
+
+        <h2>WebUI Access</h2>
+
+        <p class="hint section-note">
+            Owner roles can change settings, restore backups,
+            manage permissions, and cancel active applications.
+            Viewer roles can only view the Overview page.
+            If nothing is stored here, the bot falls back to
+            role IDs configured in <code>.env</code>.
+        </p>
+
+        <div class="stat-grid">
+
+            <div class="stat-card">
+
+                <strong>Discord OAuth</strong>
+
+                <span
+                    class="pill {{ webui_access.discord_auth_class }}"
+                >
+                    {{ webui_access.discord_auth_status }}
+                </span>
+
+            </div>
+
+            <div class="stat-card">
+
+                <strong>Password fallback</strong>
+
+                <span
+                    class="pill {{ webui_access.password_class }}"
+                >
+                    {{ webui_access.password_status }}
+                </span>
+
+            </div>
+
+            <div class="stat-card">
+
+                <strong>Owner roles</strong>
+
+                {{ webui_access.owner_count }}
+                configured via
+                {{ webui_access.owner_source }}
+
+            </div>
+
+            <div class="stat-card">
+
+                <strong>Viewer roles</strong>
+
+                {{ webui_access.viewer_count }}
+                configured via
+                {{ webui_access.viewer_source }}
+
+            </div>
+
+        </div>
+
+
+        <div class="grid-2">
+
+            <div>
+
+                <label>
+                    WebUI owner roles
+                </label>
+
+                <select
+                    name="webui_owner_role_ids"
+                    multiple
+                    size="8"
+                >
+
+                    {% for role in roles %}
+
+                        <option
+                            value="{{ role.id }}"
+                            {{ 'selected' if role.id in webui_access.owner_role_ids else '' }}
+                        >
+                            {{ role.name }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+                <p class="hint">
+                    Owner access should be kept limited.
+                    Hold Ctrl to select multiple roles.
+                </p>
+
+            </div>
+
+
+            <div>
+
+                <label>
+                    WebUI viewer roles
+                </label>
+
+                <select
+                    name="webui_viewer_role_ids"
+                    multiple
+                    size="8"
+                >
+
+                    {% for role in roles %}
+
+                        <option
+                            value="{{ role.id }}"
+                            {{ 'selected' if role.id in webui_access.viewer_role_ids else '' }}
+                        >
+                            {{ role.name }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+                <p class="hint">
+                    Viewer access only allows the Overview page.
+                    Hold Ctrl to select multiple roles.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="permission-roles"
+    >
+
+        <h2>
+            Discord Slash Command Permission Roles
+        </h2>
+
+        <p class="hint section-note">
+            These roles determine a user's permission level when
+            using bot commands inside Discord.
+        </p>
+
+        <div class="grid-2">
+
+            {% for role_setting in role_settings %}
+
+                <div>
+
+                    <label>
+                        {{ role_setting.label }}
+                    </label>
+
+                    <select
+                        name="role_{{ role_setting.level }}"
+                    >
+
+                        <option value="">
+                            Not set
+                        </option>
+
+                        {% for role in roles %}
+
+                            <option
+                                value="{{ role.id }}"
+                                {{ 'selected' if role.id == role_setting.role_id else '' }}
+                            >
+                                {{ role.name }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="slash-command-permissions"
+    >
+
+        <h2>Slash Command Levels</h2>
+
+        <p class="hint section-note">
+            Set the minimum permission level required for each command.
+        </p>
+
+        {% for command in commands %}
+
+            <div class="command-row">
+
+                <div>
+
+                    <h3>
+                        <code>
+                            {{ command.key }}
+                        </code>
+                    </h3>
+
+                </div>
+
+                <div>
+
+                    <input
+                        type="hidden"
+                        name="command_key[]"
+                        value="{{ command.key }}"
+                    >
+
+                    <select
+                        name="command_level_{{ command.safe_key }}"
+                    >
+
+                        {% for level in levels %}
+
+                            <option
+                                value="{{ level.value }}"
+                                {{ 'selected' if level.value == command.level else '' }}
+                            >
+                                {{ level.label }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <div class="panel">
+
+        <button type="submit">
+            Save Permissions
+        </button>
+
+    </div>
+
+</form>
+
+{% else %}
+
+<div class="panel">
+    <p>No servers available.</p>
+</div>
+
+{% endif %}
+
+{% endblock %}

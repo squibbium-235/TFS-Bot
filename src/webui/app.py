@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hmac
 import json
 import secrets
@@ -9,7 +8,6 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from io import BytesIO
@@ -26,23 +24,10 @@ from flask import (
     url_for,
     send_file,
 )
-from werkzeug.utils import secure_filename
 
 from src.services.forms.constants import FORM_KEY_VERIFICATION, VERIFICATION_FORM_PATH
 from src.services.backup_service import BackupError, BackupService
 from src.commands.forms.form_runtime import GenericFormStartView
-from src.commands.verification.verification import (
-    VerifyView,
-    cancel_all_pending_applications_for_guild,
-    cancel_pending_application_by_user_id,
-)
-from src.services.permission_store import (
-    LEVEL_ADMIN,
-    LEVEL_OWNER,
-    LEVEL_PUBLIC,
-    LEVEL_STAFF,
-    LEVEL_VALUES,
-)
 
 from src.webui.context import (
     WebUIContext,
@@ -57,10 +42,6 @@ from src.webui.routes import (
 
 from src.utils.embed_builder import EmbedFactory
 from src.webui.custom_commands import register_custom_command_webui
-
-
-UPLOAD_DIR = Path("data/uploads/images")
-ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 LOGIN_HTML = """
@@ -669,8 +650,8 @@ EMBED_FORM_HTML = """
                 <a href="{{ url_for('dm_templates.index') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
-                <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
-                <a href="{{ url_for('permissions_page') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
+                <a href="{{ url_for('verification.index') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
+                <a href="{{ url_for('permissions.index') }}" class="{{ 'active' if active_page == 'permissions' else '' }}">Permissions</a>
                 <a href="{{ url_for('backups_page') }}" class="{{ 'active' if active_page == 'backups' else '' }}">Backups</a>
             {% endif %}
             <span class="badge">{{ display_name }} · {{ webui_role|title }}</span>
@@ -1148,175 +1129,6 @@ EMBED_FORM_HTML = """
 </body>
 </html>
 """
-
-PERMISSIONS_BODY_HTML = """
-<div class="panel page-intro">
-    <h2>Permissions</h2>
-    <p class="hint">
-        Control who can access the WebUI and who can use Discord slash commands. WebUI access controls the website.
-        Slash command permissions control commands used inside Discord. Two doors, two locks, because apparently one permission system would have been too merciful.
-    </p>
-
-    <form method="get" action="{{ url_for('permissions_page') }}">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-    </form>
-</div>
-
-{% if selected_guild_id %}
-<form method="post" action="{{ url_for('permissions_page') }}">
-    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
-
-    <div class="panel">
-        <h2>Quick Actions</h2>
-        <p class="hint section-note">
-            Jump to the permission area you actually care about, instead of scrolling around like a lost intern.
-        </p>
-
-        <div class="quick-actions">
-            <a class="button-link secondary" href="#webui-access">WebUI Access</a>
-            <a class="button-link secondary" href="#permission-roles">Permission Roles</a>
-            <a class="button-link secondary" href="#slash-command-permissions">Slash Commands</a>
-        </div>
-    </div>
-
-    <div class="panel" id="webui-access">
-        <h2>WebUI Access</h2>
-        <p class="hint section-note">
-            Choose which Discord roles can access this WebUI. Owner roles can change settings, restore backups,
-            manage permissions, and cancel active applications. Viewer roles can only view the Overview page.
-            If nothing is saved here, the bot falls back to the role IDs in <code>.env</code>.
-        </p>
-
-        <div class="stat-grid">
-            <div class="stat-card">
-                <strong>Discord OAuth</strong>
-                <span class="pill {{ webui_access.discord_auth_class }}">{{ webui_access.discord_auth_status }}</span>
-            </div>
-
-            <div class="stat-card">
-                <strong>Password fallback</strong>
-                <span class="pill {{ webui_access.password_class }}">{{ webui_access.password_status }}</span>
-            </div>
-
-            <div class="stat-card">
-                <strong>Owner roles</strong>
-                {{ webui_access.owner_count }} configured via {{ webui_access.owner_source }}
-            </div>
-
-            <div class="stat-card">
-                <strong>Viewer roles</strong>
-                {{ webui_access.viewer_count }} configured via {{ webui_access.viewer_source }}
-            </div>
-        </div>
-
-        <div class="grid-2">
-            <div>
-                <label>WebUI owner roles</label>
-                <select name="webui_owner_role_ids" multiple size="8">
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.owner_role_ids else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-                <p class="hint">
-                    Owner access should be kept very limited. Owners can touch backups, verification, permissions, and maintenance tools.
-                    Hold Ctrl to select more than one role.
-                </p>
-            </div>
-
-            <div>
-                <label>WebUI viewer roles</label>
-                <select name="webui_viewer_role_ids" multiple size="8">
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id in webui_access.viewer_role_ids else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-                <p class="hint">
-                    Viewer access can only see the Overview page. Useful for people who need status visibility but should not be given buttons of doom.
-                    Hold Ctrl to select more than one role.
-                </p>
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit">Save WebUI Access</button>
-        </div>
-    </div>
-
-    <div class="panel" id="permission-roles">
-        <h2>Discord Slash Command Permission Roles</h2>
-        <p class="hint section-note">
-            These roles decide what permission level someone has when using bot slash commands in Discord.
-            They do not control WebUI login. Yes, that distinction is annoying. It is also important.
-        </p>
-
-        <div class="grid-2">
-            {% for role_setting in role_settings %}
-                <div>
-                    <label>{{ role_setting.label }}</label>
-                    <select name="role_{{ role_setting.level }}">
-                        <option value="">Not set</option>
-                        {% for role in roles %}
-                            <option value="{{ role.id }}" {{ 'selected' if role.id == role_setting.role_id else '' }}>{{ role.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            {% endfor %}
-        </div>
-
-        <div class="button-row">
-            <button type="submit">Save Permission Roles</button>
-        </div>
-    </div>
-
-    <div class="panel" id="slash-command-permissions">
-        <h2>Slash Command Levels</h2>
-        <p class="hint section-note">
-            Set the minimum permission level required for each slash command. Public means anyone can use it.
-            Owner means only owner-level users can use it. Try not to make destructive commands public.
-        </p>
-
-        {% for command in commands %}
-            <div class="command-row">
-                <div>
-                    <h3><code>{{ command.key }}</code></h3>
-                </div>
-
-                <div>
-                    <input type="hidden" name="command_key[]" value="{{ command.key }}">
-                    <select name="command_level_{{ command.safe_key }}">
-                        {% for level in levels %}
-                            <option value="{{ level.value }}" {{ 'selected' if level.value == command.level else '' }}>{{ level.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-        {% endfor %}
-
-        <div class="button-row">
-            <button type="submit">Save Command Levels</button>
-        </div>
-    </div>
-
-    <div class="panel">
-        <h2>Save Everything</h2>
-        <p class="hint">
-            All sections on this page are part of the same form. Any save button should save the whole page,
-            but this one exists for people who like a big obvious final button. Humanity continues.
-        </p>
-
-        <button type="submit">Save Permissions</button>
-    </div>
-</form>
-{% else %}
-<div class="panel"><p>No servers available.</p></div>
-{% endif %}
-"""
-
 
 BACKUPS_BODY_HTML = """
 <div class="panel page-intro">
@@ -2140,277 +1952,6 @@ ACCESS_DENIED_BODY_HTML = """
 """
 
 
-VERIFICATION_BODY_HTML = """
-<div class="panel page-intro">
-    <h2>Verification</h2>
-    <p class="hint">
-        Manage the verification panel, review channels, approval roles, invite tracking, and application automod from here.
-        Slash commands can still do the same things, but this is cooler.
-    </p>
-
-    <form method="get" action="{{ url_for('verification_page') }}">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-    </form>
-</div>
-
-{% if selected_guild_id %}
-<form method="post" action="{{ url_for('verification_page') }}">
-    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
-
-    <div class="panel">
-        <h2>Quick Actions</h2>
-        <p class="hint section-note">
-            Jump to the main verification setup sections. No, this does not make Discord permissions less annoying, sadly.
-        </p>
-
-        <div class="quick-actions">
-            <a class="button-link secondary" href="#verification-panel-setup">Panel Setup</a>
-            <a class="button-link secondary" href="#review-log-channels">Review + Logs</a>
-            <a class="button-link secondary" href="#approval-roles">Approval Roles</a>
-            <a class="button-link secondary" href="#verification-automod">Automod</a>
-            <a class="button-link secondary" href="#invite-tracking">Invite Tracking</a>
-            <a class="button-link secondary" href="#application-maintenance">Application Maintenance</a>
-        </div>
-    </div>
-
-    <div class="panel" id="verification-panel-setup">
-        <h2>Verification Panel Setup</h2>
-        <p class="hint section-note">
-            Choose which form the verification panel should open, then optionally post or repost the panel to a channel.
-            Existing posted panels do not update themselves, because Discord messages are not psychic.
-        </p>
-
-        <div class="setting-grid">
-            <div>
-                <label>Verification form</label>
-                <select name="verification_form_key">
-                    {% for form in forms %}
-                        <option value="{{ form.key }}" {{ 'selected' if form.key == settings.verification_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Post/repost verification panel to</label>
-                <select name="panel_channel_id">
-                    <option value="">Do not post panel</option>
-                    {% for channel in text_channels %}
-                        <option value="{{ channel.id }}">#{{ channel.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Uploaded panel image</label>
-                <select name="panel_image_upload_filename">
-                    <option value="">No panel image</option>
-                    {% for image in uploaded_images %}
-                        <option value="{{ image.reference }}">{{ image.label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Uploaded panel thumbnail</label>
-                <select name="panel_thumbnail_upload_filename">
-                    <option value="">Use server icon/default</option>
-                    {% for image in uploaded_images %}
-                        <option value="{{ image.reference }}">{{ image.label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="save_verification">Save Verification Settings</button>
-            <button type="submit" name="action" value="save_and_post_panel" class="secondary-button">Save and Post Panel</button>
-        </div>
-    </div>
-
-    <div class="panel" id="review-log-channels">
-        <h2>Review + Log Channels</h2>
-        <p class="hint section-note">
-            Review applications go to the review channel. Final outcomes go to the log channel.
-        </p>
-
-        <div class="setting-grid">
-            <div>
-                <label>Review channel</label>
-                <select name="review_channel_id">
-                    <option value="">Not set</option>
-                    {% for channel in text_channels %}
-                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.review_channel_id else '' }}>#{{ channel.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Log channel</label>
-                <select name="log_channel_id">
-                    <option value="">Not set</option>
-                    {% for channel in text_channels %}
-                        <option value="{{ channel.id }}" {{ 'selected' if channel.id == settings.log_channel_id else '' }}>#{{ channel.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="save_verification">Save Channel Settings</button>
-        </div>
-    </div>
-
-    <div class="panel" id="approval-roles">
-        <h2>Approval Roles</h2>
-        <p class="hint section-note">
-            On approval, the bot can give one role and remove one role. The bot's Discord role must be above both roles,
-            because Discord loves hierarchy more than sense.
-        </p>
-
-        <div class="setting-grid">
-            <div>
-                <label>Role to give on approval</label>
-                <select name="approved_add_role_id">
-                    <option value="">Not set</option>
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id == settings.approved_add_role_id else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div>
-                <label>Role to remove on approval</label>
-                <select name="approved_remove_role_id">
-                    <option value="">Not set</option>
-                    {% for role in roles %}
-                        <option value="{{ role.id }}" {{ 'selected' if role.id == settings.approved_remove_role_id else '' }}>{{ role.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div class="stat-grid">
-            <div class="stat-card">
-                <strong>When approved</strong>
-                User can receive the configured approval role.
-            </div>
-
-            <div class="stat-card">
-                <strong>Role removal</strong>
-                User can lose the configured pre-verification role.
-            </div>
-
-            <div class="stat-card">
-                <strong>Health check</strong>
-                Overview shows if the bot role is too low.
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="save_verification">Save Approval Roles</button>
-        </div>
-    </div>
-
-    <div class="panel" id="verification-automod">
-        <h2>Verification Automod</h2>
-        <p class="hint section-note">
-            If enabled, applications containing any blocked term are automatically logged and banned.
-            Keep one term per line. Terms are stored in SQLite and matched case-insensitively.
-        </p>
-
-        <label class="checkbox-row">
-            <input type="checkbox" name="automod_enabled" {{ 'checked' if settings.automod_enabled else '' }}>
-            Enable automatic ban for blocked application terms
-        </label>
-
-        <label>Blocked terms</label>
-        <textarea name="automod_terms" class="terms-box" placeholder="one term per line">{{ automod_terms_text }}</textarea>
-
-        <details class="default-details">
-            <summary>Default automod list</summary>
-            {% if default_terms %}
-                <pre>{{ default_terms_text }}</pre>
-            {% else %}
-                <pre>No built-in default terms are bundled. Add one term per line to data/default_automod_terms.txt, then use “Add Default Terms”.</pre>
-            {% endif %}
-        </details>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="save_verification">Save Automod Terms</button>
-            <button type="submit" name="action" value="add_default_terms" class="secondary-button">Add Default Terms</button>
-            <button type="submit" name="action" value="clear_automod_terms" class="danger-button">Clear Automod Terms</button>
-        </div>
-    </div>
-
-    <div class="panel" id="invite-tracking">
-        <h2>Invite Tracking</h2>
-        <p class="hint section-note">
-            Invite tracking runs automatically when a member joins. Refreshing the cache is useful after restarting the bot or creating/deleting invites.
-        </p>
-
-        <div class="stat-grid">
-            <div class="stat-card">
-                <strong>Status</strong>
-                {{ invite_tracking_status }}
-            </div>
-
-            <div class="stat-card">
-                <strong>Permission needed</strong>
-                Manage Server
-            </div>
-
-            <div class="stat-card">
-                <strong>Shown on apps</strong>
-                Invite code and inviter
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="refresh_invites" class="secondary-button">Refresh Invite Cache</button>
-        </div>
-    </div>
-
-    <div class="panel danger-panel" id="application-maintenance">
-        <h2>Application Maintenance</h2>
-        <p class="hint section-note">
-            Cancel/reset stuck active applications. This marks them as cancelled, logs it, deletes the review message if possible,
-            and locks/archives any questioning thread. It does not delete application history.
-        </p>
-
-        <div class="setting-grid">
-            <div>
-                <label>Cancel by User ID</label>
-                <input name="cancel_user_id" placeholder="123456789012345678">
-            </div>
-
-            <div class="wide-field">
-                <label>Cancellation reason</label>
-                <input name="cancel_reason" placeholder="Optional reason for the cancellation log">
-            </div>
-
-            <div class="wide-field">
-                <label>Confirmation</label>
-                <input name="cancel_confirm" placeholder="Type CANCEL">
-            </div>
-        </div>
-
-        <div class="button-row">
-            <button type="submit" name="action" value="cancel_by_user" class="danger-button">Cancel by User ID</button>
-            <button type="submit" name="action" value="cancel_all_pending" class="danger-button">Cancel All Pending</button>
-        </div>
-    </div>
-</form>
-{% else %}
-<div class="panel"><p>No servers available.</p></div>
-{% endif %}
-"""
-
-
 def create_webui(bot: discord.Client) -> Flask:
     app = Flask(__name__)
     
@@ -2421,6 +1962,12 @@ def create_webui(bot: discord.Client) -> Flask:
     app.extensions[
         WEBUI_CONTEXT_KEY
     ] = web_context
+    
+    UPLOAD_DIR = (
+        web_context
+        .uploads
+        .upload_dir
+    )
 
     secret_parts = [
         f"{credential.username}:{credential.password}"
@@ -2440,20 +1987,21 @@ def create_webui(bot: discord.Client) -> Flask:
 
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
     is_logged_in = (
         web_context.is_logged_in
     )
 
-    def is_discord_login_enabled() -> bool:
-        return bool(getattr(bot.config, "webui_discord_auth_enabled", False))
+    is_discord_login_enabled = (
+        web_context
+        .access
+        .discord_login_enabled
+    )
 
-    def is_password_login_enabled() -> bool:
-        return bool(
-            getattr(bot.config, "webui_password_login_enabled", True)
-            and bot.config.webui_credentials
-        )
+    is_password_login_enabled = (
+        web_context
+        .access
+        .password_login_enabled
+    )
 
     def render_login_page(error: str | None = None) -> str:
         return render_template_string(
@@ -2556,422 +2104,6 @@ def create_webui(bot: discord.Client) -> Flask:
             access_token=access_token,
         )
 
-    def get_webui_access_database_path() -> Path:
-        application_store = getattr(bot, "application_store", None)
-
-        if application_store is not None:
-            raw_path = getattr(application_store, "database_path", None)
-
-            if raw_path is not None:
-                return Path(raw_path)
-
-        return Path(getattr(bot.config, "application_db_path", "data/tfsbot.sqlite3"))
-
-    def ensure_webui_access_tables() -> None:
-        database_path = get_webui_access_database_path()
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with sqlite3.connect(database_path) as database:
-            database.execute(
-                """
-                CREATE TABLE IF NOT EXISTS webui_access_roles (
-                    guild_id INTEGER NOT NULL,
-                    access_level TEXT NOT NULL,
-                    role_id INTEGER NOT NULL,
-                    created_at TEXT NOT NULL,
-                    PRIMARY KEY (guild_id, access_level, role_id)
-                )
-                """
-            )
-
-    def get_stored_webui_access_role_ids(
-        guild_id: int,
-        access_level: str,
-    ) -> tuple[int, ...]:
-        ensure_webui_access_tables()
-
-        with sqlite3.connect(get_webui_access_database_path()) as database:
-            rows = database.execute(
-                """
-                SELECT role_id
-                FROM webui_access_roles
-                WHERE guild_id = ?
-                AND access_level = ?
-                ORDER BY role_id ASC
-                """,
-                (guild_id, access_level),
-            ).fetchall()
-
-        return tuple(int(row[0]) for row in rows)
-
-    def set_stored_webui_access_role_ids(
-        guild_id: int,
-        access_level: str,
-        role_ids: list[int],
-    ) -> None:
-        ensure_webui_access_tables()
-
-        cleaned_role_ids = sorted(set(role_ids))
-        now = datetime.now(timezone.utc).isoformat()
-
-        with sqlite3.connect(get_webui_access_database_path()) as database:
-            database.execute(
-                """
-                DELETE FROM webui_access_roles
-                WHERE guild_id = ?
-                AND access_level = ?
-                """,
-                (guild_id, access_level),
-            )
-
-            database.executemany(
-                """
-                INSERT INTO webui_access_roles (
-                    guild_id, access_level, role_id, created_at
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                [
-                    (guild_id, access_level, role_id, now)
-                    for role_id in cleaned_role_ids
-                ],
-            )
-
-    def get_env_webui_owner_role_ids() -> tuple[int, ...]:
-        owner_role_ids = tuple(
-            getattr(bot.config, "webui_discord_owner_role_ids", ())
-        )
-
-        if owner_role_ids:
-            return owner_role_ids
-
-        return tuple(
-            getattr(bot.config, "webui_discord_allowed_role_ids", ())
-        )
-
-    def get_env_webui_viewer_role_ids() -> tuple[int, ...]:
-        return tuple(
-            getattr(bot.config, "webui_discord_viewer_role_ids", ())
-        )
-
-    def get_effective_webui_access_role_ids(
-        guild_id: int,
-        access_level: str,
-    ) -> tuple[int, ...]:
-        try:
-            stored_role_ids = get_stored_webui_access_role_ids(
-                guild_id=guild_id,
-                access_level=access_level,
-            )
-        except sqlite3.Error:
-            stored_role_ids = ()
-
-        if stored_role_ids:
-            return stored_role_ids
-
-        if access_level == "owner":
-            return get_env_webui_owner_role_ids()
-
-        if access_level == "viewer":
-            return get_env_webui_viewer_role_ids()
-
-        return ()
-
-    def get_effective_webui_access_source(
-        guild_id: int,
-        access_level: str,
-    ) -> str:
-        try:
-            stored_role_ids = get_stored_webui_access_role_ids(
-                guild_id=guild_id,
-                access_level=access_level,
-            )
-        except sqlite3.Error:
-            stored_role_ids = ()
-
-        if stored_role_ids:
-            return "SQLite"
-
-        if access_level == "owner" and get_env_webui_owner_role_ids():
-            return ".env fallback"
-
-        if access_level == "viewer" and get_env_webui_viewer_role_ids():
-            return ".env fallback"
-
-        return "Not set"
-
-    def parse_role_ids_from_form(field_name: str) -> list[int]:
-        role_ids: list[int] = []
-
-        for raw_role_id in request.form.getlist(field_name):
-            raw_role_id = raw_role_id.strip()
-
-            if not raw_role_id:
-                continue
-
-            role_ids.append(int(raw_role_id))
-
-        return sorted(set(role_ids))
-
-    def build_webui_access_context(guild: discord.Guild | None) -> dict[str, Any]:
-        if guild is None:
-            return {
-                "owner_role_ids": [],
-                "viewer_role_ids": [],
-                "owner_source": "Not set",
-                "viewer_source": "Not set",
-                "discord_auth_status": "Disabled",
-                "discord_auth_class": "warn",
-                "password_status": "Disabled",
-                "password_class": "warn",
-                "owner_count": 0,
-                "viewer_count": 0,
-            }
-
-        owner_role_ids = get_effective_webui_access_role_ids(
-            guild_id=guild.id,
-            access_level="owner",
-        )
-        viewer_role_ids = get_effective_webui_access_role_ids(
-            guild_id=guild.id,
-            access_level="viewer",
-        )
-
-        return {
-            "owner_role_ids": [str(role_id) for role_id in owner_role_ids],
-            "viewer_role_ids": [str(role_id) for role_id in viewer_role_ids],
-            "owner_source": get_effective_webui_access_source(guild.id, "owner"),
-            "viewer_source": get_effective_webui_access_source(guild.id, "viewer"),
-            "discord_auth_status": "Enabled" if is_discord_login_enabled() else "Disabled",
-            "discord_auth_class": "good" if is_discord_login_enabled() else "warn",
-            "password_status": "Enabled" if is_password_login_enabled() else "Disabled",
-            "password_class": "good" if is_password_login_enabled() else "warn",
-            "owner_count": len(owner_role_ids),
-            "viewer_count": len(viewer_role_ids),
-        }
-
-    def get_matching_discord_webui_role(member_data: dict[str, Any]) -> str | None:
-        guild_id = bot.config.webui_discord_guild_id
-
-        if guild_id is None:
-            return None
-
-        member_role_ids = {
-            str(role_id)
-            for role_id in member_data.get("roles", [])
-        }
-
-        owner_role_ids = {
-            str(role_id)
-            for role_id in get_effective_webui_access_role_ids(
-                guild_id=guild_id,
-                access_level="owner",
-            )
-        }
-
-        viewer_role_ids = {
-            str(role_id)
-            for role_id in get_effective_webui_access_role_ids(
-                guild_id=guild_id,
-                access_level="viewer",
-            )
-        }
-
-        if owner_role_ids.intersection(member_role_ids):
-            return "owner"
-
-        if viewer_role_ids.intersection(member_role_ids):
-            return "viewer"
-
-        return None
-
-    def validate_uploaded_image_filename(filename: str) -> str:
-        safe_name = secure_filename(filename)
-
-        if not safe_name:
-            raise ValueError("Invalid filename.")
-
-        extension = Path(safe_name).suffix.lower()
-
-        if extension not in ALLOWED_IMAGE_EXTENSIONS:
-            raise ValueError(
-                "Unsupported image type. Use PNG, JPG, JPEG, GIF, or WEBP."
-            )
-
-        return safe_name
-
-
-    def validate_upload_folder(folder: str | None) -> str:
-        folder = (folder or "").strip().replace("\\", "/")
-
-        if not folder:
-            return ""
-
-        parts: list[str] = []
-
-        for raw_part in folder.split("/"):
-            raw_part = raw_part.strip()
-
-            if not raw_part:
-                continue
-
-            safe_part = secure_filename(raw_part)
-
-            if not safe_part:
-                raise ValueError("Invalid folder name.")
-
-            if safe_part in {".", ".."}:
-                raise ValueError("Invalid folder name.")
-
-            parts.append(safe_part)
-
-        if not parts:
-            return ""
-
-        return "/".join(parts)
-
-
-    def get_upload_folder_path(folder: str | None) -> Path:
-        safe_folder = validate_upload_folder(folder)
-        folder_path = UPLOAD_DIR / safe_folder if safe_folder else UPLOAD_DIR
-
-        resolved_upload_root = UPLOAD_DIR.resolve()
-        resolved_folder_path = folder_path.resolve()
-
-        if resolved_upload_root not in [resolved_folder_path, *resolved_folder_path.parents]:
-            raise ValueError("Invalid upload folder.")
-
-        return folder_path
-
-
-    def validate_uploaded_image_reference(reference: str) -> str:
-        reference = reference.strip().replace("\\", "/")
-
-        if not reference:
-            raise ValueError("Invalid uploaded image reference.")
-
-        folder = validate_upload_folder(str(Path(reference).parent))
-        filename = validate_uploaded_image_filename(Path(reference).name)
-
-        if folder in {".", ""}:
-            return filename
-
-        return f"{folder}/{filename}"
-
-
-    def get_uploaded_image_path(reference: str) -> Path:
-        safe_reference = validate_uploaded_image_reference(reference)
-        return UPLOAD_DIR / safe_reference
-
-
-    def get_uploaded_image_preview_url(path: Path) -> str:
-        mime_types = {
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-        }
-
-        mime_type = mime_types.get(path.suffix.lower())
-
-        if mime_type is None:
-            raise ValueError(f"Unsupported preview image type: {path.suffix}")
-
-        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-        return f"data:{mime_type};base64,{encoded}"
-
-
-    def format_upload_size(size_bytes: int) -> str:
-        if size_bytes < 1024:
-            return f"{size_bytes} B"
-
-        if size_bytes < 1024 * 1024:
-            return f"{size_bytes / 1024:.1f} KB"
-
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
-
-
-    def get_attachment_filename_for_reference(reference: str) -> str:
-        safe_reference = validate_uploaded_image_reference(reference)
-        path = Path(safe_reference)
-
-        if str(path.parent) in {".", ""}:
-            return path.name
-
-        folder_prefix = "__".join(path.parent.parts)
-        return f"{folder_prefix}__{path.name}"
-
-
-    def list_upload_folders() -> list[dict[str, str]]:
-        folders: list[dict[str, str]] = []
-
-        if not UPLOAD_DIR.exists():
-            return folders
-
-        for path in sorted(UPLOAD_DIR.rglob("*"), key=lambda item: item.as_posix().lower()):
-            if not path.is_dir():
-                continue
-
-            relative_path = path.relative_to(UPLOAD_DIR).as_posix()
-
-            if not relative_path or relative_path == ".":
-                continue
-
-            folders.append(
-                {
-                    "path": relative_path,
-                    "label": relative_path,
-                }
-            )
-
-        return folders
-
-
-    def list_uploaded_images() -> list[dict[str, str]]:
-        images: list[dict[str, str]] = []
-
-        if not UPLOAD_DIR.exists():
-            return images
-
-        image_paths = [
-            path
-            for path in UPLOAD_DIR.rglob("*")
-            if path.is_file()
-            and path.suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
-        ]
-
-        image_paths.sort(key=lambda item: item.stat().st_mtime, reverse=True)
-
-        for path in image_paths:
-            relative_path = path.relative_to(UPLOAD_DIR)
-            reference = relative_path.as_posix()
-            folder = relative_path.parent.as_posix()
-
-            if folder == ".":
-                folder = ""
-
-            stat = path.stat()
-
-            images.append(
-                {
-                    "reference": reference,
-                    "filename": path.name,
-                    "label": reference,
-                    "folder": folder,
-                    "folder_label": folder or "Root",
-                    "url": get_uploaded_image_preview_url(path),
-                    "size": format_upload_size(stat.st_size),
-                    "modified": datetime.fromtimestamp(
-                        stat.st_mtime,
-                        timezone.utc,
-                    ).strftime("%Y-%m-%d %H:%M UTC"),
-                }
-            )
-
-        return images
-
-
     def get_available_channels() -> list[dict[str, str]]:
         channels: list[dict[str, str]] = []
 
@@ -2995,56 +2127,6 @@ def create_webui(bot: discord.Client) -> Flask:
                 )
 
         return channels
-
-    def build_selected_attachment_files(
-        image_upload_filename: str | None,
-        thumbnail_upload_filename: str | None,
-        author_icon_upload_filename: str | None = None,
-    ) -> tuple[str | None, str | None, str | None, list[discord.File]]:
-        files: list[discord.File] = []
-        attached_references: set[str] = set()
-
-        image_url: str | None = None
-        thumbnail_url: str | None = None
-        author_icon_url: str | None = None
-
-        for selected_reference, target in [
-            (image_upload_filename, "image"),
-            (thumbnail_upload_filename, "thumbnail"),
-            (author_icon_upload_filename, "author_icon"),
-        ]:
-            if not selected_reference:
-                continue
-
-            safe_reference = validate_uploaded_image_reference(selected_reference)
-            path = get_uploaded_image_path(safe_reference)
-
-            if not path.exists():
-                raise FileNotFoundError(f"Uploaded image not found: {selected_reference}")
-
-            attachment_filename = get_attachment_filename_for_reference(safe_reference)
-
-            if safe_reference not in attached_references:
-                files.append(discord.File(path, filename=attachment_filename))
-                attached_references.add(safe_reference)
-
-            attachment_url = f"attachment://{attachment_filename}"
-
-            if target == "image":
-                image_url = attachment_url
-            elif target == "thumbnail":
-                thumbnail_url = attachment_url
-            else:
-                author_icon_url = attachment_url
-
-        return image_url, thumbnail_url, author_icon_url, files
-
-    def close_discord_files(files: list[discord.File]) -> None:
-        for file in files:
-            try:
-                file.close()
-            except Exception:
-                pass
 
     async def send_embeds_to_channel(
         channel_id: int,
@@ -3148,10 +2230,6 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return None
 
-    get_permission_store = (
-        web_context.permission_store
-    )
-
     get_guild_settings_store = (
         web_context.guild_settings_store
     )
@@ -3171,31 +2249,104 @@ def create_webui(bot: discord.Client) -> Flask:
     get_guild_text_channels = (
         web_context.guild_text_channels
     )
+    
+    validate_uploaded_image_filename = (
+        web_context
+        .uploads
+        .validate_filename
+    )
 
-    def get_current_verification_settings(guild: discord.Guild) -> dict[str, str | bool]:
-        settings_store = get_guild_settings_store()
+    validate_upload_folder = (
+        web_context
+        .uploads
+        .validate_folder
+    )
 
-        return {
-            "review_channel_id": str(settings_store.get_review_channel_id(guild.id) or ""),
-            "log_channel_id": str(settings_store.get_application_log_channel_id(guild.id) or ""),
-            "verification_form_key": settings_store.get_verification_form_key(guild.id) or FORM_KEY_VERIFICATION,
-            "approved_add_role_id": str(settings_store.get_approved_add_role_id(guild.id) or ""),
-            "approved_remove_role_id": str(settings_store.get_approved_remove_role_id(guild.id) or ""),
-            "automod_enabled": settings_store.is_automod_enabled(guild.id),
-        }
+    get_upload_folder_path = (
+        web_context
+        .uploads
+        .folder_path
+    )
 
-    def parse_terms_from_text(raw_text: str) -> list[str]:
-        terms: list[str] = []
+    validate_uploaded_image_reference = (
+        web_context
+        .uploads
+        .validate_reference
+    )
 
-        for raw_line in raw_text.splitlines():
-            stripped = raw_line.strip()
+    get_uploaded_image_path = (
+        web_context
+        .uploads
+        .image_path
+    )
 
-            if not stripped or stripped.startswith("#"):
-                continue
+    get_uploaded_image_preview_url = (
+        web_context
+        .uploads
+        .preview_url
+    )
 
-            terms.append(stripped)
+    format_upload_size = (
+        web_context
+        .uploads
+        .format_size
+    )
 
-        return terms
+    get_attachment_filename_for_reference = (
+        web_context
+        .uploads
+        .attachment_filename
+    )
+
+    list_upload_folders = (
+        web_context
+        .uploads
+        .list_folders
+    )
+
+    list_uploaded_images = (
+        web_context
+        .uploads
+        .list_images
+    )
+    
+    def build_selected_attachment_files(
+        image_upload_filename: (
+            str | None
+        ),
+        thumbnail_upload_filename: (
+            str | None
+        ),
+        author_icon_upload_filename: (
+            str | None
+        ) = None,
+    ) -> tuple[
+        str | None,
+        str | None,
+        str | None,
+        list[discord.File],
+    ]:
+        return (
+            web_context
+            .uploads
+            .build_attachment_files(
+                image_reference=(
+                    image_upload_filename
+                ),
+                thumbnail_reference=(
+                    thumbnail_upload_filename
+                ),
+                author_icon_reference=(
+                    author_icon_upload_filename
+                ),
+            )
+        )
+
+    close_discord_files = (
+        web_context
+        .uploads
+        .close_files
+    )
 
     def parse_optional_int(raw_value: str | None) -> int | None:
         if raw_value is None:
@@ -3210,98 +2361,6 @@ def create_webui(bot: discord.Client) -> Flask:
 
     def clean_form_key(raw_value: str) -> str:
         return raw_value.lower().strip()
-
-    async def get_guild_forms(guild: discord.Guild) -> list[dict[str, str]]:
-        form_store = get_form_store()
-        stored_forms = await form_store.list_forms(guild.id)
-
-        forms = [
-            {
-                "key": form.form_key,
-                "title": form.title,
-            }
-            for form in stored_forms
-        ]
-
-        if not any(form["key"] == FORM_KEY_VERIFICATION for form in forms):
-            forms.insert(0, {"key": FORM_KEY_VERIFICATION, "title": "Verification"})
-
-        return forms
-
-    async def post_verification_panel_from_webui(
-        guild: discord.Guild,
-        channel_id: int,
-        form_key: str,
-        image_upload_filename: str | None = None,
-        thumbnail_upload_filename: str | None = None,
-    ) -> None:
-        channel = guild.get_channel(channel_id)
-
-        if channel is None:
-            fetched_channel = await bot.fetch_channel(channel_id)
-        else:
-            fetched_channel = channel
-
-        if not isinstance(fetched_channel, discord.TextChannel):
-            raise RuntimeError("Selected panel channel is not a text channel.")
-
-        form_store = get_form_store()
-        form_config = await form_store.get_form_config(
-            guild_id=guild.id,
-            form_key=form_key,
-            fallback_json_path=VERIFICATION_FORM_PATH,
-        )
-
-        embed = discord.Embed(
-            title=f"{guild.name} Verification",
-            description=(
-                "Welcome!\n\n"
-                f"Please complete the **{discord.utils.escape_markdown(form_config.title)}** form "
-                "to apply for access to the server.\n\n"
-                "Click the button below to begin."
-            ),
-            colour=discord.Colour.blurple(),
-        )
-
-        image_attachment_url, thumbnail_attachment_url, _, files = build_selected_attachment_files(
-            image_upload_filename=image_upload_filename,
-            thumbnail_upload_filename=thumbnail_upload_filename,
-        )
-
-        if thumbnail_attachment_url:
-            embed.set_thumbnail(url=thumbnail_attachment_url)
-        elif guild.icon is not None:
-            embed.set_thumbnail(url=guild.icon.url)
-
-        if image_attachment_url:
-            embed.set_image(url=image_attachment_url)
-
-        embed.set_footer(text="TFSBot Verification")
-
-        try:
-            await fetched_channel.send(
-                embed=embed,
-                view=VerifyView(),
-                files=files if files else None,
-            )
-        finally:
-            close_discord_files(files)
-
-    def make_safe_command_key(command_key: str) -> str:
-        return (
-            command_key
-            .replace(".", "__dot__")
-            .replace("-", "__dash__")
-            .replace(" ", "__space__")
-        )
-
-    def get_level_choices() -> list[dict[str, str]]:
-        return [
-            {"value": LEVEL_PUBLIC, "label": "Public"},
-            {"value": LEVEL_STAFF, "label": "Staff"},
-            {"value": LEVEL_ADMIN, "label": "Admin"},
-            {"value": LEVEL_OWNER, "label": "Owner"},
-        ]
 
     def format_file_size(size_bytes: int) -> str:
         if size_bytes < 1024:
@@ -3423,7 +2482,13 @@ def create_webui(bot: discord.Client) -> Flask:
             user_data = fetch_discord_user(access_token=access_token)
             member_data = fetch_discord_member(access_token=access_token)
 
-            webui_role = get_matching_discord_webui_role(member_data)
+            webui_role = (
+                web_context
+                .access
+                .matching_discord_role(
+                    member_data
+                )
+            )
 
             if webui_role is None:
                 return render_login_page(
@@ -3444,7 +2509,7 @@ def create_webui(bot: discord.Client) -> Flask:
             session["display_name"] = display_name
             session["webui_role"] = webui_role
 
-            return redirect(url_for("index"))
+            return redirect(url_for("overview.index"))
 
         except Exception as error:
             return render_login_page(error=str(error))
@@ -4128,335 +3193,6 @@ def create_webui(bot: discord.Client) -> Flask:
                 page_count=0,
                 pages=[],
                 message=None,
-                error=error,
-            )
-
-
-    @app.route("/verification", methods=["GET", "POST"])
-    def verification_page():
-        owner_error = require_owner_page()
-
-        if owner_error is not None:
-            return owner_error
-
-        message: str | None = None
-        error: str | None = None
-
-        selected_guild = get_selected_guild(
-            request.form.get("guild_id") if request.method == "POST" else request.args.get("guild_id")
-        )
-
-        try:
-            settings_store = get_guild_settings_store()
-
-            if request.method == "POST":
-                if selected_guild is None:
-                    raise RuntimeError("No server selected.")
-
-                action = request.form.get("action", "save_verification")
-
-                if action in {"cancel_by_user", "cancel_all_pending"}:
-                    if bot.user is None:
-                        raise RuntimeError("Bot user is not available yet.")
-
-                    if request.form.get("cancel_confirm", "").strip() != "CANCEL":
-                        raise RuntimeError("Type CANCEL in the confirmation field to cancel applications.")
-
-                    cancellation_reason = request.form.get("cancel_reason", "").strip()
-
-                    if not cancellation_reason:
-                        cancellation_reason = "Manually cancelled from the WebUI."
-
-                    if action == "cancel_by_user":
-                        user_id_text = request.form.get("cancel_user_id", "").strip()
-
-                        if not user_id_text:
-                            raise RuntimeError("Enter a user ID to cancel by user.")
-
-                        try:
-                            user_id = int(user_id_text)
-                        except ValueError as error:
-                            raise RuntimeError("User ID must be a number.") from error
-
-                        result = run_coro_from_flask(
-                            cancel_pending_application_by_user_id(
-                                client=bot,
-                                guild_id=selected_guild.id,
-                                user_id=user_id,
-                                moderator=bot.user,
-                                reason=cancellation_reason,
-                            )
-                        )
-
-                    else:
-                        result = run_coro_from_flask(
-                            cancel_all_pending_applications_for_guild(
-                                client=bot,
-                                guild_id=selected_guild.id,
-                                moderator=bot.user,
-                                reason=cancellation_reason,
-                            )
-                        )
-
-                    message = result.detail
-
-                elif action == "refresh_invites":
-                    refreshed = run_coro_from_flask(
-                        get_invite_tracker_store().sync_guild_invites(selected_guild)
-                    )
-
-                    message = "Invite cache refreshed." if refreshed else "Could not refresh invites. Check the bot has Manage Server."
-
-                else:
-                    review_channel_id = request.form.get("review_channel_id", "").strip()
-                    log_channel_id = request.form.get("log_channel_id", "").strip()
-                    verification_form_key = request.form.get("verification_form_key", FORM_KEY_VERIFICATION).strip() or FORM_KEY_VERIFICATION
-                    approved_add_role_id = request.form.get("approved_add_role_id", "").strip()
-                    approved_remove_role_id = request.form.get("approved_remove_role_id", "").strip()
-
-                    if review_channel_id:
-                        settings_store.set_review_channel_id(selected_guild.id, int(review_channel_id))
-
-                    if log_channel_id:
-                        settings_store.set_application_log_channel_id(selected_guild.id, int(log_channel_id))
-
-                    settings_store.set_verification_form_key(selected_guild.id, verification_form_key)
-
-                    if approved_add_role_id:
-                        settings_store.set_approved_add_role_id(selected_guild.id, int(approved_add_role_id))
-                    else:
-                        settings_store.clear_approved_add_role_id(selected_guild.id)
-
-                    if approved_remove_role_id:
-                        settings_store.set_approved_remove_role_id(selected_guild.id, int(approved_remove_role_id))
-                    else:
-                        settings_store.clear_approved_remove_role_id(selected_guild.id)
-
-                    settings_store.set_automod_enabled(
-                        selected_guild.id,
-                        request.form.get("automod_enabled") == "on",
-                    )
-
-                    if action == "clear_automod_terms":
-                        settings_store.clear_automod_terms(selected_guild.id)
-                        message = "Verification settings saved and automod terms cleared."
-
-                    else:
-                        terms = parse_terms_from_text(request.form.get("automod_terms", ""))
-                        settings_store.set_automod_terms(selected_guild.id, terms)
-
-                        if action == "add_default_terms":
-                            added_count = settings_store.add_default_automod_terms(selected_guild.id)
-                            message = f"Verification settings saved. Added {added_count} default automod term(s)."
-                        else:
-                            message = "Verification settings saved."
-
-                    if action == "save_and_post_panel":
-                        panel_channel_id = request.form.get("panel_channel_id", "").strip()
-
-                        if not panel_channel_id:
-                            raise RuntimeError("Choose a panel channel before posting the verification panel.")
-
-                        run_coro_from_flask(
-                            post_verification_panel_from_webui(
-                                guild=selected_guild,
-                                channel_id=int(panel_channel_id),
-                                form_key=verification_form_key,
-                                image_upload_filename=request.form.get("panel_image_upload_filename") or None,
-                                thumbnail_upload_filename=request.form.get("panel_thumbnail_upload_filename") or None,
-                            )
-                        )
-
-                        message = "Verification settings saved and panel posted."
-
-            roles: list[dict[str, str]] = []
-            text_channels: list[dict[str, str]] = []
-            forms: list[dict[str, str]] = []
-            settings: dict[str, str | bool] = {}
-            automod_terms_text = ""
-            default_terms: list[str] = []
-
-            if selected_guild is not None:
-                roles = get_guild_roles(selected_guild)
-                text_channels = get_guild_text_channels(selected_guild)
-                forms = run_coro_from_flask(get_guild_forms(selected_guild))
-                settings = get_current_verification_settings(selected_guild)
-                automod_terms_text = "\n".join(settings_store.list_automod_terms(selected_guild.id))
-                default_terms = settings_store.get_default_automod_terms()
-
-            invite_tracking_status = "Ready" if getattr(bot, "invite_tracker_ready", False) else "Starting / not synced yet"
-
-            return render_admin_page(
-                title="TFSBot Verification",
-                active_page="verification",
-                body_template=VERIFICATION_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                roles=roles,
-                text_channels=text_channels,
-                forms=forms,
-                settings=settings,
-                automod_terms_text=automod_terms_text,
-                default_terms=default_terms,
-                default_terms_text="\n".join(default_terms),
-                invite_tracking_status=invite_tracking_status,
-                uploaded_images=list_uploaded_images(),
-                message=message,
-                error=error,
-            )
-
-        except Exception as caught_error:
-            error = str(caught_error)
-
-            return render_admin_page(
-                title="TFSBot Verification",
-                active_page="verification",
-                body_template=VERIFICATION_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                roles=[],
-                text_channels=[],
-                forms=[],
-                settings={},
-                automod_terms_text="",
-                default_terms=[],
-                default_terms_text="",
-                invite_tracking_status="Unknown",
-                uploaded_images=[],
-                message=message,
-                error=error,
-            )
-
-    @app.route("/permissions", methods=["GET", "POST"])
-    def permissions_page():
-        owner_error = require_owner_page()
-
-        if owner_error is not None:
-            return owner_error
-
-        message: str | None = None
-        error: str | None = None
-
-        selected_guild = get_selected_guild(
-            request.form.get("guild_id") if request.method == "POST" else request.args.get("guild_id")
-        )
-
-        try:
-            permission_store = get_permission_store()
-
-            if request.method == "POST":
-                if selected_guild is None:
-                    raise RuntimeError("No server selected.")
-
-                webui_owner_role_ids = parse_role_ids_from_form("webui_owner_role_ids")
-                webui_viewer_role_ids = parse_role_ids_from_form("webui_viewer_role_ids")
-
-                if not webui_owner_role_ids and not get_env_webui_owner_role_ids():
-                    raise RuntimeError(
-                        "Choose at least one WebUI owner role, or set WEBUI_DISCORD_OWNER_ROLE_IDS in .env before clearing this."
-                    )
-
-                set_stored_webui_access_role_ids(
-                    guild_id=selected_guild.id,
-                    access_level="owner",
-                    role_ids=webui_owner_role_ids,
-                )
-                set_stored_webui_access_role_ids(
-                    guild_id=selected_guild.id,
-                    access_level="viewer",
-                    role_ids=webui_viewer_role_ids,
-                )
-
-                for level in [LEVEL_STAFF, LEVEL_ADMIN, LEVEL_OWNER]:
-                    role_id_text = request.form.get(f"role_{level}", "").strip()
-
-                    if role_id_text:
-                        run_coro_from_flask(
-                            permission_store.set_role(
-                                guild_id=selected_guild.id,
-                                level=level,
-                                role_id=int(role_id_text),
-                            )
-                        )
-                    else:
-                        run_coro_from_flask(
-                            permission_store.clear_role(
-                                guild_id=selected_guild.id,
-                                level=level,
-                            )
-                        )
-
-                for command_key in request.form.getlist("command_key[]"):
-                    safe_key = make_safe_command_key(command_key)
-                    level = request.form.get(f"command_level_{safe_key}", LEVEL_PUBLIC)
-
-                    run_coro_from_flask(
-                        permission_store.set_command_level(
-                            guild_id=selected_guild.id,
-                            command_key=command_key,
-                            level=level,
-                        )
-                    )
-
-                message = "Permissions and WebUI access saved."
-
-            role_settings = []
-            commands = []
-            roles = []
-
-            if selected_guild is not None:
-                roles = get_guild_roles(selected_guild)
-                role_ids = run_coro_from_flask(permission_store.get_role_ids(selected_guild.id))
-
-                role_settings = [
-                    {"level": LEVEL_STAFF, "label": "Staff role", "role_id": str(role_ids.get(LEVEL_STAFF) or "")},
-                    {"level": LEVEL_ADMIN, "label": "Admin role", "role_id": str(role_ids.get(LEVEL_ADMIN) or "")},
-                    {"level": LEVEL_OWNER, "label": "Owner role", "role_id": str(role_ids.get(LEVEL_OWNER) or "")},
-                ]
-
-                command_levels = run_coro_from_flask(
-                    permission_store.get_all_command_levels(selected_guild.id)
-                )
-
-                commands = [
-                    {
-                        "key": command_key,
-                        "safe_key": make_safe_command_key(command_key),
-                        "level": level,
-                    }
-                    for command_key, level in sorted(command_levels.items())
-                ]
-
-            return render_admin_page(
-                title="TFSBot Permissions",
-                active_page="permissions",
-                body_template=PERMISSIONS_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                roles=roles,
-                role_settings=role_settings,
-                commands=commands,
-                levels=get_level_choices(),
-                webui_access=build_webui_access_context(selected_guild),
-                message=message,
-                error=error,
-            )
-
-        except Exception as caught_error:
-            error = str(caught_error)
-
-            return render_admin_page(
-                title="TFSBot Permissions",
-                active_page="permissions",
-                body_template=PERMISSIONS_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                roles=[],
-                role_settings=[],
-                commands=[],
-                levels=get_level_choices(),
-                webui_access=build_webui_access_context(selected_guild),
-                message=message,
                 error=error,
             )
 
