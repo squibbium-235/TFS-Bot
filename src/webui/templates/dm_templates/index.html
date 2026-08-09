@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+
+    <h2>DM Templates</h2>
+
+    <p class="hint">
+        These messages are sent to users during verification actions.
+        Edit the wording here, then save at the bottom.
+        Available variables:
+    </p>
+
+    <div class="variable-list">
+
+        <code>{user}</code>
+        <code>{user_name}</code>
+        <code>{user_id}</code>
+        <code>{server_name}</code>
+        <code>{moderator}</code>
+        <code>{moderator_name}</code>
+        <code>{moderator_id}</code>
+        <code>{application_id}</code>
+        <code>{reason}</code>
+        <code>{reason_block}</code>
+
+    </div>
+
+
+    <form
+        method="get"
+        action="{{ url_for('dm_templates.index') }}"
+    >
+
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+
+            {% for guild in guilds %}
+
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+    </form>
+
+</div>
+
+
+{% if selected_guild_id %}
+
+<form
+    method="post"
+    action="{{ url_for('dm_templates.index') }}"
+>
+
+    <input
+        type="hidden"
+        name="guild_id"
+        value="{{ selected_guild_id }}"
+    >
+
+
+    <div class="panel">
+
+        <h2>Quick Actions</h2>
+
+        <p class="hint section-note">
+            Jump to the template group you want, because scrolling
+            through text boxes is not a personality trait.
+        </p>
+
+        <div class="quick-actions">
+
+            <a
+                class="button-link secondary"
+                href="#dm-success"
+            >
+                Successful Outcomes
+            </a>
+
+            <a
+                class="button-link secondary"
+                href="#dm-rejections"
+            >
+                Rejected Outcomes
+            </a>
+
+            <a
+                class="button-link secondary"
+                href="#dm-conversation"
+            >
+                Conversation
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="dm-success"
+    >
+
+        <h2>Successful Outcomes</h2>
+
+        <p class="hint section-note">
+            Sent when an application is approved.
+        </p>
+
+        {% for template in templates %}
+
+            {% if template.key in ['approved'] %}
+
+                <div class="template-card">
+
+                    <div class="card-header">
+
+                        <div>
+
+                            <h3>
+                                {{ template.label }}
+                            </h3>
+
+                            <p class="template-meta">
+                                Key:
+                                <code>
+                                    {{ template.key }}
+                                </code>
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <textarea
+                        name="template_{{ template.key }}"
+                        rows="5"
+                    >{{ template.text }}</textarea>
+
+                    <details class="default-details">
+
+                        <summary>
+                            Show default text
+                        </summary>
+
+                        <pre>{{ template.default }}</pre>
+
+                    </details>
+
+                </div>
+
+            {% endif %}
+
+        {% endfor %}
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="dm-rejections"
+    >
+
+        <h2>Rejected Outcomes</h2>
+
+        <p class="hint section-note">
+            Sent when an application is rejected, kicked, or banned.
+        </p>
+
+        {% for template in templates %}
+
+            {% if template.key in [
+                'denied',
+                'rejected',
+                'kicked',
+                'banned'
+            ] %}
+
+                <div class="template-card">
+
+                    <div class="card-header">
+
+                        <div>
+
+                            <h3>
+                                {{ template.label }}
+                            </h3>
+
+                            <p class="template-meta">
+                                Key:
+                                <code>
+                                    {{ template.key }}
+                                </code>
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <textarea
+                        name="template_{{ template.key }}"
+                        rows="5"
+                    >{{ template.text }}</textarea>
+
+                    <details class="default-details">
+
+                        <summary>
+                            Show default text
+                        </summary>
+
+                        <pre>{{ template.default }}</pre>
+
+                    </details>
+
+                </div>
+
+            {% endif %}
+
+        {% endfor %}
+
+    </div>
+
+
+    <div
+        class="panel"
+        id="dm-conversation"
+    >
+
+        <h2>Conversation</h2>
+
+        <p class="hint section-note">
+            Sent when staff need to ask the user a question during
+            verification.
+        </p>
+
+        {% for template in templates %}
+
+            {% if template.key in [
+                'questioning',
+                'question'
+            ] %}
+
+                <div class="template-card">
+
+                    <div class="card-header">
+
+                        <div>
+
+                            <h3>
+                                {{ template.label }}
+                            </h3>
+
+                            <p class="template-meta">
+                                Key:
+                                <code>
+                                    {{ template.key }}
+                                </code>
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <textarea
+                        name="template_{{ template.key }}"
+                        rows="5"
+                    >{{ template.text }}</textarea>
+
+                    <details class="default-details">
+
+                        <summary>
+                            Show default text
+                        </summary>
+
+                        <pre>{{ template.default }}</pre>
+
+                    </details>
+
+                </div>
+
+            {% endif %}
+
+        {% endfor %}
+
+    </div>
+
+
+    <div class="panel">
+
+        <h2>Other Templates</h2>
+
+        <p class="hint section-note">
+            Any template keys not recognised by the grouped layout
+            appear here.
+        </p>
+
+        {% for template in templates %}
+
+            {% if template.key not in [
+                'approved',
+                'denied',
+                'rejected',
+                'kicked',
+                'banned',
+                'questioning',
+                'question'
+            ] %}
+
+                <div class="template-card">
+
+                    <div class="card-header">
+
+                        <div>
+
+                            <h3>
+                                {{ template.label }}
+                            </h3>
+
+                            <p class="template-meta">
+                                Key:
+                                <code>
+                                    {{ template.key }}
+                                </code>
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <textarea
+                        name="template_{{ template.key }}"
+                        rows="5"
+                    >{{ template.text }}</textarea>
+
+                    <details class="default-details">
+
+                        <summary>
+                            Show default text
+                        </summary>
+
+                        <pre>{{ template.default }}</pre>
+
+                    </details>
+
+                </div>
+
+            {% endif %}
+
+        {% endfor %}
+
+    </div>
+
+
+    <div class="panel action-panel">
+
+        <button type="submit">
+            Save DM Templates
+        </button>
+
+    </div>
+
+</form>
+
+
+{% else %}
+
+<div class="panel">
+    <p>No servers available.</p>
+</div>
+
+{% endif %}
+
+{% endblock %}

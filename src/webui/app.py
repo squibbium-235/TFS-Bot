@@ -28,11 +28,6 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-from src.services.dm_template_store import (
-    DEFAULT_DM_TEMPLATES,
-    DM_TEMPLATE_LABELS,
-    DM_TEMPLATE_ORDER,
-)
 from src.services.forms.constants import FORM_KEY_VERIFICATION, VERIFICATION_FORM_PATH
 from src.services.backup_service import BackupError, BackupService
 from src.commands.forms.form_runtime import GenericFormStartView
@@ -671,7 +666,7 @@ EMBED_FORM_HTML = """
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
                 <a href="{{ url_for('custom_commands_page') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
-                <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
+                <a href="{{ url_for('dm_templates.index') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
                 <a href="{{ url_for('verification_page') }}" class="{{ 'active' if active_page == 'verification' else '' }}">Verification</a>
@@ -1153,172 +1148,6 @@ EMBED_FORM_HTML = """
 </body>
 </html>
 """
-
-DM_TEMPLATES_BODY_HTML = """
-<div class="panel page-intro">
-    <h2>DM Templates</h2>
-    <p class="hint">
-        These messages are sent to users during verification actions. Edit the wording here, then save at the bottom.
-        Available variables:
-    </p>
-
-    <div class="variable-list">
-        <code>{user}</code>
-        <code>{user_name}</code>
-        <code>{user_id}</code>
-        <code>{server_name}</code>
-        <code>{moderator}</code>
-        <code>{moderator_name}</code>
-        <code>{moderator_id}</code>
-        <code>{application_id}</code>
-        <code>{reason}</code>
-        <code>{reason_block}</code>
-    </div>
-
-    <form method="get" action="{{ url_for('dm_templates') }}">
-        <label>Server</label>
-        <select name="guild_id" onchange="this.form.submit()">
-            {% for guild in guilds %}
-                <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
-            {% endfor %}
-        </select>
-    </form>
-</div>
-
-{% if selected_guild_id %}
-<form method="post" action="{{ url_for('dm_templates') }}">
-    <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
-
-    <div class="panel">
-        <h2>Quick Actions</h2>
-        <p class="hint section-note">
-            Jump to the template group you want, because scrolling through text boxes is not a personality trait.
-        </p>
-
-        <div class="quick-actions">
-            <a class="button-link secondary" href="#dm-success">Successful Outcomes</a>
-            <a class="button-link secondary" href="#dm-rejections">Rejected Outcomes</a>
-            <a class="button-link secondary" href="#dm-conversation">Conversation</a>
-        </div>
-    </div>
-
-    <div class="panel" id="dm-success">
-        <h2>Successful Outcomes</h2>
-        <p class="hint section-note">
-            Sent when an application is approved.
-        </p>
-
-        {% for template in templates %}
-            {% if template.key in ['approved'] %}
-                <div class="template-card">
-                    <div class="card-header">
-                        <div>
-                            <h3>{{ template.label }}</h3>
-                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
-                        </div>
-                    </div>
-
-                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
-
-                    <details class="default-details">
-                        <summary>Show default text</summary>
-                        <pre>{{ template.default }}</pre>
-                    </details>
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="panel" id="dm-rejections">
-        <h2>Rejected Outcomes</h2>
-        <p class="hint section-note">
-            Sent when an application is rejected, kicked, or banned.
-        </p>
-
-        {% for template in templates %}
-            {% if template.key in ['denied', 'rejected', 'kicked', 'banned'] %}
-                <div class="template-card">
-                    <div class="card-header">
-                        <div>
-                            <h3>{{ template.label }}</h3>
-                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
-                        </div>
-                    </div>
-
-                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
-
-                    <details class="default-details">
-                        <summary>Show default text</summary>
-                        <pre>{{ template.default }}</pre>
-                    </details>
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="panel" id="dm-conversation">
-        <h2>Conversation</h2>
-        <p class="hint section-note">
-            Sent when staff need to ask the user a question during verification.
-        </p>
-
-        {% for template in templates %}
-            {% if template.key in ['questioning', 'question'] %}
-                <div class="template-card">
-                    <div class="card-header">
-                        <div>
-                            <h3>{{ template.label }}</h3>
-                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
-                        </div>
-                    </div>
-
-                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
-
-                    <details class="default-details">
-                        <summary>Show default text</summary>
-                        <pre>{{ template.default }}</pre>
-                    </details>
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="panel">
-        <h2>Other Templates</h2>
-        <p class="hint section-note">
-            Any template keys not recognised by the grouped layout appear here, because hiding unknown config would be a bit dum.
-        </p>
-
-        {% for template in templates %}
-            {% if template.key not in ['approved', 'denied', 'rejected', 'kicked', 'banned', 'questioning', 'question'] %}
-                <div class="template-card">
-                    <div class="card-header">
-                        <div>
-                            <h3>{{ template.label }}</h3>
-                            <p class="template-meta">Key: <code>{{ template.key }}</code></p>
-                        </div>
-                    </div>
-
-                    <textarea name="template_{{ template.key }}" rows="5">{{ template.text }}</textarea>
-
-                    <details class="default-details">
-                        <summary>Show default text</summary>
-                        <pre>{{ template.default }}</pre>
-                    </details>
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="panel action-panel">
-        <button type="submit">Save DM Templates</button>
-    </div>
-</form>
-{% else %}
-<div class="panel"><p>No servers available.</p></div>
-{% endif %}
-"""
-
 
 PERMISSIONS_BODY_HTML = """
 <div class="panel page-intro">
@@ -3319,10 +3148,6 @@ def create_webui(bot: discord.Client) -> Flask:
 
         return None
 
-    get_template_store = (
-        web_context.template_store
-    )
-
     get_permission_store = (
         web_context.permission_store
     )
@@ -3856,92 +3681,6 @@ def create_webui(bot: discord.Client) -> Flask:
             message=None,
             error=None,
         )
-
-
-    @app.route("/dm-templates", methods=["GET", "POST"])
-    def dm_templates():
-        owner_error = require_owner_page()
-
-        if owner_error is not None:
-            return owner_error
-
-        message: str | None = None
-        error: str | None = None
-
-        selected_guild = get_selected_guild(
-            request.form.get("guild_id") if request.method == "POST" else request.args.get("guild_id")
-        )
-
-        try:
-            template_store = get_template_store()
-
-            if request.method == "POST":
-                if selected_guild is None:
-                    raise RuntimeError("No server selected.")
-
-                for template_key in DM_TEMPLATE_ORDER:
-                    template_text = request.form.get(f"template_{template_key}", "").strip()
-
-                    if template_text == DEFAULT_DM_TEMPLATES[template_key]:
-                        run_coro_from_flask(
-                            template_store.reset_template(
-                                guild_id=selected_guild.id,
-                                template_key=template_key,
-                            )
-                        )
-                    else:
-                        run_coro_from_flask(
-                            template_store.set_template(
-                                guild_id=selected_guild.id,
-                                template_key=template_key,
-                                template_text=template_text,
-                            )
-                        )
-
-                message = "DM templates saved."
-
-            templates = []
-
-            if selected_guild is not None:
-                stored_templates = run_coro_from_flask(
-                    template_store.get_all_templates(selected_guild.id)
-                )
-
-                for stored_template in stored_templates:
-                    templates.append(
-                        {
-                            "key": stored_template.template_key,
-                            "label": DM_TEMPLATE_LABELS[stored_template.template_key],
-                            "text": stored_template.template_text,
-                            "default": DEFAULT_DM_TEMPLATES[stored_template.template_key],
-                            "is_custom": stored_template.is_custom,
-                        }
-                    )
-
-            return render_admin_page(
-                title="TFSBot DM Templates",
-                active_page="dm_templates",
-                body_template=DM_TEMPLATES_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                templates=templates,
-                message=message,
-                error=error,
-            )
-
-        except Exception as caught_error:
-            error = str(caught_error)
-
-            return render_admin_page(
-                title="TFSBot DM Templates",
-                active_page="dm_templates",
-                body_template=DM_TEMPLATES_BODY_HTML,
-                guilds=get_available_guilds(),
-                selected_guild_id=str(selected_guild.id) if selected_guild else None,
-                templates=[],
-                message=message,
-                error=error,
-            )
 
     @app.route("/forms", methods=["GET", "POST"])
     def forms_page():
@@ -4842,9 +4581,6 @@ def create_webui(bot: discord.Client) -> Flask:
     )
 
     return app
-
-    return app
-
 
 def start_webui(bot: discord.Client) -> None:
     if not bot.config.webui_enabled:
