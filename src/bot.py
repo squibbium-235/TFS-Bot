@@ -77,6 +77,13 @@ class TFSBot(commands.Bot):
 
         self.log.info("Loading info command...")
         await self.load_extension("src.commands.info")
+        
+        self.log.info(
+            "Loading diagnostics command..."
+        )
+        await self.load_extension(
+            "src.commands.diagnostics"
+        )
 
         self.log.info("Loading permissions command...")
         await self.load_extension("src.commands.permissions.permissions")

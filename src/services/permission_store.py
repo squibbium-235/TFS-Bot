@@ -72,6 +72,9 @@ DEFAULT_COMMAND_LEVELS = {
     
     # Custom commands
     "custom_command": LEVEL_OWNER,
+    
+    # Diagnostics
+    "diagnostics": LEVEL_OWNER,
 }
 
 

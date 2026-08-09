@@ -26,6 +26,10 @@ from src.webui.helpers import (
     webui_context,
 )
 
+from src.services.diagnostics import (
+    build_diagnostic_report,
+)
+
 
 blueprint = Blueprint(
     "overview",
@@ -161,45 +165,6 @@ def get_user_display(
     return str(
         user_id
     )
-
-
-def get_channel_label(
-    guild: discord.Guild,
-    channel_id: int | None,
-) -> str:
-    if channel_id is None:
-        return "Not set"
-
-    channel = guild.get_channel(
-        channel_id
-    )
-
-    if channel is None:
-        return (
-            f"Unknown channel {channel_id}"
-        )
-
-    return f"#{channel.name}"
-
-
-def get_role_label(
-    guild: discord.Guild,
-    role_id: int | None,
-) -> str:
-    if role_id is None:
-        return "Not set"
-
-    role = guild.get_role(
-        role_id
-    )
-
-    if role is None:
-        return (
-            f"Unknown role {role_id}"
-        )
-
-    return role.name
-
 
 def get_status_class(
     status: str,
@@ -633,6 +598,15 @@ def build_overview_context(
     settings_store = (
         context.guild_settings_store()
     )
+    
+    diagnostic_report = (
+        context.run_coro(
+            build_diagnostic_report(
+                context.bot,
+                guild,
+            )
+        )
+    )
 
     app_stats = (
         count_applications_for_overview(
@@ -713,136 +687,19 @@ def build_overview_context(
 
     health_items = [
         {
-            "label": "Bot",
+            "label": item.label,
             "value": (
-                f"Online as {context.bot.user}"
-                if context.bot.user
-                else "Starting"
-            ),
-            "class": (
-                "good"
-                if context.bot.user
-                else "warn"
-            ),
-        },
-        {
-            "label": "Review channel",
-            "value": get_channel_label(
-                guild,
-                review_channel_id,
-            ),
-            "class": (
-                "good"
-                if review_channel_id
-                else "warn"
-            ),
-        },
-        {
-            "label": "Log channel",
-            "value": get_channel_label(
-                guild,
-                log_channel_id,
-            ),
-            "class": (
-                "good"
-                if log_channel_id
-                else "warn"
-            ),
-        },
-        {
-            "label": (
-                "Verification form"
-            ),
-            "value": (
-                verification_form_key
-            ),
-            "class": (
-                "good"
-                if verification_form_key
-                else "warn"
-            ),
-        },
-        {
-            "label": (
-                "Give role on approval"
-            ),
-            "value": get_role_label(
-                guild,
-                add_role_id,
-            ),
-            "class": (
-                "good"
-                if add_role_id
-                else "warn"
-            ),
-        },
-        {
-            "label": (
-                "Remove role on approval"
-            ),
-            "value": get_role_label(
-                guild,
-                remove_role_id,
-            ),
-            "class": (
-                "good"
-                if remove_role_id
-                else "warn"
-            ),
-        },
-        {
-            "label": "Automod",
-            "value": (
-                "Enabled "
-                f"({len(automod_terms)} terms)"
-                if automod_enabled
+                item.value
+                if not item.detail
                 else (
-                    "Disabled "
-                    f"({len(automod_terms)} terms)"
+                    f"{item.value} - "
+                    f"{item.detail}"
                 )
             ),
-            "class": (
-                "good"
-                if automod_enabled
-                else "warn"
-            ),
-        },
-        {
-            "label": (
-                "Invite tracking"
-            ),
-            "value": (
-                "Ready"
-                if invite_ready
-                else "Not synced"
-            ),
-            "class": (
-                "good"
-                if invite_ready
-                else "warn"
-            ),
-        },
-        {
-            "label": "Database",
-            "value": format_file_size(
-                database_size
-            ),
-            "class": (
-                "good"
-                if database_size
-                else "warn"
-            ),
-        },
-        {
-            "label": (
-                "Server members"
-            ),
-            "value": str(
-                guild.member_count
-                or "Unknown"
-            ),
-            "class": "",
-        },
+            "class": item.status,
+        }
+        for item
+        in diagnostic_report.items
     ]
 
     ignored_warning_labels = {
@@ -853,15 +710,11 @@ def build_overview_context(
     warning_items = [
         item
         for item in health_items
-        if (
-            item.get("class")
-            in {
-                "bad",
-                "warn",
-            }
-            and item.get("label")
-            not in ignored_warning_labels
-        )
+        if item["class"]
+        in {
+            "warn",
+            "bad",
+        }
     ]
 
     app_stats[

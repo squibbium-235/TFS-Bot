@@ -104,10 +104,34 @@ def discord_api_request(
             "Discord API request failed: "
             f"{error}"
         ) from error
+        
+def get_discord_redirect_uri() -> str:
+    context = webui_context()
 
+    hostname = (
+        request
+        .host
+        .split(":", 1)[0]
+        .lower()
+    )
+
+    if hostname == "localhost":
+        return (
+            "http://localhost:"
+            f"{context.bot.config.webui_port}"
+            "/auth/discord/callback"
+        )
+
+    return (
+        context
+        .bot
+        .config
+        .discord_oauth_redirect_uri
+    )
 
 def get_discord_authorisation_url(
     state: str,
+    redirect_uri: str,
 ) -> str:
     context = webui_context()
 
@@ -120,10 +144,7 @@ def get_discord_authorisation_url(
                 .discord_oauth_client_id
             ),
             "redirect_uri": (
-                context
-                .bot
-                .config
-                .discord_oauth_redirect_uri
+                redirect_uri
             ),
             "response_type": "code",
             "scope": (
@@ -143,6 +164,7 @@ def get_discord_authorisation_url(
 
 def exchange_discord_code_for_token(
     code: str,
+    redirect_uri: str,
 ) -> str:
     context = webui_context()
 
@@ -170,10 +192,7 @@ def exchange_discord_code_for_token(
             ),
             "code": code,
             "redirect_uri": (
-                context
-                .bot
-                .config
-                .discord_oauth_redirect_uri
+                redirect_uri
             ),
         },
     )
@@ -256,6 +275,15 @@ def render_login_page(
             .password_login_enabled()
         ),
     )
+    
+def render_login_failure(
+    error: str,
+):
+    session.clear()
+
+    return render_login_page(
+        error=error
+    )
 
 
 @blueprint.route(
@@ -314,10 +342,8 @@ def login():
 
     if not login_ok:
         return render_login_page(
-            error=(
-                "Incorrect username "
-                "or password."
-            )
+            "Incorrect username "
+            "or password."
         )
 
     session.clear()
@@ -349,11 +375,15 @@ def discord_login_start():
         .discord_login_enabled()
     ):
         return render_login_page(
-            error=(
-                "Discord login is "
-                "not enabled."
-            )
+            "Discord login is "
+            "not enabled."
         )
+
+    redirect_uri = (
+        get_discord_redirect_uri()
+    )
+
+    session.clear()
 
     state = secrets.token_urlsafe(
         32
@@ -363,9 +393,14 @@ def discord_login_start():
         "discord_oauth_state"
     ] = state
 
+    session[
+        "discord_oauth_redirect_uri"
+    ] = redirect_uri
+
     return redirect(
         get_discord_authorisation_url(
-            state
+            state,
+            redirect_uri,
         )
     )
 
@@ -381,11 +416,9 @@ def discord_login_callback():
         .access
         .discord_login_enabled()
     ):
-        return render_login_page(
-            error=(
-                "Discord login is "
-                "not enabled."
-            )
+        return render_login_failure(
+            "Discord login is "
+            "not enabled."
         )
 
     oauth_error = request.args.get(
@@ -393,11 +426,9 @@ def discord_login_callback():
     )
 
     if oauth_error:
-        return render_login_page(
-            error=(
-                "Discord login failed: "
-                f"{oauth_error}"
-            )
+        return render_login_failure(
+            "Discord login failed: "
+            f"{oauth_error}"
         )
 
     code = request.args.get(
@@ -414,13 +445,22 @@ def discord_login_callback():
         "discord_oauth_state",
         "",
     )
+    
+    redirect_uri = session.pop(
+        "discord_oauth_redirect_uri",
+        "",
+    )
+    
+    if not redirect_uri:
+        return render_login_failure(
+            "Discord login redirect "
+            "URI was lost. Try again."
+        )
 
     if not code:
-        return render_login_page(
-            error=(
-                "Discord did not return "
-                "an authorisation code."
-            )
+        return render_login_failure(
+            "Discord did not return "
+            "an authorisation code."
         )
 
     if (
@@ -431,17 +471,16 @@ def discord_login_callback():
             expected_state,
         )
     ):
-        return render_login_page(
-            error=(
-                "Discord login state "
-                "mismatch. Try again."
-            )
+        return render_login_failure(
+            "Discord login state "
+            "mismatch. Try again."
         )
 
     try:
         access_token = (
             exchange_discord_code_for_token(
-                code
+                code,
+                redirect_uri,
             )
         )
 
@@ -464,12 +503,10 @@ def discord_login_callback():
         )
 
         if webui_role is None:
-            return render_login_page(
-                error=(
+            return render_login_failure(
                     "Your Discord account "
                     "does not have an "
-                    "allowed WebUI role."
-                )
+                     "allowed WebUI role."
             )
 
         username = str(
