@@ -17,6 +17,18 @@ from src.webui.routes.verification import (
     blueprint as verification_blueprint,
 )
 
+from src.webui.routes.forms import (
+    blueprint as forms_blueprint,
+)
+
+from src.webui.routes.uploads import (
+    blueprint as uploads_blueprint,
+)
+
+from src.webui.routes.backups import (
+    blueprint as backups_blueprint,
+)
+
 
 def register_blueprints(
     app: Flask,
@@ -35,4 +47,16 @@ def register_blueprints(
     
     app.register_blueprint(
         verification_blueprint
+    )
+    
+    app.register_blueprint(
+        forms_blueprint
+    )
+    
+    app.register_blueprint(
+        uploads_blueprint
+    )
+    
+    app.register_blueprint(
+        backups_blueprint
     )

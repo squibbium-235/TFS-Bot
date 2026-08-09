@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel">
+    <h2>Form Preview</h2>
+    <p class="hint">
+        Read-only view of the selected form. This does not edit, publish, duplicate, disable, export, or do any other surprise nonsense.
+    </p>
+
+    <div class="health-list">
+        <div class="health-item">
+            <small>Form</small>
+            <span><code>{{ form_key }}</code></span>
+        </div>
+
+        <div class="health-item">
+            <small>Title</small>
+            <span>{{ form_title }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Custom ID Prefix</small>
+            <span><code>{{ custom_id_prefix }}</code></span>
+        </div>
+
+        <div class="health-item">
+            <small>Questions</small>
+            <span>{{ question_count }} question(s), {{ page_count }} modal page(s)</span>
+        </div>
+    </div>
+
+    <div class="button-row">
+        <a class="button-link secondary" href="url{{ url_for('forms.index', guild_id=selected_guild_id, form_key=form_key) }}">Back to Forms</a>
+    </div>
+</div>
+
+{% if pages %}
+    {% for page in pages %}
+        <div class="panel">
+            <h2>Modal Page {{ page.number }}</h2>
+            <p class="hint">
+                Discord modals can contain up to 5 questions.
+            </p>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Key</th>
+                        <th>Question</th>
+                        <th>Style</th>
+                        <th>Required</th>
+                        <th>Limits</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for question in page.questions %}
+                        <tr>
+                            <td>{{ question.number }}</td>
+                            <td><code>{{ question.key }}</code></td>
+                            <td>
+                                <strong>{{ question.label }}</strong>
+                                {% if question.placeholder %}
+                                    <br><span class="hint">Placeholder: {{ question.placeholder }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ question.style }}</td>
+                            <td><span class="pill {{ 'good' if question.required else 'warn' }}">{{ 'Yes' if question.required else 'No' }}</span></td>
+                            <td>{{ question.limits }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="panel">
+        <p class="hint">This form has no questions yet.</p>
+    </div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+    <h2>Encrypted Backups</h2>
+    <p class="hint">
+        Create or restore an encrypted <code>.tfsbackup</code> file containing the bot database and uploads.
+        The password is not stored, because that would be a bit braindead.
+    </p>
+
+    <div class="health-list">
+        <div class="health-item">
+            <small>Database</small>
+            <span>{{ database_path }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Database Size</small>
+            <span>{{ database_size }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Uploads Folder</small>
+            <span>{{ uploads_state }}</span>
+        </div>
+
+        <div class="health-item">
+            <small>Backup Extension</small>
+            <span><code>.tfsbackup</code></span>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="#create-backup">Create Backup</a>
+        <a class="button-link secondary" href="#restore-backup">Restore Backup</a>
+        <a class="button-link secondary" href="#backup-contents">Backup Contents</a>
+    </div>
+</div>
+
+{% if restore_completed %}
+<div class="panel restore-warning">
+    <h2>Restart Required</h2>
+    <p class="hint">
+        <strong>Backup restored successfully. Restart the bot now.</strong>
+        Do not keep using the WebUI until the bot has restarted, because the database has been replaced underneath the running process.
+        That is useful, but also deeply cursed.
+    </p>
+</div>
+{% endif %}
+
+
+<div class="panel" id="backup-contents">
+    <h2>What This Backup Contains</h2>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Path</th>
+                <th>Included</th>
+                <th>Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>data/tfsbot.sqlite3</code></td>
+                <td><span class="pill good">Yes</span></td>
+                <td>Main bot database: applications, forms, permissions, settings, templates.</td>
+            </tr>
+            <tr>
+                <td><code>data/uploads/</code></td>
+                <td><span class="pill good">Yes, if it exists</span></td>
+                <td>Uploaded WebUI images and other stored files.</td>
+            </tr>
+            <tr>
+                <td><code>.env</code></td>
+                <td><span class="pill warn">Optional</span></td>
+                <td>Bot token and runtime config. Sensitive, obviously!</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<div class="panel" id="create-backup">
+    <h2>Create Backup</h2>
+    <p class="hint section-note">
+        Creates an encrypted backup containing the SQLite database and uploads folder. Save the file somewhere safe and keep the password somewhere safer.
+    </p>
+
+    <form method="post"
+    action="{{ url_for('backups.index') }}">
+        <input type="hidden" name="action" value="create_backup">
+
+        <label>Backup Password</label>
+        <input
+            type="password"
+            name="password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+            placeholder="Use something long and not rubbish"
+        >
+
+        <label>Confirm Backup Password</label>
+        <input
+            type="password"
+            name="confirm_password"
+            autocomplete="new-password"
+            required
+            minlength="10"
+        >
+
+        <label>
+            <input
+                type="checkbox"
+                name="include_env"
+                value="1"
+                style="width: auto; margin-right: 8px;"
+            >
+            Include <code>.env</code> file
+        </label>
+
+        <p class="hint">
+            Including <code>.env</code> means the backup may contain the Discord bot token.
+            ONLY do this IF the backup password is strong and you understand that LOSING the password means LOSING access to the backup.
+        </p>
+
+        <div class="button-row">
+            <button type="submit">Create Encrypted Backup</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel danger-panel" id="restore-backup">
+    <h2>Restore Backup</h2>
+
+    <p class="hint section-note">
+        Restoring replaces the current database with the uploaded backup.
+        The current database and uploads are copied to <code>data/restore_safety/</code> first, because not testing the lifeboat before using that badass looking slide is generally a bad idea.
+    </p>
+
+    <div class="backup-steps">
+        <div class="backup-step">
+            <strong>Before restoring</strong>
+            Make sure this is the backup you actually want. The password must match the backup file.
+        </div>
+
+        <div class="backup-step">
+            <strong>During restore</strong>
+            The WebUI will replace <code>data/tfsbot.sqlite3</code> and optionally restore uploads and <code>.env</code>.
+        </div>
+
+        <div class="backup-step">
+            <strong>After restoring</strong>
+            Restart the bot immediately. Do not keep using the WebUI until the restart is done.
+        </div>
+    </div>
+
+    <form
+        method="post"
+        action="{{ url_for('backups.index') }}"
+        enctype="multipart/form-data"
+    >
+        <input type="hidden" name="action" value="restore_backup">
+
+        <label>Backup File</label>
+        <input
+            type="file"
+            name="backup_file"
+            accept=".tfsbackup"
+            required
+        >
+
+        <label>Backup Password</label>
+        <input
+            type="password"
+            name="restore_password"
+            autocomplete="current-password"
+            required
+        >
+
+        <label>
+            <input
+                type="checkbox"
+                name="restore_uploads"
+                value="1"
+                checked
+                style="width: auto; margin-right: 8px;"
+            >
+            Restore <code>data/uploads/</code>
+        </label>
+
+        <label>
+            <input
+                type="checkbox"
+                name="restore_env"
+                value="1"
+                style="width: auto; margin-right: 8px;"
+            >
+            Restore <code>.env</code> if the backup contains it
+        </label>
+
+        <label>Confirmation</label>
+        <input
+            type="text"
+            name="restore_confirm"
+            placeholder="Type RESTORE"
+            required
+        >
+
+        <p class="hint">
+            After restoring, restart the bot so every loaded cache and connection uses the restored database.
+        </p>
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Restore Backup</button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

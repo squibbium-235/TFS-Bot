@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+    <h2>Uploads</h2>
+    <p class="hint">
+        Manage uploaded images used by the Embed Builder. Folders keep author icons, thumbnails, and random server images from becoming one horrible image soup.
+    </p>
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="#upload-file">Upload File</a>
+        <a class="button-link secondary" href="#create-folder">Create Folder</a>
+        <a class="button-link secondary" href="#uploaded-files">Uploaded Files</a>
+    </div>
+</div>
+
+<div class="panel" id="upload-file">
+    <h2>Upload File</h2>
+
+    <form method="post" action="{{ url_for('uploads.index') }}" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload_file">
+
+        <label>Folder</label>
+        <select name="folder">
+            <option value="">Root</option>
+            {% for folder in folders %}
+                <option value="{{ folder.path }}" {{ 'selected' if folder.path == selected_folder else '' }}>{{ folder.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Or new folder</label>
+        <input name="new_folder" placeholder="author-icons">
+
+        <label>Image file</label>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required>
+
+        <div class="button-row">
+            <button type="submit">Upload Image</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel" id="create-folder">
+    <h2>Create Folder</h2>
+
+    <form method="post" action="{{ url_for('uploads.index') }}">
+        <input type="hidden" name="action" value="create_folder">
+
+        <label>Folder name</label>
+        <input name="folder" placeholder="author-icons" required>
+
+        <p class="hint">
+            Use simple names like <code>author-icons</code>, <code>thumbnails</code>, or <code>events</code>.
+        </p>
+
+        <div class="button-row">
+            <button type="submit">Create Folder</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel" id="uploaded-files">
+    <h2>Uploaded Files</h2>
+
+    {% if uploaded_images %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Preview</th>
+                    <th>File</th>
+                    <th>Folder</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for image in uploaded_images %}
+                    <tr>
+                        <td>
+                            <img src="{{ image.url }}" style="width: 54px; height: 54px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);">
+                        </td>
+                        <td><code>{{ image.filename }}</code></td>
+                        <td>{{ image.folder_label }}</td>
+                        <td>{{ image.size }}</td>
+                        <td>{{ image.modified }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('uploads.index') }}">
+                                <input type="hidden" name="action" value="delete_file">
+                                <input type="hidden" name="file_reference" value="{{ image.reference }}">
+                                <button type="submit" class="danger-button">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="hint">No uploaded images yet. Suspiciously clean.</p>
+    {% endif %}
+</div>
+
+<div class="panel danger-panel">
+    <h2>Delete Empty Folder</h2>
+    <p class="hint">
+        Only empty folders can be deleted. This prevents the classic admin mistake of deleting the entire cupboard because one shelf annoyed you.
+    </p>
+
+    <form method="post" action="{{ url_for('uploads.index') }}">
+        <input type="hidden" name="action" value="delete_folder">
+
+        <label>Folder</label>
+        <select name="folder" required>
+            {% for folder in folders %}
+                <option value="{{ folder.path }}">{{ folder.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Confirmation</label>
+        <input name="confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Empty Folder</button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

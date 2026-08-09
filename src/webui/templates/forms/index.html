@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel page-intro">
+    <h2>Forms</h2>
+    <p class="hint">
+        Create and edit Discord modal forms from here. Changing the verification form affects newly opened forms; repost the verification panel after changing it.
+    </p>
+
+    <form method="get" action="{{ url_for('forms.index') }}">
+        <div class="setting-grid">
+            <div>
+                <label>Server</label>
+                <select name="guild_id" onchange="this.form.submit()">
+                    {% for guild in guilds %}
+                        <option value="{{ guild.id }}" {{ 'selected' if guild.id == selected_guild_id else '' }}>{{ guild.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% if selected_guild_id %}
+                <div>
+                    <label>Form</label>
+                    <select name="form_key" onchange="this.form.submit()">
+                        {% for form in forms %}
+                            <option value="{{ form.key }}" {{ 'selected' if form.key == selected_form_key else '' }}>{{ form.key }} - {{ form.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{% if selected_form %}
+<div class="panel">
+    <h2>Selected Form</h2>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <strong>Form Key</strong>
+            <code>{{ selected_form_key }}</code>
+        </div>
+
+        <div class="stat-card">
+            <strong>Title</strong>
+            {{ selected_form.title }}
+        </div>
+
+        <div class="stat-card">
+            <strong>Questions</strong>
+            {{ questions|length }} question(s), {{ modal_pages }} modal page(s)
+        </div>
+
+        <div class="stat-card">
+            <strong>Verification Form</strong>
+            <span class="pill {{ 'good' if selected_form_key == verification_form_key else 'warn' }}">
+                {{ 'Yes' if selected_form_key == verification_form_key else 'No' }}
+            </span>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <a class="button-link secondary" href="{{ url_for('forms.viewer', guild_id=selected_guild_id, form_key=selected_form_key) }}">Preview Form</a>
+
+        <form method="post" action="{{ url_for('forms.index') }}" class="inline-form">
+            <input type="hidden" name="action" value="set_verification_form">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+            <button type="submit" class="secondary-button">Set as Verification Form</button>
+        </form>
+
+        <a class="button-link secondary" href="#publish-form-panel">Publish Form Panel</a>
+        <a class="button-link secondary" href="#create-form-panel">Create New Form</a>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Edit Selected Form</h2>
+
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="save_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Form key</label>
+                <input value="{{ selected_form_key }}" disabled>
+            </div>
+
+            <div>
+                <label>Question count</label>
+                <input value="{{ questions|length }} question(s), {{ modal_pages }} modal page(s)" disabled>
+            </div>
+
+            <div>
+                <label>Title</label>
+                <input name="form_title" value="{{ selected_form.title }}" maxlength="45" required>
+            </div>
+
+            <div>
+                <label>Custom ID prefix</label>
+                <input name="custom_id_prefix" value="{{ selected_form.custom_id_prefix }}" maxlength="60" required>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Save Form</button>
+            <a class="button-link secondary" href="{{ url_for('forms.viewer', guild_id=selected_guild_id, form_key=selected_form_key) }}">Preview Form</a>
+        </div>
+    </form>
+</div>
+
+<div class="panel">
+    <h2>Verification Form</h2>
+    <p class="hint">
+        Current verification form: <code>{{ verification_form_key }}</code>.
+        The verification panel will use whichever form is selected here. Existing posted panels do not magically rewrite themselves.
+    </p>
+
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="set_verification_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="button-row">
+            <button type="submit">Use This Form For Verification</button>
+        </div>
+    </form>
+
+    {% if selected_form_key == 'verification' %}
+        <form method="post" action="{{ url_for('forms.index') }}">
+            <input type="hidden" name="action" value="reset_verification_form">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+            <label>Reset confirmation</label>
+            <input name="reset_confirm" placeholder="Type RESET">
+
+            <div class="button-row">
+                <button type="submit" class="danger-button">Reset Built-In Verification Form</button>
+            </div>
+        </form>
+    {% endif %}
+</div>
+
+<div class="panel">
+    <h2>Add Question</h2>
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="add_question">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Question key</label>
+                <input name="question_key" placeholder="age" maxlength="80" required>
+            </div>
+
+            <div>
+                <label>Style</label>
+                <select name="question_style">
+                    <option value="short">Short answer</option>
+                    <option value="paragraph">Paragraph</option>
+                </select>
+            </div>
+
+            <div class="wide-field">
+                <label>Question label</label>
+                <input name="question_label" maxlength="45" required>
+            </div>
+
+            <div class="wide-field">
+                <label>Placeholder</label>
+                <input name="question_placeholder" maxlength="100">
+            </div>
+
+            <div>
+                <label>Minimum length</label>
+                <input type="number" name="question_min_length" min="0">
+            </div>
+
+            <div>
+                <label>Maximum length</label>
+                <input type="number" name="question_max_length" min="1" max="4000">
+            </div>
+
+            <div class="wide-field">
+                <label>
+                    <input type="checkbox" name="question_required" checked style="width: auto; margin-right: 8px;">
+                    Required
+                </label>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Add Question</button>
+        </div>
+    </form>
+</div>
+
+<div class="panel">
+    <h2>Questions</h2>
+
+    <p class="hint section-note">
+        Edit existing questions here. Use the order field to move questions around. Discord shows up to 5 questions per modal page.
+    </p>
+
+    {% if questions %}
+        <form method="post" action="{{ url_for('forms.index') }}">
+            <input type="hidden" name="action" value="save_questions">
+            <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+            <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Key</th>
+                        <th>Question</th>
+                        <th>Style</th>
+                        <th>Required</th>
+                        <th>Lengths</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for question in questions %}
+                        <tr>
+                            <td style="width: 90px;">
+                                <input type="hidden" name="question_key[]" value="{{ question.question_key }}">
+                                <input type="number" name="sort_order_{{ question.question_key }}" min="1" value="{{ question.sort_order }}">
+                            </td>
+                            <td><code>{{ question.question_key }}</code></td>
+                            <td>
+                                <input name="label_{{ question.question_key }}" value="{{ question.label }}" maxlength="45" required>
+                                <label>Placeholder</label>
+                                <input name="placeholder_{{ question.question_key }}" value="{{ question.placeholder or '' }}" maxlength="100">
+                            </td>
+                            <td>
+                                <select name="style_{{ question.question_key }}">
+                                    <option value="short" {{ 'selected' if question.style == 'short' else '' }}>Short</option>
+                                    <option value="paragraph" {{ 'selected' if question.style == 'paragraph' else '' }}>Paragraph</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="checkbox" name="required_{{ question.question_key }}" {{ 'checked' if question.required else '' }} style="width: auto;">
+                            </td>
+                            <td>
+                                <input type="number" name="min_length_{{ question.question_key }}" min="0" value="{{ question.min_length if question.min_length is not none else '' }}" placeholder="Min">
+                                <input type="number" name="max_length_{{ question.question_key }}" min="1" max="4000" value="{{ question.max_length if question.max_length is not none else '' }}" placeholder="Max" style="margin-top: 8px;">
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="button-row">
+                <button type="submit">Save Question Changes</button>
+            </div>
+        </form>
+    {% else %}
+        <p class="hint">This form has no questions yet. Peaceful, but not very useful.</p>
+    {% endif %}
+</div>
+
+{% if questions %}
+<div class="panel danger-panel">
+    <h2>Delete Question</h2>
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="delete_question">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Question</label>
+        <select name="delete_question_key">
+            {% for question in questions %}
+                <option value="{{ question.question_key }}">{{ question.question_key }} - {{ question.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Confirmation</label>
+        <input name="delete_question_confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Question</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="panel" id="publish-form-panel">
+    <h2>Publish Form Panel</h2>
+    <p class="hint">
+        This posts a general form button panel. Verification panels are still posted from the Verification page.
+    </p>
+
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="publish_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Channel</label>
+        <select name="publish_channel_id" required>
+            {% for channel in text_channels %}
+                <option value="{{ channel.id }}">#{{ channel.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Panel title</label>
+        <input name="publish_title" value="{{ selected_form.title }}" required>
+
+        <label>Panel description</label>
+        <textarea name="publish_description" rows="4" required>Click the button below to complete this form.</textarea>
+
+        <label>Uploaded panel image</label>
+        <select name="publish_image_upload_filename">
+            <option value="">No panel image</option>
+            {% for image in uploaded_images %}
+                <option value="{{ image.reference }}">{{ image.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Uploaded panel thumbnail</label>
+        <select name="publish_thumbnail_upload_filename">
+            <option value="">Use server icon/default</option>
+            {% for image in uploaded_images %}
+                <option value="{{ image.reference }}">{{ image.label }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="button-row">
+            <button type="submit">Publish Form Panel</button>
+        </div>
+    </form>
+</div>
+
+{% if selected_form_key != 'verification' %}
+<div class="panel danger-panel">
+    <h2>Delete Form</h2>
+    <p class="hint">Deleting a form removes its questions and published panel registrations. Submissions may remain in history. Computers love half-memories.</p>
+
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="delete_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+        <input type="hidden" name="form_key" value="{{ selected_form_key }}">
+
+        <label>Confirmation</label>
+        <input name="delete_form_confirm" placeholder="Type DELETE">
+
+        <div class="button-row">
+            <button type="submit" class="danger-button">Delete Form</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% elif selected_guild_id %}
+<div class="panel"><p class="hint">No form selected yet.</p></div>
+{% else %}
+<div class="panel"><p>No servers available.</p></div>
+{% endif %}
+
+{% if selected_guild_id %}
+<div class="panel">
+    <h2>Create New Form</h2>
+    <form method="post" action="{{ url_for('forms.index') }}">
+        <input type="hidden" name="action" value="create_form">
+        <input type="hidden" name="guild_id" value="{{ selected_guild_id }}">
+
+        <div class="setting-grid">
+            <div>
+                <label>Form key</label>
+                <input name="new_form_key" placeholder="staff_app" maxlength="40" required>
+                <p class="hint">Lowercase letters, numbers, and underscores only.</p>
+            </div>
+
+            <div>
+                <label>Title</label>
+                <input name="new_form_title" placeholder="Staff Application" maxlength="45" required>
+            </div>
+
+        </div>
+
+        <div class="button-row">
+            <button type="submit">Create Form</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{% endblock %}

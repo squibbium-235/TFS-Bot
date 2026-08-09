@@ -55,14 +55,14 @@
                 </a>
 
                 <a
-                    href="{{ url_for('forms_page') }}"
+                    href="{{ url_for('forms.index') }}"
                     class="{{ 'active' if active_page == 'forms' else '' }}"
                 >
                     Forms
                 </a>
 
                 <a
-                    href="{{ url_for('uploads_manager_page') }}"
+                    href="{{ url_for('uploads.index') }}"
                     class="{{ 'active' if active_page == 'uploads' else '' }}"
                 >
                     Uploads
@@ -83,7 +83,7 @@
                 </a>
 
                 <a
-                    href="{{ url_for('backups_page') }}"
+                    href="{{ url_for('backups.index') }}"
                     class="{{ 'active' if active_page == 'backups' else '' }}"
                 >
                     Backups

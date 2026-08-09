@@ -568,6 +568,159 @@ class WebUIUploadManager:
             author_icon_url,
             files,
         )
+        
+    def create_folder(
+        self,
+        folder: str,
+    ) -> str:
+        safe_folder = self.validate_folder(
+            folder
+        )
+
+        if not safe_folder:
+            raise ValueError(
+                "Enter a folder name."
+            )
+
+        folder_path = self.folder_path(
+            safe_folder
+        )
+
+        folder_path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        return safe_folder
+
+    def save_upload(
+        self,
+        uploaded_file,
+        folder: str | None = None,
+    ) -> str:
+        if (
+            uploaded_file is None
+            or not uploaded_file.filename
+        ):
+            raise ValueError(
+                "No image selected."
+            )
+
+        safe_folder = self.validate_folder(
+            folder
+        )
+
+        folder_path = self.folder_path(
+            safe_folder
+        )
+
+        folder_path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        safe_name = self.validate_filename(
+            uploaded_file.filename
+        )
+
+        destination = (
+            folder_path
+            / safe_name
+        )
+
+        if destination.exists():
+            stem = destination.stem
+            suffix = destination.suffix
+            counter = 1
+
+            while destination.exists():
+                destination = (
+                    folder_path
+                    / f"{stem}_{counter}{suffix}"
+                )
+
+                counter += 1
+
+        uploaded_file.save(
+            destination
+        )
+
+        return (
+            destination
+            .relative_to(
+                self.upload_dir
+            )
+            .as_posix()
+        )
+
+    def delete_file(
+        self,
+        reference: str,
+    ) -> str:
+        safe_reference = (
+            self.validate_reference(
+                reference
+            )
+        )
+
+        path = self.image_path(
+            safe_reference
+        )
+
+        if not path.exists():
+            raise FileNotFoundError(
+                "Uploaded image not found: "
+                f"{safe_reference}"
+            )
+
+        if not path.is_file():
+            raise ValueError(
+                "Upload reference is not a file."
+            )
+
+        path.unlink()
+
+        return safe_reference
+
+    def delete_folder(
+        self,
+        folder: str,
+    ) -> str:
+        safe_folder = self.validate_folder(
+            folder
+        )
+
+        if not safe_folder:
+            raise RuntimeError(
+                "Cannot delete the root "
+                "uploads folder."
+            )
+
+        folder_path = self.folder_path(
+            safe_folder
+        )
+
+        if not folder_path.exists():
+            raise FileNotFoundError(
+                f"Folder not found: "
+                f"{safe_folder}"
+            )
+
+        if not folder_path.is_dir():
+            raise RuntimeError(
+                "That path is not a folder."
+            )
+
+        if any(
+            folder_path.iterdir()
+        ):
+            raise RuntimeError(
+                "Folder is not empty."
+            )
+
+        folder_path.rmdir()
+
+        return safe_folder
 
     @staticmethod
     def close_files(
