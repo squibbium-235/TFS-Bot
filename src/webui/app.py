@@ -50,6 +50,7 @@ from src.services.permission_store import (
     LEVEL_VALUES,
 )
 from src.utils.embed_builder import EmbedFactory
+from src.webui.custom_commands import register_custom_command_webui
 
 
 UPLOAD_DIR = Path("data/uploads/images")
@@ -658,6 +659,7 @@ EMBED_FORM_HTML = """
             <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'overview' else '' }}">Overview</a>
             {% if is_owner %}
                 <a href="{{ url_for('embed_builder') }}" class="{{ 'active' if active_page == 'embed_builder' else '' }}">Embed Builder</a>
+                <a href="{{ url_for('custom_commands_page') }}" class="{{ 'active' if active_page == 'custom_commands' else '' }}">Custom Commands</a>
                 <a href="{{ url_for('dm_templates') }}" class="{{ 'active' if active_page == 'dm_templates' else '' }}">DM Templates</a>
                 <a href="{{ url_for('forms_page') }}" class="{{ 'active' if active_page == 'forms' else '' }}">Forms</a>
                 <a href="{{ url_for('uploads_manager_page') }}" class="{{ 'active' if active_page == 'uploads' else '' }}">Uploads</a>
@@ -3350,6 +3352,17 @@ def create_webui(bot: discord.Client) -> Flask:
                 "scope": "identify guilds.members.read",
                 "state": state,
             }
+        )
+        
+        register_custom_command_webui(
+            app=app,
+            bot=bot,
+            require_owner_page=require_owner_page,
+            get_selected_guild=get_selected_guild,
+            get_available_guilds=get_available_guilds,
+            get_guild_roles=get_guild_roles,
+            render_admin_page=render_admin_page,
+            run_coro_from_flask=run_coro_from_flask,
         )
 
         return f"https://discord.com/oauth2/authorize?{query}"

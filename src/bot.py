@@ -15,6 +15,7 @@ from .services.invite_tracker import InviteTrackerStore
 from .services.permission_store import PermissionStore
 from .utils.permissions import PermissionCommandTree, PermissionDenied
 from .webui.app import start_webui
+from .services.custom_commands.store import CustomCommandStore
 
 
 class TFSBot(commands.Bot):
@@ -25,6 +26,7 @@ class TFSBot(commands.Bot):
 
         self.guild_settings = GuildSettingsStore(config.application_db_path)
         self.application_store = ApplicationStore(config.application_db_path)
+        self.custom_command_store = CustomCommandStore(config.application_db_path)
         self.form_store = FormStore(config.application_db_path)
         self.permission_store = PermissionStore(config.application_db_path)
         self.dm_template_store = DmTemplateStore(config.application_db_path)
@@ -49,6 +51,9 @@ class TFSBot(commands.Bot):
     async def setup_hook(self) -> None:
         await self.application_store.initialise()
         self.log.info("Application database initialised.")
+        
+        await self.custom_command_store.initialise()
+        self.log.info("Custom command database initialised.")
 
         self.guild_settings.initialise()
         self.log.info("Guild settings database initialised.")
@@ -81,6 +86,11 @@ class TFSBot(commands.Bot):
 
         self.log.info("Loading form editor command...")
         await self.load_extension("src.commands.forms.form_editor")
+        
+        self.log.info("Loading custom commands...")
+        await self.load_extension(
+            "src.commands.custom_commands.custom_commands"
+        )
 
         if self.config.webui_enabled:
             self.log.info("Starting web UI...")

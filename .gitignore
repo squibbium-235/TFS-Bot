@@ -23,3 +23,6 @@ Thumbs.db
 .idea/
 
 old/
+
+# Windows download metadata
+*:Zone.Identifier

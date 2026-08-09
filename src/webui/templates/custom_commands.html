@@ -1,0 +1,1055 @@
+<style>
+    .cc-layout {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+    }
+
+    .cc-sidebar {
+        position: sticky;
+        top: 18px;
+    }
+
+    .cc-command-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .cc-command-link {
+        display: block;
+        padding: 11px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #151820;
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .cc-command-link:hover {
+        background: var(--panel-2);
+    }
+
+    .cc-command-link.active {
+        border-color: var(--accent);
+        background: var(--panel-2);
+    }
+
+    .cc-command-link strong {
+        display: block;
+    }
+
+    .cc-command-link span {
+        color: var(--muted);
+        font-size: 12px;
+    }
+
+    .cc-action {
+        border: 1px solid var(--border);
+        background: var(--panel-2);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 14px;
+    }
+
+    .cc-action-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .cc-action-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .cc-action-number {
+        background: var(--accent);
+        color: white;
+        border-radius: 999px;
+        min-width: 28px;
+        height: 28px;
+        padding: 0 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .cc-action-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .cc-action-buttons button {
+        padding: 7px 10px;
+    }
+
+    .cc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .cc-wide {
+        grid-column: 1 / -1;
+    }
+
+    .cc-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .cc-check input {
+        width: auto;
+        margin: 0;
+    }
+
+    .cc-field {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 10px;
+        background: #151820;
+    }
+
+    .cc-field-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .cc-field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .cc-placeholder-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .cc-placeholder {
+        font-family: monospace;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #151820;
+        cursor: pointer;
+        color: var(--text);
+    }
+
+    .cc-placeholder:hover {
+        background: var(--panel-2);
+    }
+
+    .cc-preview {
+        background: #313338;
+        border-radius: 10px;
+        padding: 14px;
+        margin-top: 12px;
+    }
+
+    .cc-preview-embed {
+        border-left: 4px solid #5865f2;
+        background: #2b2d31;
+        border-radius: 4px;
+        padding: 12px;
+        max-width: 520px;
+    }
+
+    .cc-preview-title {
+        font-weight: 700;
+        color: #00a8fc;
+        margin-bottom: 6px;
+    }
+
+    .cc-preview-description {
+        white-space: pre-wrap;
+    }
+
+    .cc-preview-field {
+        margin-top: 9px;
+    }
+
+    .cc-preview-field strong {
+        display: block;
+    }
+
+    .cc-danger-zone {
+        border-color: #ed4245;
+    }
+
+    @media (max-width: 900px) {
+        .cc-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .cc-sidebar {
+            position: static;
+        }
+
+        .cc-grid,
+        .cc-field-grid,
+        .cc-placeholder-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="panel">
+    <form method="get">
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+            {% for guild in guilds %}
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if selected_guild_id %}
+
+<div class="cc-layout">
+
+    <div class="cc-sidebar">
+
+        <div class="panel">
+            <h2>Commands</h2>
+
+            <div class="cc-command-list">
+                {% for command in commands %}
+                    <a
+                        class="cc-command-link {{ 'active' if selected_command and selected_command.name == command.name else '' }}"
+                        href="{{ url_for('custom_commands_page', guild_id=selected_guild_id, command=command.name) }}"
+                    >
+                        <strong>{{ prefix }}{{ command.name }}</strong>
+
+                        <span>
+                            {{ command.required_level|title }}
+                            ·
+                            {{ command.actions|length }} action(s)
+                        </span>
+                    </a>
+                {% else %}
+                    <p class="hint">
+                        No custom commands yet.
+                    </p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Create Command</h2>
+
+            <form method="post">
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
+                <label>Name</label>
+
+                <input
+                    name="new_name"
+                    placeholder="rules"
+                    required
+                >
+
+                <label>Description</label>
+
+                <input
+                    name="new_description"
+                    placeholder="Shows the server rules"
+                >
+
+                <label>Permission</label>
+
+                <select name="new_required_level">
+                    {% for level in levels %}
+                        <option value="{{ level.value }}">
+                            {{ level.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <label>Cooldown (seconds)</label>
+
+                <input
+                    type="number"
+                    name="new_cooldown"
+                    value="0"
+                    min="0"
+                    max="86400"
+                >
+
+                <label class="cc-check">
+                    <input
+                        type="checkbox"
+                        name="new_delete_trigger"
+                    >
+
+                    Delete invoking message
+                </label>
+
+                <div class="button-row">
+                    <button
+                        name="action"
+                        value="create_command"
+                    >
+                        Create Command
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+    <div>
+
+        {% if selected_command %}
+
+        <div class="panel">
+            <h2>
+                {{ prefix }}{{ selected_command.name }}
+            </h2>
+
+            <form method="post">
+
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
+                <input
+                    type="hidden"
+                    name="command_name"
+                    value="{{ selected_command.name }}"
+                >
+
+                <div class="cc-grid">
+
+                    <div>
+                        <label>Command Name</label>
+
+                        <input
+                            name="edited_name"
+                            value="{{ selected_command.name }}"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label>Permission</label>
+
+                        <select name="required_level">
+                            {% for level in levels %}
+                                <option
+                                    value="{{ level.value }}"
+                                    {{ 'selected' if selected_command.required_level == level.value else '' }}
+                                >
+                                    {{ level.label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="cc-wide">
+                        <label>Description</label>
+
+                        <input
+                            name="description"
+                            value="{{ selected_command.description }}"
+                        >
+                    </div>
+
+                    <div>
+                        <label>Cooldown (seconds)</label>
+
+                        <input
+                            type="number"
+                            name="cooldown_seconds"
+                            value="{{ selected_command.cooldown_seconds }}"
+                            min="0"
+                            max="86400"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="cc-check">
+                            <input
+                                type="checkbox"
+                                name="enabled"
+                                {{ 'checked' if selected_command.enabled else '' }}
+                            >
+
+                            Enabled
+                        </label>
+
+                        <label class="cc-check">
+                            <input
+                                type="checkbox"
+                                name="delete_trigger"
+                                {{ 'checked' if selected_command.delete_trigger else '' }}
+                            >
+
+                            Delete invoking message
+                        </label>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button
+                        name="action"
+                        value="save_command"
+                    >
+                        Save Command
+                    </button>
+                </div>
+            </form>
+        </div>
+
+
+        <div class="panel">
+
+            <h2>Actions</h2>
+
+            <p class="hint">
+                Actions execute from top to bottom.
+            </p>
+
+            {% for action in selected_command.actions %}
+
+                {% set number = loop.index %}
+                {% set data = action.data %}
+
+                <form
+                    method="post"
+                    class="cc-action"
+                    data-action-type="{{ action.type }}"
+                >
+
+                    <input
+                        type="hidden"
+                        name="guild_id"
+                        value="{{ selected_guild_id }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="command_name"
+                        value="{{ selected_command.name }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="action_number"
+                        value="{{ number }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="action_type"
+                        value="{{ action.type }}"
+                    >
+
+                    <div class="cc-action-header">
+
+                        <div class="cc-action-title">
+                            <span class="cc-action-number">
+                                {{ number }}
+                            </span>
+
+                            <strong>
+                                {{ action_labels.get(action.type, action.type) }}
+                            </strong>
+                        </div>
+
+                        <div class="cc-action-buttons">
+
+                            <button
+                                class="secondary-button"
+                                name="action"
+                                value="move_action_up"
+                                type="submit"
+                                {{ 'disabled' if loop.first else '' }}
+                            >
+                                ↑
+                            </button>
+
+                            <button
+                                class="secondary-button"
+                                name="action"
+                                value="move_action_down"
+                                type="submit"
+                                {{ 'disabled' if loop.last else '' }}
+                            >
+                                ↓
+                            </button>
+
+                            <button
+                                class="danger-button"
+                                name="action"
+                                value="delete_action"
+                                type="submit"
+                            >
+                                Delete
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    {% if action.type == 'send_message' %}
+
+                        <label>Message</label>
+
+                        <textarea
+                            name="content"
+                            rows="5"
+                            class="cc-placeholder-target"
+                        >{{ data.get('content', '') }}</textarea>
+
+                        <label class="cc-check">
+                            <input
+                                type="checkbox"
+                                name="reply"
+                                {{ 'checked' if data.get('reply') else '' }}
+                            >
+
+                            Reply to invoking message
+                        </label>
+
+
+                    {% elif action.type == 'send_embed' %}
+
+                        <div class="cc-grid">
+
+                            <div>
+                                <label>Title</label>
+
+                                <input
+                                    name="title"
+                                    class="cc-embed-title"
+                                    value="{{ data.get('title', '') }}"
+                                >
+                            </div>
+
+                            <div>
+                                <label>Colour</label>
+
+                                <input
+                                    name="colour"
+                                    class="cc-embed-colour"
+                                    value="{{ '%06X'|format(data.get('colour', 5793266)) }}"
+                                    maxlength="6"
+                                >
+                            </div>
+
+                            <div class="cc-wide">
+                                <label>Description</label>
+
+                                <textarea
+                                    name="description"
+                                    rows="6"
+                                    class="cc-embed-description cc-placeholder-target"
+                                >{{ data.get('description', '') }}</textarea>
+                            </div>
+
+                            <div>
+                                <label>Author</label>
+
+                                <input
+                                    name="author"
+                                    value="{{ data.get('author', '') }}"
+                                >
+                            </div>
+
+                            <div>
+                                <label>Footer</label>
+
+                                <input
+                                    name="footer"
+                                    value="{{ data.get('footer', '') }}"
+                                >
+                            </div>
+
+                            <div>
+                                <label>Thumbnail URL</label>
+
+                                <input
+                                    name="thumbnail"
+                                    value="{{ data.get('thumbnail', '') }}"
+                                >
+                            </div>
+
+                            <div>
+                                <label>Image URL</label>
+
+                                <input
+                                    name="image"
+                                    value="{{ data.get('image', '') }}"
+                                >
+                            </div>
+
+                        </div>
+
+                        <label class="cc-check">
+                            <input
+                                type="checkbox"
+                                name="reply"
+                                {{ 'checked' if data.get('reply') else '' }}
+                            >
+
+                            Reply to invoking message
+                        </label>
+
+                        <h3>Fields</h3>
+
+                        <div class="cc-fields">
+                            {% for field in data.get('fields', []) %}
+
+                                <div class="cc-field">
+
+                                    <input
+                                        type="hidden"
+                                        name="field_slot[]"
+                                        value="{{ loop.index0 }}"
+                                    >
+
+                                    <div class="cc-field-header">
+                                        <strong>
+                                            Field {{ loop.index }}
+                                        </strong>
+
+                                        <button
+                                            type="button"
+                                            class="danger-button cc-remove-field"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+
+                                    <div class="cc-field-grid">
+
+                                        <div>
+                                            <label>Name</label>
+
+                                            <input
+                                                name="field_name_{{ loop.index0 }}"
+                                                value="{{ field.get('name', '') }}"
+                                            >
+                                        </div>
+
+                                        <div>
+                                            <label>Value</label>
+
+                                            <textarea
+                                                name="field_value_{{ loop.index0 }}"
+                                                rows="2"
+                                            >{{ field.get('value', '') }}</textarea>
+                                        </div>
+
+                                    </div>
+
+                                    <label class="cc-check">
+                                        <input
+                                            type="checkbox"
+                                            name="field_inline_{{ loop.index0 }}"
+                                            {{ 'checked' if field.get('inline') else '' }}
+                                        >
+
+                                        Inline
+                                    </label>
+
+                                </div>
+
+                            {% endfor %}
+                        </div>
+
+                        <div class="button-row">
+                            <button
+                                type="button"
+                                class="secondary-button cc-add-field"
+                            >
+                                Add Field
+                            </button>
+                        </div>
+
+
+                        <div class="cc-preview">
+
+                            <span class="badge">
+                                Live Preview
+                            </span>
+
+                            <div class="cc-preview-embed">
+
+                                <div class="cc-preview-title"></div>
+
+                                <div class="cc-preview-description"></div>
+
+                                <div class="cc-preview-fields"></div>
+
+                            </div>
+
+                        </div>
+
+
+                    {% elif action.type == 'add_reaction' %}
+
+                        <div class="cc-grid">
+
+                            <div>
+                                <label>Emoji</label>
+
+                                <input
+                                    name="emoji"
+                                    value="{{ data.get('emoji', '') }}"
+                                    required
+                                >
+                            </div>
+
+                            <div>
+                                <label>React To</label>
+
+                                <select name="target">
+
+                                    <option
+                                        value="trigger"
+                                        {{ 'selected' if data.get('target') == 'trigger' else '' }}
+                                    >
+                                        Trigger Message
+                                    </option>
+
+                                    <option
+                                        value="response"
+                                        {{ 'selected' if data.get('target') == 'response' else '' }}
+                                    >
+                                        Latest Bot Response
+                                    </option>
+
+                                </select>
+                            </div>
+
+                        </div>
+
+
+                    {% elif action.type in ['add_role', 'remove_role'] %}
+
+                        <div class="cc-grid">
+
+                            <div>
+                                <label>Role</label>
+
+                                <select name="role_id">
+
+                                    {% for role in roles %}
+
+                                        <option
+                                            value="{{ role.id }}"
+                                            {{ 'selected' if data.get('role_id')|string == role.id else '' }}
+                                        >
+                                            {{ role.name }}
+                                        </option>
+
+                                    {% endfor %}
+
+                                </select>
+                            </div>
+
+                            <div>
+                                <label>Member</label>
+
+                                <select name="target">
+
+                                    <option
+                                        value="invoker"
+                                        {{ 'selected' if data.get('target') == 'invoker' else '' }}
+                                    >
+                                        Command User
+                                    </option>
+
+                                    <option
+                                        value="target"
+                                        {{ 'selected' if data.get('target') == 'target' else '' }}
+                                    >
+                                        Mentioned User
+                                    </option>
+
+                                </select>
+                            </div>
+
+                        </div>
+
+
+                    {% elif action.type == 'delete_message' %}
+
+                        <div class="cc-grid">
+
+                            <div>
+                                <label>Delete</label>
+
+                                <select name="target">
+
+                                    <option
+                                        value="trigger"
+                                        {{ 'selected' if data.get('target') == 'trigger' else '' }}
+                                    >
+                                        Trigger Message
+                                    </option>
+
+                                    <option
+                                        value="response"
+                                        {{ 'selected' if data.get('target') == 'response' else '' }}
+                                    >
+                                        Latest Bot Response
+                                    </option>
+
+                                </select>
+                            </div>
+
+                            <div>
+                                <label>Delay (seconds)</label>
+
+                                <input
+                                    type="number"
+                                    name="delay"
+                                    min="0"
+                                    max="86400"
+                                    step="0.1"
+                                    value="{{ data.get('delay', 0) }}"
+                                >
+                            </div>
+
+                        </div>
+
+                    {% endif %}
+
+
+                    <div class="button-row">
+                        <button
+                            type="submit"
+                            name="action"
+                            value="save_action"
+                        >
+                            Save Action
+                        </button>
+                    </div>
+
+                </form>
+
+            {% else %}
+
+                <p class="hint">
+                    This command does not have any actions yet.
+                </p>
+
+            {% endfor %}
+
+
+            <form method="post">
+
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
+                <input
+                    type="hidden"
+                    name="command_name"
+                    value="{{ selected_command.name }}"
+                >
+
+                <label>Add Action</label>
+
+                <select name="new_action_type">
+                    {% for value, label in action_types %}
+                        <option value="{{ value }}">
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <div class="button-row">
+                    <button
+                        name="action"
+                        value="add_action"
+                    >
+                        Add Action
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+
+        <div class="panel">
+
+            <h2>Placeholders</h2>
+
+            <p class="hint">
+                Click one to copy it.
+            </p>
+
+            <div class="cc-placeholder-grid">
+
+                {% for placeholder in [
+                    '{user}',
+                    '{display_name}',
+                    '{mention}',
+                    '{user_id}',
+                    '{target}',
+                    '{target_mention}',
+                    '{target_id}',
+                    '{server}',
+                    '{server_id}',
+                    '{member_count}',
+                    '{channel}',
+                    '{channel_id}',
+                    '{args}',
+                    '{arg1}',
+                    '{arg2}',
+                    '{command}',
+                    '{prefix}',
+                    '{newline}',
+                    '{random:one|two|three}'
+                ] %}
+
+                    <button
+                        type="button"
+                        class="cc-placeholder"
+                        data-placeholder="{{ placeholder }}"
+                    >
+                        {{ placeholder }}
+                    </button>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+        <div class="panel cc-danger-zone">
+
+            <h2>Danger Zone</h2>
+
+            <form method="post">
+
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
+                <input
+                    type="hidden"
+                    name="command_name"
+                    value="{{ selected_command.name }}"
+                >
+
+                <label>
+                    Type CLEAR to remove all actions
+                </label>
+
+                <input name="clear_confirm">
+
+                <div class="button-row">
+                    <button
+                        class="danger-button"
+                        name="action"
+                        value="clear_actions"
+                    >
+                        Clear All Actions
+                    </button>
+                </div>
+
+            </form>
+
+
+            <form method="post">
+
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
+                <input
+                    type="hidden"
+                    name="command_name"
+                    value="{{ selected_command.name }}"
+                >
+
+                <label>
+                    Type DELETE to permanently delete this command
+                </label>
+
+                <input name="delete_confirm">
+
+                <div class="button-row">
+                    <button
+                        class="danger-button"
+                        name="action"
+                        value="delete_command"
+                    >
+                        Delete Command
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+        {% else %}
+
+            <div class="panel">
+                <h2>Custom Commands</h2>
+
+                <p>
+                    Create a custom command using the panel on the left.
+                </p>
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='custom_commands.js') }}"></script>
+
+{% else %}
+
+<div class="panel">
+    <p>No servers available.</p>
+</div>
+
+{% endif %}

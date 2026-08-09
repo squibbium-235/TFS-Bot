@@ -69,6 +69,9 @@ DEFAULT_COMMAND_LEVELS = {
     "permissions.clear_role": LEVEL_OWNER,
     "permissions.set_command": LEVEL_OWNER,
     "permissions.reset_command": LEVEL_OWNER,
+    
+    # Custom commands
+    "custom_command": LEVEL_OWNER,
 }
 
 
