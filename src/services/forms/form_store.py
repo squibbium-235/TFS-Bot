@@ -9,11 +9,12 @@ import aiosqlite
 import discord
 
 from src.services.forms.form_loader import FormConfig, FormLoader
-from src.utils.form_builder import FormQuestion
+from src.utils.form_builder import FormAnswer, FormQuestion
 
 
 FORM_KEY_VERIFICATION = "verification"
 
+VALID_FORM_KEY_PATTERN = re.compile(r"^[a-z0-9_]{1,40}$")
 VALID_QUESTION_KEY_PATTERN = re.compile(r"^[a-z0-9_]{1,80}$")
 
 
@@ -122,6 +123,28 @@ class StoredFormQuestion:
     sort_order: int
 
 
+@dataclass(frozen=True)
+class StoredPublishedForm:
+    guild_id: int
+    form_key: str
+    channel_id: int
+    message_id: int
+    title: str
+    description: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class StoredFormSubmission:
+    id: str
+    guild_id: int
+    form_key: str
+    user_id: int
+    submitted_at: str
+    answers: list[FormAnswer]
+
+
 class FormStore:
     def __init__(self, database_path: str) -> None:
         self.database_path = Path(database_path)
@@ -182,6 +205,50 @@ class FormStore:
                 """
                 CREATE INDEX IF NOT EXISTS idx_form_questions_lookup
                 ON form_questions (guild_id, form_key, sort_order)
+                """
+            )
+
+            await database.execute(
+                """
+                CREATE TABLE IF NOT EXISTS published_forms (
+                    guild_id INTEGER NOT NULL,
+                    form_key TEXT NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (guild_id, message_id)
+                )
+                """
+            )
+
+            await database.execute(
+                """
+                CREATE TABLE IF NOT EXISTS form_submissions (
+                    id TEXT PRIMARY KEY,
+                    guild_id INTEGER NOT NULL,
+                    form_key TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    submitted_at TEXT NOT NULL
+                )
+                """
+            )
+
+            await database.execute(
+                """
+                CREATE TABLE IF NOT EXISTS form_submission_answers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    submission_id TEXT NOT NULL,
+                    question_key TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL,
+                    FOREIGN KEY (submission_id)
+                    REFERENCES form_submissions (id)
+                    ON DELETE CASCADE
+                )
                 """
             )
 
@@ -358,6 +425,395 @@ class FormStore:
             json_path=json_path,
         )
 
+    async def create_form(
+        self,
+        guild_id: int,
+        form_key: str,
+        title: str,
+        custom_id_prefix: str | None = None,
+    ) -> None:
+        form_key = form_key.lower().strip()
+        title = title.strip()
+        custom_id_prefix = (custom_id_prefix or f"form:{form_key}").strip()
+
+        self._validate_form_values(
+            form_key=form_key,
+            title=title,
+            custom_id_prefix=custom_id_prefix,
+        )
+
+        now = self._now()
+
+        async with aiosqlite.connect(self.database_path) as database:
+            await database.execute(
+                """
+                INSERT INTO forms (
+                    guild_id,
+                    form_key,
+                    title,
+                    custom_id_prefix,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    guild_id,
+                    form_key,
+                    title,
+                    custom_id_prefix,
+                    now,
+                    now,
+                ),
+            )
+
+            await database.commit()
+
+    async def update_form(
+        self,
+        guild_id: int,
+        form_key: str,
+        title: str,
+        custom_id_prefix: str,
+    ) -> bool:
+        form_key = form_key.lower().strip()
+        title = title.strip()
+        custom_id_prefix = custom_id_prefix.strip()
+
+        self._validate_form_values(
+            form_key=form_key,
+            title=title,
+            custom_id_prefix=custom_id_prefix,
+        )
+
+        now = self._now()
+
+        async with aiosqlite.connect(self.database_path) as database:
+            cursor = await database.execute(
+                """
+                UPDATE forms
+                SET title = ?,
+                    custom_id_prefix = ?,
+                    updated_at = ?
+                WHERE guild_id = ?
+                AND form_key = ?
+                """,
+                (
+                    title,
+                    custom_id_prefix,
+                    now,
+                    guild_id,
+                    form_key,
+                ),
+            )
+
+            updated = cursor.rowcount > 0
+            await database.commit()
+
+        return updated
+
+    async def delete_form(
+        self,
+        guild_id: int,
+        form_key: str,
+    ) -> bool:
+        form_key = form_key.lower().strip()
+
+        if form_key == FORM_KEY_VERIFICATION:
+            raise ValueError("The built-in verification form cannot be deleted.")
+
+        async with aiosqlite.connect(self.database_path) as database:
+            await database.execute("PRAGMA foreign_keys = ON")
+
+            cursor = await database.execute(
+                """
+                DELETE FROM forms
+                WHERE guild_id = ?
+                AND form_key = ?
+                """,
+                (guild_id, form_key),
+            )
+
+            deleted = cursor.rowcount > 0
+
+            submission_rows = await (
+                await database.execute(
+                    """
+                    SELECT id
+                    FROM form_submissions
+                    WHERE guild_id = ?
+                    AND form_key = ?
+                    """,
+                    (guild_id, form_key),
+                )
+            ).fetchall()
+
+            for submission_row in submission_rows:
+                await database.execute(
+                    """
+                    DELETE FROM form_submission_answers
+                    WHERE submission_id = ?
+                    """,
+                    (submission_row[0],),
+                )
+
+            await database.execute(
+                """
+                DELETE FROM form_submissions
+                WHERE guild_id = ?
+                AND form_key = ?
+                """,
+                (guild_id, form_key),
+            )
+
+            await database.execute(
+                """
+                DELETE FROM published_forms
+                WHERE guild_id = ?
+                AND form_key = ?
+                """,
+                (guild_id, form_key),
+            )
+
+            await database.commit()
+
+        return deleted
+
+    async def set_question_order(
+        self,
+        guild_id: int,
+        form_key: str,
+        question_keys: list[str],
+    ) -> None:
+        form_key = form_key.lower().strip()
+        cleaned_question_keys = [key.lower().strip() for key in question_keys if key.strip()]
+        now = self._now()
+
+        async with aiosqlite.connect(self.database_path) as database:
+            for index, question_key in enumerate(cleaned_question_keys, start=1):
+                await database.execute(
+                    """
+                    UPDATE form_questions
+                    SET sort_order = ?,
+                        updated_at = ?
+                    WHERE guild_id = ?
+                    AND form_key = ?
+                    AND question_key = ?
+                    """,
+                    (index, now, guild_id, form_key, question_key),
+                )
+
+            await database.execute(
+                """
+                UPDATE forms
+                SET updated_at = ?
+                WHERE guild_id = ?
+                AND form_key = ?
+                """,
+                (now, guild_id, form_key),
+            )
+
+            await database.commit()
+
+    async def save_published_form(
+        self,
+        guild_id: int,
+        form_key: str,
+        channel_id: int,
+        message_id: int,
+        title: str,
+        description: str,
+    ) -> None:
+        form_key = form_key.lower().strip()
+        now = self._now()
+
+        async with aiosqlite.connect(self.database_path) as database:
+            await database.execute(
+                """
+                INSERT INTO published_forms (
+                    guild_id,
+                    form_key,
+                    channel_id,
+                    message_id,
+                    title,
+                    description,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(guild_id, message_id)
+                DO UPDATE SET
+                    form_key = excluded.form_key,
+                    channel_id = excluded.channel_id,
+                    title = excluded.title,
+                    description = excluded.description,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    guild_id,
+                    form_key,
+                    channel_id,
+                    message_id,
+                    title,
+                    description,
+                    now,
+                    now,
+                ),
+            )
+
+            await database.commit()
+
+    async def get_published_form_by_message(
+        self,
+        guild_id: int,
+        message_id: int,
+    ) -> StoredPublishedForm | None:
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM published_forms
+                WHERE guild_id = ?
+                AND message_id = ?
+                """,
+                (guild_id, message_id),
+            )
+
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return StoredPublishedForm(
+            guild_id=row["guild_id"],
+            form_key=row["form_key"],
+            channel_id=row["channel_id"],
+            message_id=row["message_id"],
+            title=row["title"],
+            description=row["description"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    async def save_submission(
+        self,
+        submission_id: str,
+        guild_id: int,
+        form_key: str,
+        user_id: int,
+        answers: list[FormAnswer],
+    ) -> None:
+        now = self._now()
+
+        async with aiosqlite.connect(self.database_path) as database:
+            await database.execute(
+                """
+                INSERT INTO form_submissions (
+                    id,
+                    guild_id,
+                    form_key,
+                    user_id,
+                    submitted_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    submission_id,
+                    guild_id,
+                    form_key.lower().strip(),
+                    user_id,
+                    now,
+                ),
+            )
+
+            for index, answer in enumerate(answers, start=1):
+                await database.execute(
+                    """
+                    INSERT INTO form_submission_answers (
+                        submission_id,
+                        question_key,
+                        label,
+                        value,
+                        sort_order
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        submission_id,
+                        answer.key,
+                        answer.label,
+                        answer.value,
+                        index,
+                    ),
+                )
+
+            await database.commit()
+
+    async def list_submissions(
+        self,
+        guild_id: int,
+        form_key: str,
+        limit: int = 10,
+    ) -> list[StoredFormSubmission]:
+        form_key = form_key.lower().strip()
+        limit = max(1, min(limit, 25))
+
+        async with aiosqlite.connect(self.database_path) as database:
+            database.row_factory = aiosqlite.Row
+
+            submission_rows = await (
+                await database.execute(
+                    """
+                    SELECT *
+                    FROM form_submissions
+                    WHERE guild_id = ?
+                    AND form_key = ?
+                    ORDER BY submitted_at DESC
+                    LIMIT ?
+                    """,
+                    (guild_id, form_key, limit),
+                )
+            ).fetchall()
+
+            submissions: list[StoredFormSubmission] = []
+
+            for row in submission_rows:
+                answer_rows = await (
+                    await database.execute(
+                        """
+                        SELECT *
+                        FROM form_submission_answers
+                        WHERE submission_id = ?
+                        ORDER BY sort_order ASC
+                        """,
+                        (row["id"],),
+                    )
+                ).fetchall()
+
+                answers = [
+                    FormAnswer(
+                        key=answer_row["question_key"],
+                        label=answer_row["label"],
+                        value=answer_row["value"],
+                    )
+                    for answer_row in answer_rows
+                ]
+
+                submissions.append(
+                    StoredFormSubmission(
+                        id=row["id"],
+                        guild_id=row["guild_id"],
+                        form_key=row["form_key"],
+                        user_id=row["user_id"],
+                        submitted_at=row["submitted_at"],
+                        answers=answers,
+                    )
+                )
+
+        return submissions
+
     async def list_forms(
         self,
         guild_id: int,
@@ -393,8 +849,9 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
+        fallback_json_path: str | None = None,
     ) -> FormConfig:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         await self.ensure_form_from_json(
             guild_id=guild_id,
             form_key=form_key,
@@ -470,8 +927,9 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
+        fallback_json_path: str | None = None,
     ) -> list[StoredFormQuestion]:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         await self.ensure_form_from_json(
             guild_id=guild_id,
             form_key=form_key,
@@ -501,8 +959,9 @@ class FormStore:
         guild_id: int,
         form_key: str,
         question_key: str,
-        fallback_json_path: str,
+        fallback_json_path: str | None = None,
     ) -> StoredFormQuestion | None:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         await self.ensure_form_from_json(
             guild_id=guild_id,
             form_key=form_key,
@@ -534,7 +993,6 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
         question_key: str,
         label: str,
         style: str,
@@ -542,7 +1000,9 @@ class FormStore:
         placeholder: str | None,
         min_length: int | None,
         max_length: int | None,
+        fallback_json_path: str | None = None,
     ) -> None:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         self._validate_question_values(
             question_key=question_key,
             label=label,
@@ -623,7 +1083,6 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
         question_key: str,
         label: str | None = None,
         style: str | None = None,
@@ -633,7 +1092,9 @@ class FormStore:
         max_length: int | None = None,
         clear_placeholder: bool = False,
         clear_lengths: bool = False,
+        fallback_json_path: str | None = None,
     ) -> bool:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         existing = await self.get_question(
             guild_id=guild_id,
             form_key=form_key,
@@ -720,9 +1181,10 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
         question_key: str,
+        fallback_json_path: str | None = None,
     ) -> bool:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         await self.ensure_form_from_json(
             guild_id=guild_id,
             form_key=form_key,
@@ -753,10 +1215,11 @@ class FormStore:
         self,
         guild_id: int,
         form_key: str,
-        fallback_json_path: str,
         question_key: str,
         new_position: int,
+        fallback_json_path: str | None = None,
     ) -> bool:
+        fallback_json_path = fallback_json_path or "data/forms/verification.json"
         questions = await self.list_questions(
             guild_id=guild_id,
             form_key=form_key,
@@ -860,6 +1323,30 @@ class FormStore:
             return get_default_verification_form_config()
 
         raise FileNotFoundError(f"Form config does not exist: {form_path}")
+
+    @staticmethod
+    def _validate_form_values(
+        form_key: str,
+        title: str,
+        custom_id_prefix: str,
+    ) -> None:
+        if not VALID_FORM_KEY_PATTERN.fullmatch(form_key):
+            raise ValueError(
+                "Form key must be 1-40 characters and only use lowercase letters, numbers, and underscores."
+            )
+
+        if not title.strip():
+            raise ValueError("Form title cannot be empty.")
+
+        if len(title) > 45:
+            raise ValueError("Form title cannot be longer than 45 characters.")
+
+        if not custom_id_prefix.strip():
+            raise ValueError("Form custom ID prefix cannot be empty.")
+
+        if len(custom_id_prefix) > 60:
+            raise ValueError("Form custom ID prefix cannot be longer than 60 characters.")
+
 
     @staticmethod
     def _validate_question_values(

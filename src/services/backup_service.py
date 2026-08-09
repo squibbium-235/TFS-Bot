@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,6 +26,14 @@ class BackupError(RuntimeError):
 class BackupResult:
     filename: str
     data: bytes
+
+
+@dataclass(frozen=True)
+class RestoreResult:
+    restored_database: bool
+    restored_uploads: bool
+    restored_env: bool
+    safety_backup_directory: Path
 
 
 class BackupService:
@@ -56,6 +65,7 @@ class BackupService:
         )
 
         created_at = datetime.now(timezone.utc)
+
         filename = (
             f"TFSBot_Backup_"
             f"{created_at.strftime('%Y-%m-%d_%H%M%S')}"
@@ -65,6 +75,121 @@ class BackupService:
         return BackupResult(
             filename=filename,
             data=encrypted_bytes,
+        )
+
+    def restore_encrypted_backup(
+        self,
+        encrypted_data: bytes,
+        password: str,
+        restore_uploads: bool = True,
+        restore_env: bool = False,
+    ) -> RestoreResult:
+        plain_archive = self.decrypt_backup(
+            encrypted_data=encrypted_data,
+            password=password,
+        )
+
+        restore_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
+        safety_backup_directory = (
+            self.project_root / "data" / "restore_safety" / restore_timestamp
+        )
+
+        safety_backup_directory.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(BytesIO(plain_archive), mode="r") as archive:
+            self._validate_archive(archive)
+            members = set(archive.namelist())
+
+            if "data/tfsbot.sqlite3" not in members:
+                raise BackupError("Backup does not contain data/tfsbot.sqlite3.")
+
+            restored_database = False
+            restored_uploads = False
+            restored_env = False
+
+            database_target = self.database_path
+            database_target.parent.mkdir(parents=True, exist_ok=True)
+
+            if database_target.exists():
+                database_safety_path = (
+                    safety_backup_directory / "data" / "tfsbot.sqlite3"
+                )
+                database_safety_path.parent.mkdir(parents=True, exist_ok=True)
+
+                shutil.copy2(
+                    database_target,
+                    database_safety_path,
+                )
+
+            database_temp_path = database_target.with_suffix(".sqlite3.restore_tmp")
+
+            with archive.open("data/tfsbot.sqlite3", mode="r") as source:
+                with database_temp_path.open("wb") as target:
+                    shutil.copyfileobj(source, target)
+
+            database_temp_path.replace(database_target)
+            restored_database = True
+
+            uploads_target = self.project_root / "data" / "uploads"
+            upload_members = [
+                member
+                for member in members
+                if member.startswith("data/uploads/") and not member.endswith("/")
+            ]
+
+            if restore_uploads and upload_members:
+                uploads_safety_path = safety_backup_directory / "data" / "uploads"
+
+                if uploads_target.exists():
+                    uploads_safety_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    shutil.copytree(
+                        uploads_target,
+                        uploads_safety_path,
+                        dirs_exist_ok=True,
+                    )
+
+                    shutil.rmtree(uploads_target)
+
+                uploads_target.mkdir(parents=True, exist_ok=True)
+
+                for member in upload_members:
+                    relative_path = Path(member).relative_to("data/uploads")
+                    target_path = uploads_target / relative_path
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with archive.open(member, mode="r") as source:
+                        with target_path.open("wb") as target:
+                            shutil.copyfileobj(source, target)
+
+                restored_uploads = True
+
+            if restore_env:
+                if ".env" not in members:
+                    raise BackupError(
+                        "Restore .env was requested, but this backup does not contain .env."
+                    )
+
+                env_target = self.project_root / ".env"
+
+                if env_target.exists():
+                    env_safety_path = safety_backup_directory / ".env"
+                    shutil.copy2(
+                        env_target,
+                        env_safety_path,
+                    )
+
+                with archive.open(".env", mode="r") as source:
+                    with env_target.open("wb") as target:
+                        shutil.copyfileobj(source, target)
+
+                restored_env = True
+
+        return RestoreResult(
+            restored_database=restored_database,
+            restored_uploads=restored_uploads,
+            restored_env=restored_env,
+            safety_backup_directory=safety_backup_directory,
         )
 
     def decrypt_backup(
@@ -82,6 +207,7 @@ class BackupService:
         try:
             salt_b64, token = remaining.split(b"\n", 1)
             salt = base64.urlsafe_b64decode(salt_b64)
+
         except ValueError as error:
             raise BackupError("Backup file header is damaged.") from error
 
@@ -94,6 +220,7 @@ class BackupService:
 
         try:
             return fernet.decrypt(token)
+
         except InvalidToken as error:
             raise BackupError("Incorrect password or damaged backup file.") from error
 
@@ -180,12 +307,40 @@ class BackupService:
                 archive_path.as_posix(),
             )
 
+    def _validate_archive(
+        self,
+        archive: zipfile.ZipFile,
+    ) -> None:
+        for member in archive.namelist():
+            member_path = Path(member)
+
+            if member_path.is_absolute():
+                raise BackupError(f"Unsafe backup path: {member}")
+
+            if ".." in member_path.parts:
+                raise BackupError(f"Unsafe backup path: {member}")
+
+        if "manifest.json" not in archive.namelist():
+            raise BackupError("Backup is missing manifest.json.")
+
+        try:
+            manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        except Exception as error:
+            raise BackupError("Backup manifest is damaged.") from error
+
+        if manifest.get("format") != "tfsbot-backup":
+            raise BackupError("Backup manifest has an invalid format.")
+
+        if int(manifest.get("version", 0)) != 1:
+            raise BackupError("Backup version is not supported.")
+
     def _encrypt_bytes(
         self,
         data: bytes,
         password: str,
     ) -> bytes:
         salt = os.urandom(16)
+
         key = self._derive_key(
             password=password,
             salt=salt,
@@ -194,12 +349,7 @@ class BackupService:
         fernet = Fernet(key)
         token = fernet.encrypt(data)
 
-        return (
-            BACKUP_MAGIC
-            + base64.urlsafe_b64encode(salt)
-            + b"\n"
-            + token
-        )
+        return BACKUP_MAGIC + base64.urlsafe_b64encode(salt) + b"\n" + token
 
     def _derive_key(
         self,
@@ -214,20 +364,18 @@ class BackupService:
             p=1,
         )
 
-        return base64.urlsafe_b64encode(
-            kdf.derive(password.encode("utf-8"))
-        )
+        return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
 
     def _build_restore_readme(
         self,
         include_env: bool,
     ) -> str:
-        env_note = (
-            "This backup includes .env.\n"
-            "That means it may include the Discord bot token.\n"
-        )
-
-        if not include_env:
+        if include_env:
+            env_note = (
+                "This backup includes .env.\n"
+                "That means it may include the Discord bot token.\n"
+            )
+        else:
             env_note = (
                 "This backup does not include .env.\n"
                 "You will need to recreate .env manually or copy it from the VPS.\n"
@@ -245,7 +393,6 @@ Contents:
 - README_RESTORE.txt
 
 {env_note}
-
 Basic restore idea:
 1. Stop the bot.
 2. Decrypt the backup using the WebUI restore tool or restore script.
@@ -254,5 +401,6 @@ Basic restore idea:
 5. Restore .env if included, or recreate it manually.
 6. Start the bot again.
 
-DO NOT delete the database unless you have a confirmed working backup.
+Do not delete the database unless you have a confirmed working backup.
+Computers already cause enough suffering.
 """

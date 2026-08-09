@@ -25,9 +25,9 @@ DM_TEMPLATE_ORDER = [
 
 DM_TEMPLATE_LABELS = {
     DM_TEMPLATE_APPROVED: "Approved application",
-    DM_TEMPLATE_DENIED: "Denied application",
-    DM_TEMPLATE_KICKED: "Kicked after denial",
-    DM_TEMPLATE_BANNED: "Banned after denial",
+    DM_TEMPLATE_DENIED: "Rejected application",
+    DM_TEMPLATE_KICKED: "Kicked after rejection",
+    DM_TEMPLATE_BANNED: "Banned after rejection",
     DM_TEMPLATE_QUESTIONING: "Questioning opened",
 }
 
@@ -36,16 +36,16 @@ DEFAULT_DM_TEMPLATES = {
         "Your verification application for {server_name} has been approved."
     ),
     DM_TEMPLATE_DENIED: (
-        "Your verification application for {server_name} has been denied."
+        "Your verification application for {server_name} has been rejected."
         "{reason_block}"
     ),
     DM_TEMPLATE_KICKED: (
-        "Your verification application for {server_name} has been denied and you "
-        "have been removed from the server."
+        "Your verification application for {server_name} has been rejected and you "
+        "have been kicked from the server."
         "{reason_block}"
     ),
     DM_TEMPLATE_BANNED: (
-        "Your verification application for {server_name} has been denied and you "
+        "Your verification application for {server_name} has been rejected and you "
         "have been banned from the server."
         "{reason_block}"
     ),

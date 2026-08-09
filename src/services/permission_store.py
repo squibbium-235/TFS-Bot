@@ -60,6 +60,8 @@ DEFAULT_COMMAND_LEVELS = {
     "verification.automod_add": LEVEL_OWNER,
     "verification.automod_remove": LEVEL_OWNER,
     "verification.automod_list": LEVEL_OWNER,
+    "verification.cancel_user": LEVEL_OWNER,
+    "verification.cancel_all": LEVEL_OWNER,
 
     # Permission config commands
     "permissions.view": LEVEL_OWNER,
