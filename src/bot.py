@@ -16,6 +16,7 @@ from .services.permission_store import PermissionStore
 from .utils.permissions import PermissionCommandTree, PermissionDenied
 from .webui.app import start_webui
 from .services.custom_commands.store import CustomCommandStore
+from .services.audit_store import AuditStore
 
 
 class TFSBot(commands.Bot):
@@ -33,6 +34,7 @@ class TFSBot(commands.Bot):
         self.invite_tracker = InviteTrackerStore(config.application_db_path)
         self.invite_tracker_ready = False
         self.verification_departure_suppression: set[tuple[int, int]] = set()
+        self.audit_store = AuditStore(config.application_db_path)
 
         intents = discord.Intents.default()
         intents.guilds = True
@@ -66,6 +68,9 @@ class TFSBot(commands.Bot):
 
         await self.dm_template_store.initialise()
         self.log.info("DM template database initialised.")
+        
+        await self.audit_store.initialise()
+        self.log.info("Audit database initialised.")
 
         await self.invite_tracker.initialise()
         self.log.info("Invite tracker database initialised.")

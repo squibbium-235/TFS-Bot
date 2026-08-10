@@ -46,6 +46,45 @@ class WebUIContext:
             "display_name": self.display_name(),
             **extra,
         }
+        
+    def audit(
+        self,
+        *,
+        action: str,
+        detail: str = "",
+        guild_id: int | None = None,
+    ) -> None:
+        store = getattr(
+            self.bot,
+            "audit_store",
+            None,
+        )
+
+        if store is None:
+            return
+
+        actor_id = str(
+            session.get(
+                "discord_user_id"
+            )
+            or session.get(
+                "username"
+            )
+            or ""
+        ) or None
+
+        self.run_coro(
+            store.log(
+                source="WebUI",
+                actor_id=actor_id,
+                actor_name=(
+                    self.display_name()
+                ),
+                guild_id=guild_id,
+                action=action,
+                detail=detail,
+            )
+        )
 
     def run_coro(
         self,
@@ -86,7 +125,7 @@ class WebUIContext:
         ):
             return "owner"
 
-        return "viewer"
+        return ""
 
     def is_owner(self) -> bool:
         return (

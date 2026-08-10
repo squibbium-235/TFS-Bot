@@ -15,6 +15,7 @@ from src.services.backup_service import (
     BackupService,
 )
 from src.webui.helpers import (
+    has_fresh_authentication,
     require_owner,
     webui_context,
 )
@@ -185,6 +186,16 @@ def index():
                         "",
                     ).strip()
                 )
+                
+                if not (
+                    has_fresh_authentication()
+                ):
+                    raise RuntimeError(
+                        "Backup restore requires "
+                        "a fresh login. Log out, "
+                        "sign back in, and retry "
+                        "within 10 minutes."
+                    )
 
                 if (
                     restore_confirm

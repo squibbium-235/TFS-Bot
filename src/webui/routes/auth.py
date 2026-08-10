@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+import time
 
 from flask import (
     Blueprint,
@@ -341,7 +342,7 @@ def login():
     )
 
     if not login_ok:
-        return render_login_page(
+        return render_login_failure(
             "Incorrect username "
             "or password."
         )
@@ -355,6 +356,15 @@ def login():
     session["username"] = username
     session["display_name"] = username
     session["webui_role"] = "owner"
+    
+    authenticated_at = int(time.time())
+    
+    session["authenticated_at"] = authenticated_at
+    
+    session["last_activity"] = authenticated_at
+    
+    session.permanent = True
+    
 
     return redirect(
         url_for(
@@ -560,6 +570,13 @@ def discord_login_callback():
         session[
             "webui_role"
         ] = webui_role
+        
+        authenticated_at = int(time.time())
+        
+        session["authenticated_at"] = authenticated_at
+        session["last_activity"] = authenticated_at
+        
+        session.permanent = True
 
         return redirect(
             url_for(
@@ -568,8 +585,8 @@ def discord_login_callback():
         )
 
     except Exception as error:
-        return render_login_page(
-            error=str(
+        return render_login_failure(
+            str(
                 error
             )
         )

@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 import threading
+import time
+
+from datetime import timedelta
 
 import discord
-from flask import Flask
+
+from flask import (
+    Flask,
+    redirect,
+    request,
+    session,
+    url_for,
+)
 
 from src.webui.context import (
     WebUIContext,
@@ -13,6 +23,11 @@ from src.webui.helpers import (
 )
 from src.webui.routes import (
     register_blueprints,
+)
+
+from src.webui.csrf import(
+    csrf_token,
+    validate_csrf,
 )
 
 
@@ -75,7 +90,111 @@ def create_webui(
         * 1024
         * 1024
     )
+    
+    app.config.update(
+        PERMANANT_SESSION_LIFETIME=(timedelta(hours=8)),
+    
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax"
+    )
+    
+    @app.before_request
+    def enforce_session_lifetime():
+        if not (session.get("logged_in") is True):
+            return None
+        
+        now = int(time.time())
+        
+        try:
+            authenticated_at = int(session.get("authenticated_at", now,))
+            
+            last_activity = int(session.get("last_activity", now,))
+            
+        except(TypeError, ValueError):
+            session.clear()
+            
+            return redirect(url_for("auth.login"))
+        
+        absolute_age = (now - authenticated_at)
+        idle_age = (now - last_activity)
+        
+        if(absolute_age > 8*60*60 or idle_age > 60*60):
+            session.clear()
+            
+            if(request.endpoint == "auth.login"):
+                return None
+            
+            return redirect(url_for("auth.login"))
+        
+        session["last_activity"] = now
+        session.permanent = True
+        
+        return None 
+    
+    app.before_request(
+        validate_csrf
+    )
+    
+    @app.after_request
+    def audit_webui_change(
+        response,
+    ):
+        if (
+            request.method
+            == "POST"
+            and response.status_code
+            < 400
+            and session.get(
+                "logged_in"
+            )
+            is True
+        ):
+            action = (
+                request.form.get(
+                    "action"
+                )
+                or request.endpoint
+                or "unknown"
+            )
 
+            guild_id = None
+
+            try:
+                raw_guild_id = (
+                    request.form.get(
+                        "guild_id"
+                    )
+                )
+
+                if raw_guild_id:
+                    guild_id = int(
+                        raw_guild_id
+                    )
+
+            except ValueError:
+                pass
+
+            web_context.audit(
+                action=(
+                    f"webui.{action}"
+                ),
+                guild_id=guild_id,
+                detail=(
+                    request.endpoint
+                    or ""
+                ),
+            )
+
+        return response
+
+    @app.context_processor
+    def inject_csrf_token():
+        return {
+            "csrf_token": (
+                csrf_token()
+            )
+        }
+    
     register_blueprints(
         app
     )

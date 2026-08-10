@@ -43,6 +43,9 @@ class StoredApplication:
     submitted_at: str
     updated_at: str
     actioned_at: str | None
+    
+    claimed_by: int | None
+    claimed_at: str | None
 
     @property
     def review_message_url(self) -> str | None:
@@ -78,6 +81,15 @@ class StoredApplication:
     def best_message_url(self) -> str | None:
         return self.log_message_url or self.review_message_url
 
+@dataclass(
+    frozen=True
+)
+class ApplicationNote:
+    id: int
+    application_id: str
+    author_id: int
+    content: str
+    created_at: str
 
 class ApplicationStore:
     def __init__(self, database_path: str) -> None:

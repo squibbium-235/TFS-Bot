@@ -5,17 +5,46 @@ from flask import (
     redirect,
     render_template,
     url_for,
+    session,
 )
 
 from src.webui.context import (
     WebUIContext,
 )
 
+import time
+
 
 WEBUI_CONTEXT_KEY = (
     "tfsbot_webui_context"
 )
 
+
+def has_fresh_authentication(
+    max_age_seconds: int = 600,
+) -> bool:
+    try:
+        authenticated_at = float(
+            session.get(
+                "authenticated_at",
+                0,
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return False
+
+    if authenticated_at <= 0:
+        return False
+
+    return (
+        time.time()
+        - authenticated_at
+        <= max_age_seconds
+    )
 
 def webui_context() -> WebUIContext:
     context = current_app.extensions.get(
