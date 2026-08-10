@@ -9,6 +9,14 @@ import re
 import unicodedata
 import discord
 
+from src.commands.verification.review_claims import (
+    AddApplicationNoteButton,
+    ClaimApplicationButton,
+    ReleaseApplicationClaimButton,
+    ViewApplicationNotesButton,
+    get_claimed_pending_application_or_respond,
+)
+
 from src.services.application_store import (
     APPLICATION_STATUS_APPROVED,
     APPLICATION_STATUS_BANNED,
@@ -1267,14 +1275,31 @@ async def build_verify_page_modal(
     title = f"{form.title[:max_base_title_length]}{page_suffix}"
 
     async def on_submit(
+        self,
         interaction: discord.Interaction,
-        answers: list[FormAnswer],
     ) -> None:
-        await handle_verify_page_submit(
+        result = (
+            await
+            get_claimed_pending_application_or_respond(
+                interaction,
+                self.application_id,
+            )
+        )
+
+        if result is None:
+            return
+
+        _, application = result
+
+        reason = str(
+            self.reason.value
+        ).strip()
+
+        await complete_application_action(
             interaction=interaction,
-            session_id=session_id,
-            page_index=page_index,
-            answers=answers,
+            application=application,
+            action=self.action,
+            reason=reason,
         )
 
     return build_form_modal(
@@ -2160,37 +2185,44 @@ class ApplicationQuestionControlsView(discord.ui.View):
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
         self.application_id = application_id
+        
+        self.add_item(
+            ClaimApplicationButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            ReleaseApplicationClaimButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            AddApplicationNoteButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            ViewApplicationNotesButton(
+                application_id
+            )
+        )
 
     async def get_pending_application_or_respond(
         self,
         interaction: discord.Interaction,
-    ) -> tuple[ApplicationStore, StoredApplication] | None:
-        application_store = get_application_store(interaction.client)
-
-        if application_store is None:
-            await interaction.response.send_message(
-                "The application database is not available.",
-                ephemeral=True,
+    ) -> tuple[
+        ApplicationStore,
+        StoredApplication,
+    ] | None:
+        return await (
+            get_claimed_pending_application_or_respond(
+                interaction,
+                self.application_id,
             )
-            return None
-
-        application = await application_store.get_application(self.application_id)
-
-        if application is None:
-            await interaction.response.send_message(
-                "This application no longer exists.",
-                ephemeral=True,
-            )
-            return None
-
-        if application.status != APPLICATION_STATUS_PENDING:
-            await interaction.response.send_message(
-                f"This application is already `{application.status}`.",
-                ephemeral=True,
-            )
-            return None
-
-        return application_store, application
+        )
 
     @discord.ui.button(
         label="Approve",
@@ -2286,37 +2318,44 @@ class ApplicationReviewView(discord.ui.View):
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
         self.application_id = application_id
+        
+        self.add_item(
+            ClaimApplicationButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            ReleaseApplicationClaimButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            AddApplicationNoteButton(
+                application_id
+            )
+        )
+
+        self.add_item(
+            ViewApplicationNotesButton(
+                application_id
+            )
+        )
 
     async def get_pending_application_or_respond(
         self,
         interaction: discord.Interaction,
-    ) -> tuple[ApplicationStore, StoredApplication] | None:
-        application_store = get_application_store(interaction.client)
-
-        if application_store is None:
-            await interaction.response.send_message(
-                "The application database is not available.",
-                ephemeral=True,
+    ) -> tuple[
+        ApplicationStore,
+        StoredApplication,
+    ] | None:
+        return await (
+            get_claimed_pending_application_or_respond(
+                interaction,
+                self.application_id,
             )
-            return None
-
-        application = await application_store.get_application(self.application_id)
-
-        if application is None:
-            await interaction.response.send_message(
-                "This application no longer exists.",
-                ephemeral=True,
-            )
-            return None
-
-        if application.status != APPLICATION_STATUS_PENDING:
-            await interaction.response.send_message(
-                f"This application is already `{application.status}`.",
-                ephemeral=True,
-            )
-            return None
-
-        return application_store, application
+        )
 
     @discord.ui.button(
         label="Approve",

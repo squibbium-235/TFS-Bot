@@ -18,16 +18,15 @@ from flask import (
 from src.webui.context import (
     WebUIContext,
 )
+from src.webui.csrf import (
+    csrf_token,
+    validate_csrf,
+)
 from src.webui.helpers import (
     WEBUI_CONTEXT_KEY,
 )
 from src.webui.routes import (
     register_blueprints,
-)
-
-from src.webui.csrf import(
-    csrf_token,
-    validate_csrf,
 )
 
 
@@ -83,58 +82,111 @@ def create_webui(
         )
     )
 
-    app.config[
-        "MAX_CONTENT_LENGTH"
-    ] = (
-        10
-        * 1024
-        * 1024
-    )
-    
     app.config.update(
-        PERMANANT_SESSION_LIFETIME=(timedelta(hours=8)),
-    
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax"
+        MAX_CONTENT_LENGTH=(
+            10
+            * 1024
+            * 1024
+        ),
+        PERMANENT_SESSION_LIFETIME=(
+            timedelta(
+                hours=8
+            )
+        ),
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
     )
-    
+
     @app.before_request
     def enforce_session_lifetime():
-        if not (session.get("logged_in") is True):
+        if not (
+            session.get(
+                "logged_in"
+            )
+            is True
+        ):
             return None
-        
-        now = int(time.time())
-        
+
+        now = int(
+            time.time()
+        )
+
         try:
-            authenticated_at = int(session.get("authenticated_at", now,))
-            
-            last_activity = int(session.get("last_activity", now,))
-            
-        except(TypeError, ValueError):
+            authenticated_at = int(
+                session[
+                    "authenticated_at"
+                ]
+            )
+
+            last_activity = int(
+                session[
+                    "last_activity"
+                ]
+            )
+
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
             session.clear()
-            
-            return redirect(url_for("auth.login"))
-        
-        absolute_age = (now - authenticated_at)
-        idle_age = (now - last_activity)
-        
-        if(absolute_age > 8*60*60 or idle_age > 60*60):
+
+            return redirect(
+                url_for(
+                    "auth.login"
+                )
+            )
+
+        absolute_age = (
+            now
+            - authenticated_at
+        )
+
+        idle_age = (
+            now
+            - last_activity
+        )
+
+        if (
+            absolute_age
+            > 8 * 60 * 60
+            or idle_age
+            > 60 * 60
+        ):
             session.clear()
-            
-            if(request.endpoint == "auth.login"):
+
+            if (
+                request.endpoint
+                == "auth.login"
+            ):
                 return None
-            
-            return redirect(url_for("auth.login"))
-        
-        session["last_activity"] = now
+
+            return redirect(
+                url_for(
+                    "auth.login"
+                )
+            )
+
+        session[
+            "last_activity"
+        ] = now
+
         session.permanent = True
-        
-        return None 
-    
+
+        return None
+
     app.before_request(
         validate_csrf
     )
-    
+
+    @app.context_processor
+    def inject_csrf_token():
+        return {
+            "csrf_token": (
+                csrf_token()
+            )
+        }
+
     @app.after_request
     def audit_webui_change(
         response,
@@ -171,30 +223,32 @@ def create_webui(
                         raw_guild_id
                     )
 
-            except ValueError:
-                pass
+            except (
+                TypeError,
+                ValueError,
+            ):
+                guild_id = None
 
-            web_context.audit(
-                action=(
-                    f"webui.{action}"
-                ),
-                guild_id=guild_id,
-                detail=(
-                    request.endpoint
-                    or ""
-                ),
-            )
+            try:
+                web_context.audit(
+                    action=(
+                        f"webui.{action}"
+                    ),
+                    guild_id=guild_id,
+                    detail=(
+                        request.endpoint
+                        or ""
+                    ),
+                )
+
+            except Exception:
+                bot.log.exception(
+                    "Failed to write "
+                    "WebUI audit entry."
+                )
 
         return response
 
-    @app.context_processor
-    def inject_csrf_token():
-        return {
-            "csrf_token": (
-                csrf_token()
-            )
-        }
-    
     register_blueprints(
         app
     )
@@ -226,6 +280,7 @@ def start_webui(
             use_reloader=False,
         ),
         daemon=True,
+        name="TFSBot-WebUI",
     )
 
     thread.start()

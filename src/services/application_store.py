@@ -44,8 +44,8 @@ class StoredApplication:
     updated_at: str
     actioned_at: str | None
     
-    claimed_by: int | None
-    claimed_at: str | None
+    claimed_by: int | None = None
+    claimed_at: str | None = None
 
     @property
     def review_message_url(self) -> str | None:
@@ -136,6 +136,42 @@ class ApplicationStore:
                 table_name="applications",
                 column_name="question_controls_message_id",
                 column_definition="INTEGER",
+            )
+            
+            await self._ensure_column(
+                database=database,
+                table_name="applications",
+                column_name="claimed_by",
+                column_definition="INTEGER",
+            )
+
+            await self._ensure_column(
+                database=database,
+                table_name="applications",
+                column_name="claimed_at",
+                column_definition="TEXT",
+            )
+
+            await database.execute(
+                """
+                CREATE TABLE IF NOT EXISTS application_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    application_id TEXT NOT NULL,
+                    author_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
+            await database.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_application_notes_application
+                ON application_notes (
+                    application_id,
+                    id DESC
+                )
+                """
             )
 
             await database.execute(
@@ -508,6 +544,181 @@ class ApplicationStore:
 
         return previous_lines
 
+    async def claim_application(
+        self,
+        application_id: str,
+        user_id: int,
+    ) -> bool:
+        now = self._now()
+
+        async with aiosqlite.connect(
+            self.database_path
+        ) as database:
+            cursor = await database.execute(
+                """
+                UPDATE applications
+                SET claimed_by = ?,
+                    claimed_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                AND status = ?
+                AND (
+                    claimed_by IS NULL
+                    OR claimed_by = ?
+                )
+                """,
+                (
+                    user_id,
+                    now,
+                    now,
+                    application_id,
+                    APPLICATION_STATUS_PENDING,
+                    user_id,
+                ),
+            )
+
+            await database.commit()
+
+            return (
+                cursor.rowcount
+                > 0
+            )
+
+    async def release_claim(
+        self,
+        application_id: str,
+        user_id: int,
+    ) -> bool:
+        async with aiosqlite.connect(
+            self.database_path
+        ) as database:
+            cursor = await database.execute(
+                """
+                UPDATE applications
+                SET claimed_by = NULL,
+                    claimed_at = NULL,
+                    updated_at = ?
+                WHERE id = ?
+                AND status = ?
+                AND claimed_by = ?
+                """,
+                (
+                    self._now(),
+                    application_id,
+                    APPLICATION_STATUS_PENDING,
+                    user_id,
+                ),
+            )
+
+            await database.commit()
+
+            return (
+                cursor.rowcount
+                > 0
+            )
+
+    async def add_note(
+        self,
+        application_id: str,
+        author_id: int,
+        content: str,
+    ) -> None:
+        content = content.strip()
+
+        if not content:
+            raise ValueError(
+                "Note cannot be empty."
+            )
+
+        application = (
+            await self.get_application(
+                application_id
+            )
+        )
+
+        if application is None:
+            raise ValueError(
+                "Application does not exist."
+            )
+
+        async with aiosqlite.connect(
+            self.database_path
+        ) as database:
+            await database.execute(
+                """
+                INSERT INTO application_notes (
+                    application_id,
+                    author_id,
+                    content,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    application_id,
+                    author_id,
+                    content[:1000],
+                    self._now(),
+                ),
+            )
+
+            await database.commit()
+
+    async def list_notes(
+        self,
+        application_id: str,
+        limit: int = 10,
+    ) -> list[ApplicationNote]:
+        limit = max(
+            1,
+            min(
+                limit,
+                20,
+            ),
+        )
+
+        async with aiosqlite.connect(
+            self.database_path
+        ) as database:
+            database.row_factory = (
+                aiosqlite.Row
+            )
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM application_notes
+                WHERE application_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (
+                    application_id,
+                    limit,
+                ),
+            )
+
+            rows = await cursor.fetchall()
+
+        return [
+            ApplicationNote(
+                id=row["id"],
+                application_id=row[
+                    "application_id"
+                ],
+                author_id=row[
+                    "author_id"
+                ],
+                content=row[
+                    "content"
+                ],
+                created_at=row[
+                    "created_at"
+                ],
+            )
+            for row in rows
+        ]
+
     async def mark_actioned(
         self,
         application_id: str,
@@ -527,7 +738,9 @@ class ApplicationStore:
                     action_reason = ?,
                     dm_sent = ?,
                     updated_at = ?,
-                    actioned_at = ?
+                    actioned_at = ?,
+                    claimed_by = NULL,
+                    claimed_at = NULL
                 WHERE id = ?
                 """,
                 (
@@ -631,4 +844,16 @@ class ApplicationStore:
             submitted_at=row["submitted_at"],
             updated_at=row["updated_at"],
             actioned_at=row["actioned_at"],
+            claimed_by=(
+                row["claimed_by"]
+                if "claimed_by"
+                in row_keys
+                else None
+            ),
+            claimed_at=(
+                row["claimed_at"]
+                if "claimed_at"
+                in row_keys
+                else None
+            ),
         )

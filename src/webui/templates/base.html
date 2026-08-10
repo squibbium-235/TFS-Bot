@@ -10,6 +10,11 @@
 
     <title>{{ title }}</title>
 
+    <meta
+        name="csrf-token"
+        content="{{ csrf_token }}"
+    >
+
     <link
         rel="stylesheet"
         href="{{ url_for('static', filename='css/base.css') }}"
@@ -121,48 +126,9 @@
 
     </main>
 
-    <script>
-        document.addEventListener(
-            "DOMContentLoaded",
-            () => {
-                const token = {{ csrf_token|tojson }};
-
-                document
-                    .querySelectorAll("form")
-                    .forEach((form) => {
-                        const method = (
-                            form.getAttribute("method")
-                            || "get"
-                        ).toLowerCase();
-
-                        if (method !== "post") {
-                            return;
-                        }
-
-                        if (
-                            form.querySelector(
-                                'input[name="_csrf_token"]'
-                            )
-                        ) {
-                            return;
-                        }
-
-                        const input =
-                            document.createElement(
-                                "input"
-                            );
-
-                        input.type = "hidden";
-                        input.name = "_csrf_token";
-                        input.value = token;
-
-                        form.prepend(
-                            input
-                        );
-                    });
-            }
-        );
-    </script>
+    <script
+        src="{{ url_for('static', filename='js/base.js') }}"
+    ></script>
 
     {% block scripts %}{% endblock %}
 
