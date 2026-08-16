@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import sqlite3
+from src.services.database import open_sync_database
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,7 +33,7 @@ class GuildSettingsStore:
         self.initialise()
 
     def initialise(self) -> None:
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS guild_settings (
@@ -160,7 +160,7 @@ class GuildSettingsStore:
         if not cleaned:
             raise ValueError("Automod term cannot be empty.")
 
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 """
                 INSERT OR IGNORE INTO verification_automod_terms (
@@ -178,7 +178,7 @@ class GuildSettingsStore:
     def remove_automod_term(self, guild_id: int, term: str) -> bool:
         cleaned = self._normalise_automod_term(term)
 
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             cursor = database.execute(
                 """
                 DELETE FROM verification_automod_terms
@@ -193,7 +193,7 @@ class GuildSettingsStore:
         return cursor.rowcount > 0
 
     def list_automod_terms(self, guild_id: int) -> list[str]:
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             cursor = database.execute(
                 """
                 SELECT term
@@ -209,7 +209,7 @@ class GuildSettingsStore:
         return [str(row[0]) for row in rows]
 
     def clear_automod_terms(self, guild_id: int) -> None:
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 """
                 DELETE FROM verification_automod_terms
@@ -223,7 +223,7 @@ class GuildSettingsStore:
     def set_automod_terms(self, guild_id: int, terms: list[str]) -> None:
         cleaned_terms = self._normalise_automod_terms_list(terms)
 
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 """
                 DELETE FROM verification_automod_terms
@@ -252,7 +252,7 @@ class GuildSettingsStore:
 
         added_count = 0
 
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             for term in cleaned_terms:
                 cursor = database.execute(
                     """
@@ -299,7 +299,7 @@ class GuildSettingsStore:
         )
 
     def _get_value(self, guild_id: int, setting_key: str) -> str | None:
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             cursor = database.execute(
                 """
                 SELECT setting_value
@@ -330,7 +330,7 @@ class GuildSettingsStore:
             return None
 
     def _delete_value(self, guild_id: int, setting_key: str) -> None:
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 """
                 DELETE FROM guild_settings
@@ -375,7 +375,7 @@ class GuildSettingsStore:
                 VALUES (?, ?, ?, ?)
             """
 
-        with sqlite3.connect(self.database_path) as database:
+        with open_sync_database(self.database_path) as database:
             database.execute(
                 query,
                 (

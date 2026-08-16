@@ -6,7 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-import aiosqlite
+from src.services.database import (
+    DatabaseRow,
+    open_database,
+)
 
 
 DM_TEMPLATE_APPROVED = "approved"
@@ -96,7 +99,7 @@ class DmTemplateStore:
     async def initialise(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS guild_dm_templates (
@@ -118,8 +121,8 @@ class DmTemplateStore:
     ) -> StoredDmTemplate:
         template_key = normalise_template_key(template_key)
 
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -169,7 +172,7 @@ class DmTemplateStore:
         if not template_text:
             raise ValueError("Template text cannot be empty.")
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO guild_dm_templates (
@@ -201,7 +204,7 @@ class DmTemplateStore:
     ) -> None:
         template_key = normalise_template_key(template_key)
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 DELETE FROM guild_dm_templates

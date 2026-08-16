@@ -5,8 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import aiosqlite
 import discord
+
+from src.services.database import (
+    DatabaseRow,
+    open_database,
+)
 
 from src.services.forms.form_loader import FormConfig, FormLoader
 from src.utils.form_builder import FormAnswer, FormQuestion
@@ -152,7 +156,7 @@ class FormStore:
     async def initialise(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS forms (
@@ -271,7 +275,7 @@ class FormStore:
         form = self._load_form_or_default(form_key, json_path)
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO forms (
@@ -340,7 +344,7 @@ class FormStore:
         form = self._load_form_or_default(form_key, json_path)
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 DELETE FROM form_questions
@@ -444,7 +448,7 @@ class FormStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO forms (
@@ -488,7 +492,7 @@ class FormStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             cursor = await database.execute(
                 """
                 UPDATE forms
@@ -522,7 +526,7 @@ class FormStore:
         if form_key == FORM_KEY_VERIFICATION:
             raise ValueError("The built-in verification form cannot be deleted.")
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute("PRAGMA foreign_keys = ON")
 
             cursor = await database.execute(
@@ -589,7 +593,7 @@ class FormStore:
         cleaned_question_keys = [key.lower().strip() for key in question_keys if key.strip()]
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             for index, question_key in enumerate(cleaned_question_keys, start=1):
                 await database.execute(
                     """
@@ -627,7 +631,7 @@ class FormStore:
         form_key = form_key.lower().strip()
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO published_forms (
@@ -668,8 +672,8 @@ class FormStore:
         guild_id: int,
         message_id: int,
     ) -> StoredPublishedForm | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -707,7 +711,7 @@ class FormStore:
     ) -> None:
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO form_submissions (
@@ -760,8 +764,8 @@ class FormStore:
         form_key = form_key.lower().strip()
         limit = max(1, min(limit, 25))
 
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             submission_rows = await (
                 await database.execute(
@@ -818,8 +822,8 @@ class FormStore:
         self,
         guild_id: int,
     ) -> list[StoredForm]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -873,8 +877,8 @@ class FormStore:
         guild_id: int,
         form_key: str,
     ) -> FormConfig | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             form_cursor = await database.execute(
                 """
@@ -936,8 +940,8 @@ class FormStore:
             json_path=fallback_json_path,
         )
 
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -968,8 +972,8 @@ class FormStore:
             json_path=fallback_json_path,
         )
 
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -1020,7 +1024,7 @@ class FormStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             cursor = await database.execute(
                 """
                 SELECT COALESCE(MAX(sort_order), 0) + 1
@@ -1134,7 +1138,7 @@ class FormStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE form_questions
@@ -1191,7 +1195,7 @@ class FormStore:
             json_path=fallback_json_path,
         )
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             cursor = await database.execute(
                 """
                 DELETE FROM form_questions
@@ -1251,7 +1255,7 @@ class FormStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             for index, question in enumerate(questions_without_target, start=1):
                 await database.execute(
                     """
@@ -1282,8 +1286,8 @@ class FormStore:
         guild_id: int,
         form_key: str,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -1422,7 +1426,7 @@ class FormStore:
     def _int_to_bool(value: int) -> bool:
         return bool(value)
 
-    def _row_to_question(self, row: aiosqlite.Row) -> StoredFormQuestion:
+    def _row_to_question(self, row: DatabaseRow) -> StoredFormQuestion:
         return StoredFormQuestion(
             id=row["id"],
             guild_id=row["guild_id"],

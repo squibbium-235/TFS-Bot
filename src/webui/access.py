@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
-
 from datetime import (
     datetime,
     timezone,
@@ -10,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import discord
+
+from src.services.database import (
+    DatabaseError,
+    open_sync_database,
+)
 
 
 class WebUIAccessManager:
@@ -60,7 +63,7 @@ class WebUIAccessManager:
             exist_ok=True,
         )
 
-        with sqlite3.connect(
+        with open_sync_database(
             database_path
         ) as database:
             database.execute(
@@ -86,7 +89,7 @@ class WebUIAccessManager:
     ) -> tuple[int, ...]:
         self.ensure_tables()
 
-        with sqlite3.connect(
+        with open_sync_database(
             self.database_path()
         ) as database:
             rows = database.execute(
@@ -124,7 +127,7 @@ class WebUIAccessManager:
             timezone.utc
         ).isoformat()
 
-        with sqlite3.connect(
+        with open_sync_database(
             self.database_path()
         ) as database:
             database.execute(
@@ -207,7 +210,7 @@ class WebUIAccessManager:
                 )
             )
 
-        except sqlite3.Error:
+        except DatabaseError:
             stored_role_ids = ()
 
         if stored_role_ids:
@@ -238,7 +241,7 @@ class WebUIAccessManager:
                 )
             )
 
-        except sqlite3.Error:
+        except DatabaseError:
             stored_role_ids = ()
 
         if stored_role_ids:

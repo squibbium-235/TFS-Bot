@@ -9,6 +9,12 @@ from typing import Any
 
 import aiosqlite
 
+from src.services.database import (
+    DatabaseIntegrityError,
+    DatabaseRow,
+    open_database,
+)
+
 from src.services.permission_store import(
     LEVEL_PUBLIC,
     normalise_level,
@@ -80,7 +86,7 @@ class CustomCommandStore:
         return name
     
     async def initialise(self) -> None:
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
             await database.execute(
@@ -121,7 +127,7 @@ class CustomCommandStore:
         
         now = self._now()
         
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             try:
                 await database.execute(
                     """
@@ -171,7 +177,7 @@ class CustomCommandStore:
                     ),
                 )
                 
-            except aiosqlite.IntegrityError as error:
+            except DatabaseIntegrityError as error:
                 raise ValueError(
                     f"Custom command \"{name}\" already exists."
                 ) from error
@@ -185,10 +191,10 @@ class CustomCommandStore:
     ) -> CustomCommand | None:
         name = self.normalise_name(name)
         
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
-            database.row_factory = aiosqlite.Row
+            database.row_factory = DatabaseRow
             
             cursor = await database.execute(
                 """
@@ -214,10 +220,10 @@ class CustomCommandStore:
         self,
         guild_id: int,
     ) -> list[CustomCommand]:
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
-            database.row_factory = aiosqlite.Row
+            database.row_factory = DatabaseRow
             
             cursor = await database.execute(
                 """
@@ -243,7 +249,7 @@ class CustomCommandStore:
     ) -> bool:
         name = self.normalise_name(name)
         
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             cursor = await database.execute(
                 """
                 DELETE FROM custom_commands
@@ -339,7 +345,7 @@ class CustomCommandStore:
             )
         )
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
             cursor = await database.execute(
@@ -368,7 +374,7 @@ class CustomCommandStore:
         if old_name == new_name:
             return True
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
             cursor = await database.execute(
@@ -656,7 +662,7 @@ class CustomCommandStore:
         self,
         command: CustomCommand,
     ) -> None:
-        async with aiosqlite.connect(
+        async with open_database(
             self.db_path
         ) as database:
             await database.execute(
@@ -682,7 +688,7 @@ class CustomCommandStore:
 
     @staticmethod
     def _from_row(
-        row: aiosqlite.Row,
+        row: DatabaseRow,
     ) -> CustomCommand:
         try:
             actions = json.loads(

@@ -11,6 +11,12 @@ from typing import Any
 
 import discord
 
+from src.services.database import (
+    DatabaseError,
+    DatabaseRow,
+    open_sync_database,
+)
+
 from flask import (
     Blueprint,
     render_template,
@@ -291,11 +297,11 @@ def count_applications_for_overview(
     )
 
     try:
-        with sqlite3.connect(
+        with open_sync_database(
             database_path
         ) as database:
             database.row_factory = (
-                sqlite3.Row
+                DatabaseRow
             )
 
             status_rows = (
@@ -414,7 +420,7 @@ def count_applications_for_overview(
                 .fetchall()
             )
 
-    except sqlite3.Error:
+    except DatabaseError:
         return (
             empty_application_stats()
         )

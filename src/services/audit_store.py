@@ -9,6 +9,11 @@ from pathlib import Path
 
 import aiosqlite
 
+from src.services.database import (
+    DatabaseRow,
+    open_database,
+)
+
 
 @dataclass(
     frozen=True
@@ -36,7 +41,7 @@ class AuditStore:
     async def initialise(
         self,
     ) -> None:
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             await database.execute(
@@ -73,7 +78,7 @@ class AuditStore:
         guild_id: int | None = None,
         detail: str = "",
     ) -> None:
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             await database.execute(
@@ -114,11 +119,11 @@ class AuditStore:
             ),
         )
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             database.row_factory = (
-                aiosqlite.Row
+                DatabaseRow
             )
 
             rows = await (

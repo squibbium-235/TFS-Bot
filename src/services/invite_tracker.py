@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-import aiosqlite
 import discord
+
+from src.services.database import (
+    DatabaseRow,
+    open_database,
+)
 
 
 @dataclass(frozen=True)
@@ -27,7 +31,7 @@ class InviteTrackerStore:
         self.database_path = database_path_object
 
     async def initialise(self) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS invite_snapshots (
@@ -70,7 +74,7 @@ class InviteTrackerStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 "DELETE FROM invite_snapshots WHERE guild_id = ?",
                 (guild.id,),
@@ -112,7 +116,7 @@ class InviteTrackerStore:
 
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO invite_snapshots (
@@ -145,7 +149,7 @@ class InviteTrackerStore:
         guild_id: int,
         invite_code: str,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 DELETE FROM invite_snapshots
@@ -192,8 +196,8 @@ class InviteTrackerStore:
         guild_id: int,
         user_id: int,
     ) -> TrackedInviteInfo | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -226,7 +230,7 @@ class InviteTrackerStore:
         inviter_name = str(inviter) if inviter is not None else None
         uses = invite.uses if invite is not None else None
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO member_invites (
@@ -278,8 +282,8 @@ class InviteTrackerStore:
         self,
         guild_id: int,
     ) -> dict[str, dict[str, int | None]]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -325,7 +329,7 @@ class InviteTrackerStore:
         )
 
     @staticmethod
-    def _row_to_info(row: aiosqlite.Row) -> TrackedInviteInfo:
+    def _row_to_info(row: DatabaseRow) -> TrackedInviteInfo:
         return TrackedInviteInfo(
             guild_id=int(row["guild_id"]),
             user_id=int(row["user_id"]),

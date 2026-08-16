@@ -3,8 +3,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import aiosqlite
-
+from src.services.database import (
+    DatabaseRow,
+    open_database,
+)
 
 LEVEL_PUBLIC = "public"
 LEVEL_STAFF = "staff"
@@ -125,7 +127,7 @@ class PermissionStore:
         self.db_path = str(db_path_object)
 
     async def initialise(self) -> None:
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS permission_roles (
@@ -158,8 +160,8 @@ class PermissionStore:
         command_key = normalise_command_key(command_key)
         parent_key = command_key.split(".")[0]
 
-        async with aiosqlite.connect(self.db_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -214,7 +216,7 @@ class PermissionStore:
         command_key = normalise_command_key(command_key)
         level = normalise_level(level)
 
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 INSERT INTO permission_command_levels (
@@ -238,7 +240,7 @@ class PermissionStore:
     ) -> None:
         command_key = normalise_command_key(command_key)
 
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 DELETE FROM permission_command_levels
@@ -256,8 +258,8 @@ class PermissionStore:
     ) -> dict[str, str]:
         custom_levels: dict[str, str] = {}
 
-        async with aiosqlite.connect(self.db_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -301,7 +303,7 @@ class PermissionStore:
         if level == LEVEL_PUBLIC:
             raise ValueError("Public does not use a role.")
 
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 INSERT INTO permission_roles (
@@ -328,7 +330,7 @@ class PermissionStore:
         if level == LEVEL_PUBLIC:
             raise ValueError("Public does not use a role.")
 
-        async with aiosqlite.connect(self.db_path) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 DELETE FROM permission_roles
@@ -347,8 +349,8 @@ class PermissionStore:
     ) -> int | None:
         level = normalise_level(level)
 
-        async with aiosqlite.connect(self.db_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """

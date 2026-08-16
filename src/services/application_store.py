@@ -9,6 +9,13 @@ import aiosqlite
 
 from src.utils.form_builder import FormAnswer
 
+from src.services.database import (
+    AsyncDatabaseConnection,
+    DatabaseIntegrityError,
+    DatabaseRow,
+    open_database,
+)
+
 
 APPLICATION_STATUS_PENDING = "pending"
 APPLICATION_STATUS_APPROVED = "approved"
@@ -98,7 +105,7 @@ class ApplicationStore:
     async def initialise(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS applications (
@@ -206,7 +213,7 @@ class ApplicationStore:
     ) -> None:
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 INSERT INTO applications (
@@ -239,7 +246,7 @@ class ApplicationStore:
         review_channel_id: int,
         review_message_id: int,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE applications
@@ -264,7 +271,7 @@ class ApplicationStore:
         log_channel_id: int,
         log_message_id: int,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE applications
@@ -288,7 +295,7 @@ class ApplicationStore:
         application_id: str,
         questioning_thread_id: int | None,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE applications
@@ -310,7 +317,7 @@ class ApplicationStore:
         application_id: str,
         question_controls_message_id: int | None,
     ) -> None:
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE applications
@@ -331,8 +338,8 @@ class ApplicationStore:
         self,
         application_id: str,
     ) -> StoredApplication | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -354,8 +361,8 @@ class ApplicationStore:
         self,
         questioning_thread_id: int,
     ) -> StoredApplication | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -379,8 +386,8 @@ class ApplicationStore:
         self,
         user_id: int,
     ) -> StoredApplication | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -408,8 +415,8 @@ class ApplicationStore:
         guild_id: int,
         user_id: int,
     ) -> StoredApplication | None:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -439,8 +446,8 @@ class ApplicationStore:
         self,
         guild_id: int,
     ) -> list[StoredApplication]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -458,8 +465,8 @@ class ApplicationStore:
         return [self._row_to_application(row) for row in rows]
 
     async def list_pending_applications(self) -> list[StoredApplication]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -476,8 +483,8 @@ class ApplicationStore:
         return [self._row_to_application(row) for row in rows]
 
     async def list_applications_with_log_messages(self) -> list[StoredApplication]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -499,8 +506,8 @@ class ApplicationStore:
         exclude_application_id: str | None = None,
         limit: int = 5,
     ) -> list[str]:
-        async with aiosqlite.connect(self.database_path) as database:
-            database.row_factory = aiosqlite.Row
+        async with open_database(self.database_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -551,7 +558,7 @@ class ApplicationStore:
     ) -> bool:
         now = self._now()
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             cursor = await database.execute(
@@ -589,7 +596,7 @@ class ApplicationStore:
         application_id: str,
         user_id: int,
     ) -> bool:
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             cursor = await database.execute(
@@ -641,7 +648,7 @@ class ApplicationStore:
                 "Application does not exist."
             )
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             await database.execute(
@@ -677,11 +684,11 @@ class ApplicationStore:
             ),
         )
 
-        async with aiosqlite.connect(
+        async with open_database(
             self.database_path
         ) as database:
             database.row_factory = (
-                aiosqlite.Row
+                DatabaseRow
             )
 
             cursor = await database.execute(
@@ -729,7 +736,7 @@ class ApplicationStore:
     ) -> None:
         now = self._now()
 
-        async with aiosqlite.connect(self.database_path) as database:
+        async with open_database(self.database_path) as database:
             await database.execute(
                 """
                 UPDATE applications
@@ -756,104 +763,197 @@ class ApplicationStore:
 
             await database.commit()
 
-    @staticmethod
-    async def _ensure_column(
-        database: aiosqlite.Connection,
-        table_name: str,
-        column_name: str,
-        column_definition: str,
-    ) -> None:
-        cursor = await database.execute(f"PRAGMA table_info({table_name})")
-        rows = await cursor.fetchall()
-        existing_columns = {row[1] for row in rows}
-
-        if column_name in existing_columns:
-            return
-
-        await database.execute(
-            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
-        )
-
-    @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
-    @staticmethod
-    def _serialise_answers(answers: list[FormAnswer]) -> str:
-        return json.dumps(
-            [
-                {
-                    "key": answer.key,
-                    "label": answer.label,
-                    "value": answer.value,
-                }
-                for answer in answers
-            ],
-            ensure_ascii=False,
-        )
-
-    @staticmethod
-    def _deserialise_answers(raw_json: str) -> list[FormAnswer]:
-        raw_answers = json.loads(raw_json)
-
-        return [
-            FormAnswer(
-                key=str(answer.get("key") or answer.get("label") or "unknown"),
-                label=str(answer.get("label", "")),
-                value=str(answer.get("value", "")),
+        @staticmethod
+        async def _ensure_column(
+            database: AsyncDatabaseConnection,
+            table_name: str,
+            column_name: str,
+            column_definition: str,
+        ) -> None:
+            cursor = await database.execute(
+                f"PRAGMA table_info({table_name})"
             )
-            for answer in raw_answers
-        ]
+            rows = await cursor.fetchall()
 
-    @staticmethod
-    def _bool_to_int(value: bool | None) -> int | None:
-        if value is None:
-            return None
+            existing_columns = {
+                row[1]
+                for row in rows
+            }
 
-        return 1 if value else 0
+            if column_name in existing_columns:
+                return
 
-    @staticmethod
-    def _int_to_bool(value: int | None) -> bool | None:
-        if value is None:
-            return None
+            await database.execute(
+                f"ALTER TABLE {table_name} "
+                f"ADD COLUMN {column_name} "
+                f"{column_definition}"
+            )
+                
+        @staticmethod
+        async def _ensure_column(
+            database: AsyncDatabaseConnection,
+            table_name: str,
+            column_name: str,
+            column_definition: str,
+        ) -> None:
+            cursor = await database.execute(
+                f"PRAGMA table_info({table_name})"
+            )
 
-        return bool(value)
+            rows = await cursor.fetchall()
 
-    def _row_to_application(self, row: aiosqlite.Row) -> StoredApplication:
-        row_keys = set(row.keys())
+            existing_columns = {
+                row[1]
+                for row in rows
+            }
 
-        return StoredApplication(
-            id=row["id"],
-            guild_id=row["guild_id"],
-            user_id=row["user_id"],
-            status=row["status"],
-            answers=self._deserialise_answers(row["answers_json"]),
-            review_channel_id=row["review_channel_id"],
-            review_message_id=row["review_message_id"],
-            log_channel_id=row["log_channel_id"],
-            log_message_id=row["log_message_id"],
-            questioning_thread_id=row["questioning_thread_id"],
-            question_controls_message_id=(
-                row["question_controls_message_id"]
-                if "question_controls_message_id" in row_keys
-                else None
-            ),
-            moderator_id=row["moderator_id"],
-            action_reason=row["action_reason"],
-            dm_sent=self._int_to_bool(row["dm_sent"]),
-            submitted_at=row["submitted_at"],
-            updated_at=row["updated_at"],
-            actioned_at=row["actioned_at"],
-            claimed_by=(
-                row["claimed_by"]
-                if "claimed_by"
-                in row_keys
-                else None
-            ),
-            claimed_at=(
-                row["claimed_at"]
-                if "claimed_at"
-                in row_keys
-                else None
-            ),
-        )
+            if column_name in existing_columns:
+                return
+
+            await database.execute(
+                f"ALTER TABLE {table_name} "
+                f"ADD COLUMN {column_name} "
+                f"{column_definition}"
+            )
+
+        @staticmethod
+        def _now() -> str:
+            return datetime.now(
+                timezone.utc
+            ).isoformat()
+
+        @staticmethod
+        def _serialise_answers(
+            answers: list[FormAnswer],
+        ) -> str:
+            return json.dumps(
+                [
+                    {
+                        "key": answer.key,
+                        "label": answer.label,
+                        "value": answer.value,
+                    }
+                    for answer in answers
+                ],
+                ensure_ascii=False,
+            )
+
+        @staticmethod
+        def _deserialise_answers(
+            raw_json: str,
+        ) -> list[FormAnswer]:
+            raw_answers = json.loads(
+                raw_json
+            )
+
+            return [
+                FormAnswer(
+                    key=str(
+                        answer.get("key")
+                        or answer.get("label")
+                        or "unknown"
+                    ),
+                    label=str(
+                        answer.get(
+                            "label",
+                            "",
+                        )
+                    ),
+                    value=str(
+                        answer.get(
+                            "value",
+                            "",
+                        )
+                    ),
+                )
+                for answer in raw_answers
+            ]
+
+        @staticmethod
+        def _bool_to_int(
+            value: bool | None,
+        ) -> int | None:
+            if value is None:
+                return None
+
+            return 1 if value else 0
+
+        @staticmethod
+        def _int_to_bool(
+            value: int | None,
+        ) -> bool | None:
+            if value is None:
+                return None
+
+            return bool(value)
+
+        def _row_to_application(
+            self,
+            row: DatabaseRow,
+        ) -> StoredApplication:
+            row_keys = set(
+                row.keys()
+            )
+
+            return StoredApplication(
+                id=row["id"],
+                guild_id=row["guild_id"],
+                user_id=row["user_id"],
+                status=row["status"],
+                answers=self._deserialise_answers(
+                    row["answers_json"]
+                ),
+                review_channel_id=(
+                    row["review_channel_id"]
+                ),
+                review_message_id=(
+                    row["review_message_id"]
+                ),
+                log_channel_id=(
+                    row["log_channel_id"]
+                ),
+                log_message_id=(
+                    row["log_message_id"]
+                ),
+                questioning_thread_id=(
+                    row["questioning_thread_id"]
+                ),
+                question_controls_message_id=(
+                    row[
+                        "question_controls_message_id"
+                    ]
+                    if (
+                        "question_controls_message_id"
+                        in row_keys
+                    )
+                    else None
+                ),
+                moderator_id=(
+                    row["moderator_id"]
+                ),
+                action_reason=(
+                    row["action_reason"]
+                ),
+                dm_sent=self._int_to_bool(
+                    row["dm_sent"]
+                ),
+                submitted_at=(
+                    row["submitted_at"]
+                ),
+                updated_at=(
+                    row["updated_at"]
+                ),
+                actioned_at=(
+                    row["actioned_at"]
+                ),
+                claimed_by=(
+                    row["claimed_by"]
+                    if "claimed_by" in row_keys
+                    else None
+                ),
+                claimed_at=(
+                    row["claimed_at"]
+                    if "claimed_at" in row_keys
+                    else None
+                ),
+            )
