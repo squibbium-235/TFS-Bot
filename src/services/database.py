@@ -155,6 +155,77 @@ async def open_database(
     finally:
         await database.close()
 
+def create_database_snapshot(
+    source_path: DatabasePath,
+    snapshot_path: DatabasePath,
+) -> None:
+    source = Path(source_path)
+    snapshot = Path(snapshot_path)
+
+    if source.resolve() == snapshot.resolve():
+        raise ValueError(
+            "Database snapshot path must be "
+            "different from the source path."
+        )
+
+    snapshot.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    if snapshot.exists():
+        snapshot.unlink()
+
+    source_database = (
+        _open_sqlcipher_connection(
+            source
+        )
+    )
+
+    snapshot_database = (
+        _open_sqlcipher_connection(
+            snapshot
+        )
+    )
+
+    try:
+        source_database.backup(
+            snapshot_database
+        )
+
+        integrity = (
+            snapshot_database.execute(
+                "PRAGMA integrity_check;"
+            ).fetchone()
+        )
+
+        if (
+            integrity is None
+            or integrity[0] != "ok"
+        ):
+            raise DatabaseError(
+                "Database snapshot failed "
+                "integrity check."
+            )
+
+        cipher_errors = (
+            snapshot_database.execute(
+                """
+                PRAGMA
+                    cipher_integrity_check;
+                """
+            ).fetchall()
+        )
+
+        if cipher_errors:
+            raise DatabaseError(
+                "Database snapshot failed "
+                "SQLCipher integrity check."
+            )
+
+    finally:
+        snapshot_database.close()
+        source_database.close()
 
 @contextmanager
 def open_sync_database(

@@ -762,198 +762,172 @@ class ApplicationStore:
             )
 
             await database.commit()
-
-        @staticmethod
-        async def _ensure_column(
-            database: AsyncDatabaseConnection,
-            table_name: str,
-            column_name: str,
-            column_definition: str,
-        ) -> None:
-            cursor = await database.execute(
-                f"PRAGMA table_info({table_name})"
-            )
-            rows = await cursor.fetchall()
-
-            existing_columns = {
-                row[1]
-                for row in rows
-            }
-
-            if column_name in existing_columns:
-                return
-
-            await database.execute(
-                f"ALTER TABLE {table_name} "
-                f"ADD COLUMN {column_name} "
-                f"{column_definition}"
-            )
                 
-        @staticmethod
-        async def _ensure_column(
-            database: AsyncDatabaseConnection,
-            table_name: str,
-            column_name: str,
-            column_definition: str,
-        ) -> None:
-            cursor = await database.execute(
-                f"PRAGMA table_info({table_name})"
-            )
+    @staticmethod
+    async def _ensure_column(
+        database: AsyncDatabaseConnection,
+        table_name: str,
+        column_name: str,
+        column_definition: str,
+    ) -> None:
+        cursor = await database.execute(
+            f"PRAGMA table_info({table_name})"
+        )
 
-            rows = await cursor.fetchall()
+        rows = await cursor.fetchall()
 
-            existing_columns = {
-                row[1]
-                for row in rows
-            }
+        existing_columns = {
+            row[1]
+            for row in rows
+        }
 
-            if column_name in existing_columns:
-                return
+        if column_name in existing_columns:
+            return
 
-            await database.execute(
-                f"ALTER TABLE {table_name} "
-                f"ADD COLUMN {column_name} "
-                f"{column_definition}"
-            )
+        await database.execute(
+            f"ALTER TABLE {table_name} "
+            f"ADD COLUMN {column_name} "
+            f"{column_definition}"
+        )
 
-        @staticmethod
-        def _now() -> str:
-            return datetime.now(
-                timezone.utc
-            ).isoformat()
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(
+            timezone.utc
+        ).isoformat()
 
-        @staticmethod
-        def _serialise_answers(
-            answers: list[FormAnswer],
-        ) -> str:
-            return json.dumps(
-                [
-                    {
-                        "key": answer.key,
-                        "label": answer.label,
-                        "value": answer.value,
-                    }
-                    for answer in answers
-                ],
-                ensure_ascii=False,
-            )
+    @staticmethod
+    def _serialise_answers(
+        answers: list[FormAnswer],
+    ) -> str:
+        return json.dumps(
+            [
+                {
+                    "key": answer.key,
+                    "label": answer.label,
+                    "value": answer.value,
+                }
+                for answer in answers
+            ],
+            ensure_ascii=False,
+        )
 
-        @staticmethod
-        def _deserialise_answers(
-            raw_json: str,
-        ) -> list[FormAnswer]:
-            raw_answers = json.loads(
-                raw_json
-            )
+    @staticmethod
+    def _deserialise_answers(
+        raw_json: str,
+    ) -> list[FormAnswer]:
+        raw_answers = json.loads(
+            raw_json
+        )
 
-            return [
-                FormAnswer(
-                    key=str(
-                        answer.get("key")
-                        or answer.get("label")
-                        or "unknown"
-                    ),
-                    label=str(
-                        answer.get(
-                            "label",
-                            "",
-                        )
-                    ),
-                    value=str(
-                        answer.get(
-                            "value",
-                            "",
-                        )
-                    ),
-                )
-                for answer in raw_answers
-            ]
-
-        @staticmethod
-        def _bool_to_int(
-            value: bool | None,
-        ) -> int | None:
-            if value is None:
-                return None
-
-            return 1 if value else 0
-
-        @staticmethod
-        def _int_to_bool(
-            value: int | None,
-        ) -> bool | None:
-            if value is None:
-                return None
-
-            return bool(value)
-
-        def _row_to_application(
-            self,
-            row: DatabaseRow,
-        ) -> StoredApplication:
-            row_keys = set(
-                row.keys()
-            )
-
-            return StoredApplication(
-                id=row["id"],
-                guild_id=row["guild_id"],
-                user_id=row["user_id"],
-                status=row["status"],
-                answers=self._deserialise_answers(
-                    row["answers_json"]
+        return [
+            FormAnswer(
+                key=str(
+                    answer.get("key")
+                    or answer.get("label")
+                    or "unknown"
                 ),
-                review_channel_id=(
-                    row["review_channel_id"]
-                ),
-                review_message_id=(
-                    row["review_message_id"]
-                ),
-                log_channel_id=(
-                    row["log_channel_id"]
-                ),
-                log_message_id=(
-                    row["log_message_id"]
-                ),
-                questioning_thread_id=(
-                    row["questioning_thread_id"]
-                ),
-                question_controls_message_id=(
-                    row[
-                        "question_controls_message_id"
-                    ]
-                    if (
-                        "question_controls_message_id"
-                        in row_keys
+                label=str(
+                    answer.get(
+                        "label",
+                        "",
                     )
-                    else None
                 ),
-                moderator_id=(
-                    row["moderator_id"]
-                ),
-                action_reason=(
-                    row["action_reason"]
-                ),
-                dm_sent=self._int_to_bool(
-                    row["dm_sent"]
-                ),
-                submitted_at=(
-                    row["submitted_at"]
-                ),
-                updated_at=(
-                    row["updated_at"]
-                ),
-                actioned_at=(
-                    row["actioned_at"]
-                ),
-                claimed_by=(
-                    row["claimed_by"]
-                    if "claimed_by" in row_keys
-                    else None
-                ),
-                claimed_at=(
-                    row["claimed_at"]
-                    if "claimed_at" in row_keys
-                    else None
+                value=str(
+                    answer.get(
+                        "value",
+                        "",
+                    )
                 ),
             )
+            for answer in raw_answers
+        ]
+
+    @staticmethod
+    def _bool_to_int(
+        value: bool | None,
+    ) -> int | None:
+        if value is None:
+            return None
+
+        return 1 if value else 0
+
+    @staticmethod
+    def _int_to_bool(
+        value: int | None,
+    ) -> bool | None:
+        if value is None:
+            return None
+
+        return bool(value)
+
+    def _row_to_application(
+        self,
+        row: DatabaseRow,
+    ) -> StoredApplication:
+        row_keys = set(
+            row.keys()
+        )
+
+        return StoredApplication(
+            id=row["id"],
+            guild_id=row["guild_id"],
+            user_id=row["user_id"],
+            status=row["status"],
+            answers=self._deserialise_answers(
+                row["answers_json"]
+            ),
+            review_channel_id=(
+                row["review_channel_id"]
+            ),
+            review_message_id=(
+                row["review_message_id"]
+            ),
+            log_channel_id=(
+                row["log_channel_id"]
+            ),
+            log_message_id=(
+                row["log_message_id"]
+            ),
+            questioning_thread_id=(
+                row["questioning_thread_id"]
+            ),
+            question_controls_message_id=(
+                row[
+                    "question_controls_message_id"
+                ]
+                if (
+                    "question_controls_message_id"
+                    in row_keys
+                )
+                else None
+            ),
+            moderator_id=(
+                row["moderator_id"]
+            ),
+            action_reason=(
+                row["action_reason"]
+            ),
+            dm_sent=self._int_to_bool(
+                row["dm_sent"]
+            ),
+            submitted_at=(
+                row["submitted_at"]
+            ),
+            updated_at=(
+                row["updated_at"]
+            ),
+            actioned_at=(
+                row["actioned_at"]
+            ),
+            claimed_by=(
+                row["claimed_by"]
+                if "claimed_by" in row_keys
+                else None
+            ),
+            claimed_at=(
+                row["claimed_at"]
+                if "claimed_at" in row_keys
+                else None
+            ),
+        )
