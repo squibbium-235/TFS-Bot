@@ -70,6 +70,9 @@ class TFSBot(commands.Bot):
         
         await self.moderation_store.initialise()
         self.log.info("Moderation database initialised.")
+        
+        await self.load_extension("src.commands.modprofile.modprofile")
+        self.log.info( "Loading moderation profile commands...")
 
         await self.dm_template_store.initialise()
         self.log.info("DM template database initialised.")
