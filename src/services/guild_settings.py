@@ -13,6 +13,7 @@ SETTING_VERIFICATION_FORM_KEY = "verification_form_key"
 SETTING_APPROVED_ADD_ROLE_ID = "approved_add_role_id"
 SETTING_APPROVED_REMOVE_ROLE_ID = "approved_remove_role_id"
 SETTING_AUTOMOD_ENABLED = "automod_enabled"
+SETTING_MODERATION_LOG_CHANNEL_ID = ("moderation_log_channel_id")
 
 # Optional deployment-provided preset. Put one blocked term per line. Lines starting with # are ignored.
 # This keeps the repo from hardcoding nasty terms while still letting the owner load a default list.
@@ -118,6 +119,37 @@ class GuildSettingsStore:
         channel_id: int,
     ) -> None:
         self._set_value(guild_id, SETTING_APPLICATION_LOG_CHANNEL_ID, str(channel_id))
+        
+    def get_moderation_log_channel_id(
+        self,
+        guild_id: int,
+    ) -> int | None:
+        return self._get_int_value(
+            guild_id,
+            SETTING_MODERATION_LOG_CHANNEL_ID,
+        )
+
+
+    def set_moderation_log_channel_id(
+        self,
+        guild_id: int,
+        channel_id: int,
+    ) -> None:
+        self._set_value(
+            guild_id,
+            SETTING_MODERATION_LOG_CHANNEL_ID,
+            str(channel_id),
+        )
+
+
+    def clear_moderation_log_channel_id(
+        self,
+        guild_id: int,
+    ) -> None:
+        self._delete_value(
+            guild_id,
+            SETTING_MODERATION_LOG_CHANNEL_ID,
+        )
 
     def get_verification_form_key(self, guild_id: int) -> str | None:
         return self._get_value(guild_id, SETTING_VERIFICATION_FORM_KEY)
