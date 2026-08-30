@@ -80,6 +80,68 @@ async def audit_action(
         # break moderation actions.
         pass
 
+CLAIM_FIELD_NAME = "Claimed By"
+
+
+async def update_claim_display(
+    interaction: discord.Interaction,
+    claimed_by: int | None,
+) -> None:
+    message = interaction.message
+
+    if (
+        message is None
+        or not message.embeds
+    ):
+        return
+
+    embed = discord.Embed.from_dict(
+        message.embeds[0].to_dict()
+    )
+
+    claim_field_index: int | None = None
+
+    for index, field in enumerate(
+        embed.fields
+    ):
+        if field.name == CLAIM_FIELD_NAME:
+            claim_field_index = index
+            break
+
+    if claimed_by is None:
+        if claim_field_index is not None:
+            embed.remove_field(
+                claim_field_index
+            )
+
+    else:
+        value = f"<@{claimed_by}>"
+
+        if claim_field_index is None:
+            embed.insert_field_at(
+                0,
+                name=CLAIM_FIELD_NAME,
+                value=value,
+                inline=False,
+            )
+
+        else:
+            embed.set_field_at(
+                claim_field_index,
+                name=CLAIM_FIELD_NAME,
+                value=value,
+                inline=False,
+            )
+
+    try:
+        await message.edit(
+            embed=embed
+        )
+
+    except discord.HTTPException:
+        # A failed cosmetic update should not
+        # break the moderation action itself.
+        pass
 
 async def get_claimed_pending_application_or_respond(
     interaction: discord.Interaction,
@@ -160,6 +222,15 @@ async def get_claimed_pending_application_or_respond(
                 )
                 or application
             )
+            
+    if (
+        application.claimed_by
+        == interaction.user.id
+    ):
+        await update_claim_display(
+            interaction,
+            application.claimed_by,
+        )
 
     if (
         application.claimed_by
@@ -428,7 +499,7 @@ class ReleaseApplicationClaimButton(
         application_id: str,
     ) -> None:
         super().__init__(
-            label="Release",
+            label="Cancel",
             style=(
                 discord.ButtonStyle.secondary
             ),
@@ -478,18 +549,17 @@ class ReleaseApplicationClaimButton(
             )
 
             return
+        
+        await update_claim_display(
+            interaction,
+            None,
+        )
 
         await audit_action(
             interaction,
             "application.claim.release",
             self.application_id,
         )
-
-        await send_ephemeral(
-            interaction,
-            "Application claim released.",
-        )
-
 
 class AddApplicationNoteButton(
     discord.ui.Button

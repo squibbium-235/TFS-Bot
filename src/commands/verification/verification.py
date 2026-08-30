@@ -11,7 +11,6 @@ import discord
 
 from src.commands.verification.review_claims import (
     AddApplicationNoteButton,
-    ClaimApplicationButton,
     ReleaseApplicationClaimButton,
     ViewApplicationNotesButton,
     get_claimed_pending_application_or_respond,
@@ -1262,49 +1261,54 @@ async def build_verify_page_modal(
         client=client,
         guild_id=guild_id,
     )
+
     pages = form.pages()
     total_pages = len(pages)
 
-    if page_index < 0 or page_index >= total_pages:
-        raise ValueError(f"Invalid verification form page: {page_index}")
-
-    page_questions = pages[page_index]
-
-    page_suffix = f" {page_index + 1}/{total_pages}"
-    max_base_title_length = 45 - len(page_suffix)
-    title = f"{form.title[:max_base_title_length]}{page_suffix}"
-
-    async def on_submit(
-        self,
-        interaction: discord.Interaction,
-    ) -> None:
-        result = (
-            await
-            get_claimed_pending_application_or_respond(
-                interaction,
-                self.application_id,
-            )
+    if (
+        page_index < 0
+        or page_index >= total_pages
+    ):
+        raise ValueError(
+            f"Invalid verification form page: "
+            f"{page_index}"
         )
 
-        if result is None:
-            return
+    page_questions = pages[
+        page_index
+    ]
 
-        _, application = result
+    page_suffix = (
+        f" {page_index + 1}/{total_pages}"
+    )
 
-        reason = str(
-            self.reason.value
-        ).strip()
+    max_base_title_length = (
+        45 - len(page_suffix)
+    )
 
-        await complete_application_action(
+    title = (
+        f"{form.title[:max_base_title_length]}"
+        f"{page_suffix}"
+    )
+
+    async def on_submit(
+        interaction: discord.Interaction,
+        answers: list[FormAnswer],
+    ) -> None:
+        await handle_verify_page_submit(
             interaction=interaction,
-            application=application,
-            action=self.action,
-            reason=reason,
+            session_id=session_id,
+            page_index=page_index,
+            answers=answers,
         )
 
     return build_form_modal(
         title=title,
-        custom_id=f"{form.custom_id_prefix}:{session_id}:{page_index}",
+        custom_id=(
+            f"{form.custom_id_prefix}:"
+            f"{session_id}:"
+            f"{page_index}"
+        ),
         questions=page_questions,
         on_submit=on_submit,
     )
@@ -2185,12 +2189,6 @@ class ApplicationQuestionControlsView(discord.ui.View):
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
         self.application_id = application_id
-        
-        self.add_item(
-            ClaimApplicationButton(
-                application_id
-            )
-        )
 
         self.add_item(
             ReleaseApplicationClaimButton(
@@ -2319,12 +2317,6 @@ class ApplicationReviewView(discord.ui.View):
         super().__init__(timeout=None)
         self.application_id = application_id
         
-        self.add_item(
-            ClaimApplicationButton(
-                application_id
-            )
-        )
-
         self.add_item(
             ReleaseApplicationClaimButton(
                 application_id
