@@ -8,35 +8,30 @@ from src.webui.routes.dm_templates import (
 from src.webui.routes.overview import (
     blueprint as overview_blueprint,
 )
-
 from src.webui.routes.permissions import (
     blueprint as permissions_blueprint,
 )
-
 from src.webui.routes.verification import (
     blueprint as verification_blueprint,
 )
-
+from src.webui.routes.verification_welcome import (
+    blueprint as verification_welcome_blueprint,
+)
 from src.webui.routes.forms import (
     blueprint as forms_blueprint,
 )
-
 from src.webui.routes.uploads import (
     blueprint as uploads_blueprint,
 )
-
 from src.webui.routes.backups import (
     blueprint as backups_blueprint,
 )
-
 from src.webui.routes.custom_commands import (
     blueprint as custom_commands_blueprint,
 )
-
 from src.webui.routes.embed_builder import (
     blueprint as embed_builder_blueprint,
 )
-
 from src.webui.routes.auth import (
     blueprint as auth_blueprint,
 )
@@ -48,7 +43,7 @@ def register_blueprints(
     app.register_blueprint(
         auth_blueprint
     )
-    
+
     app.register_blueprint(
         overview_blueprint
     )
@@ -56,31 +51,35 @@ def register_blueprints(
     app.register_blueprint(
         dm_templates_blueprint
     )
-    
+
     app.register_blueprint(
         permissions_blueprint
     )
-    
+
     app.register_blueprint(
         verification_blueprint
     )
-    
+
+    app.register_blueprint(
+        verification_welcome_blueprint
+    )
+
     app.register_blueprint(
         forms_blueprint
     )
-    
+
     app.register_blueprint(
         uploads_blueprint
     )
-    
+
     app.register_blueprint(
         backups_blueprint
     )
-    
+
     app.register_blueprint(
         custom_commands_blueprint
     )
-    
+
     app.register_blueprint(
         embed_builder_blueprint
     )

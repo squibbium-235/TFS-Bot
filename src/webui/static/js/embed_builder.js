@@ -1,7 +1,8 @@
 let fieldCount = 0;
 
+
 function escapeHtml(value) {
-    return value
+    return String(value)
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -9,8 +10,11 @@ function escapeHtml(value) {
         .replaceAll("'", "&#039;");
 }
 
+
 function normaliseHexColour(value) {
-    const cleaned = value.trim().replace("#", "");
+    const cleaned = value
+        .trim()
+        .replace("#", "");
 
     if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {
         return "#" + cleaned.toUpperCase();
@@ -19,23 +23,47 @@ function normaliseHexColour(value) {
     return null;
 }
 
+
 function openColourPicker() {
-    document.getElementById("colour_picker").click();
+    document
+        .getElementById("colour_picker")
+        .click();
 }
 
-function syncColourFromPicker() {
-    const picker = document.getElementById("colour_picker");
-    const input = document.getElementById("colour");
 
-    input.value = picker.value.toUpperCase();
+function syncColourFromPicker() {
+    const picker =
+        document.getElementById(
+            "colour_picker"
+        );
+
+    const input =
+        document.getElementById(
+            "colour"
+        );
+
+    input.value =
+        picker.value.toUpperCase();
+
     updatePreview();
 }
 
-function syncColourFromText() {
-    const picker = document.getElementById("colour_picker");
-    const input = document.getElementById("colour");
 
-    const normalised = normaliseHexColour(input.value);
+function syncColourFromText() {
+    const picker =
+        document.getElementById(
+            "colour_picker"
+        );
+
+    const input =
+        document.getElementById(
+            "colour"
+        );
+
+    const normalised =
+        normaliseHexColour(
+            input.value
+        );
 
     if (normalised !== null) {
         picker.value = normalised;
@@ -44,217 +72,612 @@ function syncColourFromText() {
     updatePreview();
 }
 
-function addField(name = "", value = "", inline = false) {
-    fieldCount += 1;
-    const fieldId = fieldCount;
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "field-card";
-    wrapper.dataset.fieldCard = "true";
+function addField(
+    name = "",
+    value = "",
+    inline = false
+) {
+    fieldCount += 1;
+
+    const fieldId =
+        fieldCount;
+
+    const wrapper =
+        document.createElement(
+            "div"
+        );
+
+    wrapper.className =
+        "field-card";
+
+    wrapper.dataset.fieldCard =
+        "true";
 
     wrapper.innerHTML = `
         <div class="field-card-header">
             <strong>Field ${fieldId}</strong>
-            <button type="button" class="danger" onclick="removeField(this)">Remove</button>
+
+            <button
+                type="button"
+                class="danger"
+                onclick="removeField(this)"
+            >
+                Remove
+            </button>
         </div>
 
-        <input type="hidden" name="field_id[]" value="${fieldId}">
+        <input
+            type="hidden"
+            name="field_id[]"
+            value="${fieldId}"
+        >
 
         <label>Name</label>
-        <input name="field_${fieldId}_name" class="field-name" maxlength="256" value="${escapeHtml(name)}">
+
+        <input
+            name="field_${fieldId}_name"
+            class="field-name"
+            maxlength="256"
+            value="${escapeHtml(name)}"
+        >
 
         <label>Value</label>
-        <textarea name="field_${fieldId}_value" class="field-value" maxlength="1024" rows="3">${escapeHtml(value)}</textarea>
+
+        <textarea
+            name="field_${fieldId}_value"
+            class="field-value"
+            maxlength="1024"
+            rows="3"
+        >${escapeHtml(value)}</textarea>
 
         <label class="checkbox-row">
-            <input type="checkbox" name="field_${fieldId}_inline" class="field-inline" ${inline ? "checked" : ""}>
+            <input
+                type="checkbox"
+                name="field_${fieldId}_inline"
+                class="field-inline"
+                ${inline ? "checked" : ""}
+            >
+
             Inline
         </label>
     `;
 
-    document.getElementById("fields").appendChild(wrapper);
+    document
+        .getElementById("fields")
+        .appendChild(wrapper);
 
-    wrapper.querySelectorAll("input, textarea").forEach((element) => {
-        element.addEventListener("input", updatePreview);
-        element.addEventListener("change", updatePreview);
-    });
+    wrapper
+        .querySelectorAll(
+            "input, textarea"
+        )
+        .forEach(
+            (element) => {
+                element.addEventListener(
+                    "input",
+                    updatePreview
+                );
+
+                element.addEventListener(
+                    "change",
+                    updatePreview
+                );
+            }
+        );
 
     updatePreview();
 }
+
 
 function removeField(button) {
-    button.closest("[data-field-card='true']").remove();
+    button
+        .closest(
+            "[data-field-card='true']"
+        )
+        .remove();
+
     updatePreview();
 }
 
+
 function getValue(id) {
-    return document.getElementById(id).value.trim();
+    return document
+        .getElementById(id)
+        .value
+        .trim();
 }
 
-function getSelectedUploadPreviewUrl(selectId) {
-    const select = document.getElementById(selectId);
-    const option = select.options[select.selectedIndex];
+
+function getSelectedUploadPreviewUrl(
+    selectId
+) {
+    const select =
+        document.getElementById(
+            selectId
+        );
+
+    const option =
+        select.options[
+            select.selectedIndex
+        ];
 
     if (!option) {
         return "";
     }
 
-    return option.dataset.url || "";
+    return (
+        option.dataset.url
+        || ""
+    );
 }
 
-function getImagePreviewUrl(uploadSelectId, urlInputId) {
-    const uploadedUrl = getSelectedUploadPreviewUrl(uploadSelectId);
+
+function getImagePreviewUrl(
+    uploadSelectId,
+    urlInputId
+) {
+    const uploadedUrl =
+        getSelectedUploadPreviewUrl(
+            uploadSelectId
+        );
 
     if (uploadedUrl) {
         return uploadedUrl;
     }
 
-    return getValue(urlInputId);
+    return getValue(
+        urlInputId
+    );
 }
 
-function setImage(id, url) {
-    const image = document.getElementById(id);
-    const error = document.getElementById(id + "-error");
+
+function setImage(
+    id,
+    url
+) {
+    const image =
+        document.getElementById(
+            id
+        );
+
+    const error =
+        document.getElementById(
+            id + "-error"
+        );
 
     image.onload = null;
     image.onerror = null;
-    image.style.display = "none";
-    image.removeAttribute("src");
+
+    image.style.display =
+        "none";
+
+    image.removeAttribute(
+        "src"
+    );
 
     if (error) {
-        error.style.display = "none";
+        error.style.display =
+            "none";
     }
 
     if (!url) {
         return;
     }
 
-    image.dataset.previewUrl = url;
+    image.dataset.previewUrl =
+        url;
 
-    image.onload = function () {
-        if (image.dataset.previewUrl !== url) {
-            return;
-        }
+    image.onload =
+        function () {
+            if (
+                image.dataset.previewUrl
+                !== url
+            ) {
+                return;
+            }
 
-        image.style.display = "block";
+            image.style.display =
+                "block";
 
-        if (error) {
-            error.style.display = "none";
-        }
-    };
+            if (error) {
+                error.style.display =
+                    "none";
+            }
+        };
 
-    image.onerror = function () {
-        if (image.dataset.previewUrl !== url) {
-            return;
-        }
+    image.onerror =
+        function () {
+            if (
+                image.dataset.previewUrl
+                !== url
+            ) {
+                return;
+            }
 
-        image.style.display = "none";
+            image.style.display =
+                "none";
 
-        if (error) {
-            error.style.display = "block";
-        }
-    };
+            if (error) {
+                error.style.display =
+                    "block";
+            }
+        };
 
     image.src = url;
 }
 
-function clearEmbedForm() {
-    document.getElementById("title").value = "";
-    document.getElementById("description").value = "";
-    document.getElementById("colour").value = "#5865F2";
-    document.getElementById("colour_picker").value = "#5865F2";
-    document.getElementById("image_upload_filename").value = "";
-    document.getElementById("image_url").value = "";
-    document.getElementById("thumbnail_upload_filename").value = "";
-    document.getElementById("thumbnail_url").value = "";
-    document.getElementById("author_name").value = "";
-    document.getElementById("author_icon_url").value = "";
-    document.getElementById("footer").value = "TFSBot";
-    document.getElementById("author_icon_upload_filename").value = "";
 
-    document.getElementById("fields").innerHTML = "";
+function clearEmbedForm() {
+    document.getElementById(
+        "title"
+    ).value = "";
+
+    document.getElementById(
+        "description"
+    ).value = "";
+
+    document.getElementById(
+        "colour"
+    ).value = "#5865F2";
+
+    document.getElementById(
+        "colour_picker"
+    ).value = "#5865F2";
+
+    document.getElementById(
+        "image_upload_filename"
+    ).value = "";
+
+    document.getElementById(
+        "image_url"
+    ).value = "";
+
+    document.getElementById(
+        "thumbnail_upload_filename"
+    ).value = "";
+
+    document.getElementById(
+        "thumbnail_url"
+    ).value = "";
+
+    document.getElementById(
+        "author_name"
+    ).value = "";
+
+    document.getElementById(
+        "author_icon_url"
+    ).value = "";
+
+    document.getElementById(
+        "author_icon_upload_filename"
+    ).value = "";
+
+    document.getElementById(
+        "footer"
+    ).value = "TFSBot";
+
+    document.getElementById(
+        "fields"
+    ).innerHTML = "";
+
     fieldCount = 0;
+
     addField();
 
     updatePreview();
 }
 
+
 function updatePreview() {
-    const title = getValue("title") || "Embed title";
-    const description = getValue("description") || "Embed description will appear here.";
-    const colour = normaliseHexColour(getValue("colour")) || "#5865F2";
-    const imageUrl = getImagePreviewUrl("image_upload_filename", "image_url");
-    const thumbnailUrl = getImagePreviewUrl("thumbnail_upload_filename", "thumbnail_url");
-    const authorName = getValue("author_name");
-    const authorIconUrl = getImagePreviewUrl("author_icon_upload_filename", "author_icon_url");
-    const footer = getValue("footer");
+    const title =
+        getValue("title")
+        || "Embed title";
 
-    document.getElementById("preview-title").textContent = title;
-    document.getElementById("preview-description").textContent = description;
-    document.getElementById("preview-footer").textContent = footer;
+    const description =
+        getValue("description")
+        || (
+            "Embed description "
+            + "will appear here."
+        );
 
-    document.getElementById("preview-embed").style.borderLeftColor = colour;
+    const colour =
+        normaliseHexColour(
+            getValue("colour")
+        )
+        || "#5865F2";
 
-    setImage("preview-image", imageUrl);
-    setImage("preview-thumbnail", thumbnailUrl);
+    const imageUrl =
+        getImagePreviewUrl(
+            "image_upload_filename",
+            "image_url"
+        );
 
-    const authorWrap = document.getElementById("preview-author-wrap");
-    const author = document.getElementById("preview-author");
-    const authorIcon = document.getElementById("preview-author-icon");
+    const thumbnailUrl =
+        getImagePreviewUrl(
+            "thumbnail_upload_filename",
+            "thumbnail_url"
+        );
 
-    if (authorName || authorIconUrl) {
-        authorWrap.style.display = "flex";
-        author.textContent = authorName || "Author";
+    const authorName =
+        getValue(
+            "author_name"
+        );
+
+    const authorIconUrl =
+        getImagePreviewUrl(
+            "author_icon_upload_filename",
+            "author_icon_url"
+        );
+
+    const footer =
+        getValue(
+            "footer"
+        );
+
+    document.getElementById(
+        "preview-title"
+    ).textContent = title;
+
+    document.getElementById(
+        "preview-description"
+    ).textContent = description;
+
+    document.getElementById(
+        "preview-footer"
+    ).textContent = footer;
+
+    document.getElementById(
+        "preview-embed"
+    ).style.borderLeftColor =
+        colour;
+
+    setImage(
+        "preview-image",
+        imageUrl
+    );
+
+    setImage(
+        "preview-thumbnail",
+        thumbnailUrl
+    );
+
+    const authorWrap =
+        document.getElementById(
+            "preview-author-wrap"
+        );
+
+    const author =
+        document.getElementById(
+            "preview-author"
+        );
+
+    const authorIcon =
+        document.getElementById(
+            "preview-author-icon"
+        );
+
+    if (
+        authorName
+        || authorIconUrl
+    ) {
+        authorWrap.style.display =
+            "flex";
+
+        author.textContent =
+            authorName || "Author";
 
         if (authorIconUrl) {
-            authorIcon.src = authorIconUrl;
-            authorIcon.style.display = "inline-block";
+            authorIcon.src =
+                authorIconUrl;
+
+            authorIcon.style.display =
+                "inline-block";
         } else {
-            authorIcon.style.display = "none";
-            authorIcon.removeAttribute("src");
+            authorIcon.style.display =
+                "none";
+
+            authorIcon.removeAttribute(
+                "src"
+            );
         }
     } else {
-        authorWrap.style.display = "none";
-        author.textContent = "";
-        authorIcon.style.display = "none";
-        authorIcon.removeAttribute("src");
+        authorWrap.style.display =
+            "none";
+
+        author.textContent =
+            "";
+
+        authorIcon.style.display =
+            "none";
+
+        authorIcon.removeAttribute(
+            "src"
+        );
     }
 
-    const previewFields = document.getElementById("preview-fields");
-    previewFields.innerHTML = "";
+    const previewFields =
+        document.getElementById(
+            "preview-fields"
+        );
 
-    document.querySelectorAll("[data-field-card='true']").forEach((card) => {
-        const fieldName = card.querySelector(".field-name").value.trim();
-        const fieldValue = card.querySelector(".field-value").value.trim();
-        const inline = card.querySelector(".field-inline").checked;
+    previewFields.innerHTML =
+        "";
 
-        if (!fieldName || !fieldValue) {
-            return;
-        }
+    document
+        .querySelectorAll(
+            "[data-field-card='true']"
+        )
+        .forEach(
+            (card) => {
+                const fieldName =
+                    card
+                        .querySelector(
+                            ".field-name"
+                        )
+                        .value
+                        .trim();
 
-        const field = document.createElement("div");
-        field.className = "embed-field" + (inline ? " inline" : "");
+                const fieldValue =
+                    card
+                        .querySelector(
+                            ".field-value"
+                        )
+                        .value
+                        .trim();
 
-        field.innerHTML = `
-            <div class="embed-field-name"></div>
-            <div class="embed-field-value"></div>
-        `;
+                const inline =
+                    card
+                        .querySelector(
+                            ".field-inline"
+                        )
+                        .checked;
 
-        field.querySelector(".embed-field-name").textContent = fieldName;
-        field.querySelector(".embed-field-value").textContent = fieldValue;
+                if (
+                    !fieldName
+                    || !fieldValue
+                ) {
+                    return;
+                }
 
-        previewFields.appendChild(field);
-    });
+                const field =
+                    document.createElement(
+                        "div"
+                    );
+
+                field.className =
+                    "embed-field"
+                    + (
+                        inline
+                            ? " inline"
+                            : ""
+                    );
+
+                field.innerHTML = `
+                    <div class="embed-field-name"></div>
+                    <div class="embed-field-value"></div>
+                `;
+
+                field
+                    .querySelector(
+                        ".embed-field-name"
+                    )
+                    .textContent =
+                        fieldName;
+
+                field
+                    .querySelector(
+                        ".embed-field-value"
+                    )
+                    .textContent =
+                        fieldValue;
+
+                previewFields.appendChild(
+                    field
+                );
+            }
+        );
 }
 
-document.querySelectorAll("#embed-form input, #embed-form textarea, #embed-form select").forEach((element) => {
-    element.addEventListener("input", updatePreview);
-    element.addEventListener("change", updatePreview);
-});
 
-document.getElementById("colour_picker").addEventListener("input", syncColourFromPicker);
-document.getElementById("colour").addEventListener("input", syncColourFromText);
-document.getElementById("colour").addEventListener("click", openColourPicker);
+document
+    .querySelectorAll(
+        "#embed-form input, "
+        + "#embed-form textarea, "
+        + "#embed-form select"
+    )
+    .forEach(
+        (element) => {
+            element.addEventListener(
+                "input",
+                updatePreview
+            );
 
-addField();
+            element.addEventListener(
+                "change",
+                updatePreview
+            );
+        }
+    );
+
+
+document
+    .getElementById(
+        "colour_picker"
+    )
+    .addEventListener(
+        "input",
+        syncColourFromPicker
+    );
+
+
+document
+    .getElementById(
+        "colour"
+    )
+    .addEventListener(
+        "input",
+        syncColourFromText
+    );
+
+
+document
+    .getElementById(
+        "colour"
+    )
+    .addEventListener(
+        "click",
+        openColourPicker
+    );
+
+
+let loadedFields = [];
+
+const loadedFieldsElement =
+    document.getElementById(
+        "tfsbot-loaded-fields"
+    );
+
+if (loadedFieldsElement) {
+    try {
+        const parsedFields =
+            JSON.parse(
+                loadedFieldsElement.textContent
+                || "[]"
+            );
+
+        if (Array.isArray(parsedFields)) {
+            loadedFields =
+                parsedFields;
+        }
+    } catch (error) {
+        console.error(
+            "Could not load saved embed fields.",
+            error
+        );
+    }
+}
+
+
+if (loadedFields.length > 0) {
+    loadedFields.forEach(
+        (field) => {
+            addField(
+                String(
+                    field.name || ""
+                ),
+                String(
+                    field.value || ""
+                ),
+                Boolean(
+                    field.inline
+                )
+            );
+        }
+    );
+} else {
+    addField();
+}
+
+
+syncColourFromText();
 updatePreview();

@@ -39,6 +39,12 @@
             <a class="button-link secondary" href="#verification-panel-setup">Panel Setup</a>
             <a class="button-link secondary" href="#review-log-channels">Review + Logs</a>
             <a class="button-link secondary" href="#approval-roles">Approval Roles</a>
+            <a
+                class="button-link secondary"
+                href="{{ url_for('verification_welcome.index', guild_id=selected_guild_id) }}"
+            >
+                Welcome Message
+            </a>
             <a class="button-link secondary" href="#verification-automod">Automod</a>
             <a class="button-link secondary" href="#invite-tracking">Invite Tracking</a>
             <a class="button-link secondary" href="#application-maintenance">Application Maintenance</a>
