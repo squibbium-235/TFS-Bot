@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import discord
@@ -209,7 +210,9 @@ def parse_embed_form(
     ).strip()
 
     if title:
-        embed_data["title"] = title
+        embed_data[
+            "title"
+        ] = title
 
     if description:
         embed_data[
@@ -291,12 +294,8 @@ def parse_embed_form(
         ):
             fields.append(
                 {
-                    "name": (
-                        field_name
-                    ),
-                    "value": (
-                        field_value
-                    ),
+                    "name": field_name,
+                    "value": field_value,
                     "inline": inline,
                 }
             )
@@ -312,6 +311,61 @@ def parse_embed_form(
         )
 
     return embed_data
+
+
+def parse_channel_id(
+    guild: discord.Guild,
+) -> int | None:
+    raw_value = request.form.get(
+        "channel_id",
+        "",
+    ).strip()
+
+    if not raw_value:
+        return None
+
+    try:
+        channel_id = int(
+            raw_value
+        )
+
+    except ValueError as caught:
+        raise ValueError(
+            "Welcome channel is invalid."
+        ) from caught
+
+    channel = guild.get_channel(
+        channel_id
+    )
+
+    if not isinstance(
+        channel,
+        discord.TextChannel,
+    ):
+        raise ValueError(
+            "The selected welcome channel "
+            "is not a text channel."
+        )
+
+    return channel_id
+
+
+def submitted_settings(
+    *,
+    guild: discord.Guild,
+    existing: WelcomeSettings,
+) -> WelcomeSettings:
+    return replace(
+        existing,
+        channel_id=(
+            parse_channel_id(
+                guild
+            )
+        ),
+        embed_data=(
+            parse_embed_form()
+        ),
+    )
 
 
 def template_values(
@@ -576,23 +630,11 @@ def index():
             )
 
             if action == "save":
-                channel_id_text = (
-                    request.form.get(
-                        "channel_id",
-                        "",
-                    ).strip()
-                )
-
-                channel_id = (
-                    int(
-                        channel_id_text
+                submitted = (
+                    submitted_settings(
+                        guild=guild,
+                        existing=settings,
                     )
-                    if channel_id_text
-                    else None
-                )
-
-                embed_data = (
-                    parse_embed_form()
                 )
 
                 settings = (
@@ -602,10 +644,10 @@ def index():
                                 guild.id
                             ),
                             channel_id=(
-                                channel_id
+                                submitted.channel_id
                             ),
                             embed_data=(
-                                embed_data
+                                submitted.embed_data
                             ),
                         )
                     )
@@ -631,14 +673,37 @@ def index():
                 )
 
             if action == "enable":
+                submitted = (
+                    submitted_settings(
+                        guild=guild,
+                        existing=settings,
+                    )
+                )
+
                 if (
-                    settings.channel_id
+                    submitted.channel_id
                     is None
                 ):
                     raise ValueError(
-                        "Choose and save a "
-                        "welcome channel first."
+                        "Choose a welcome channel "
+                        "before enabling welcome messages."
                     )
+
+                settings = (
+                    context.run_coro(
+                        store.save_config(
+                            guild_id=(
+                                guild.id
+                            ),
+                            channel_id=(
+                                submitted.channel_id
+                            ),
+                            embed_data=(
+                                submitted.embed_data
+                            ),
+                        )
+                    )
+                )
 
                 settings = (
                     context.run_coro(
@@ -656,13 +721,18 @@ def index():
                         "welcome.enable"
                     ),
                     guild_id=guild.id,
+                    detail=(
+                        "Saved current welcome "
+                        "configuration and enabled it."
+                    ),
                 )
 
                 return render_page(
                     guild=guild,
                     settings=settings,
                     message=(
-                        "Welcome messages enabled."
+                        "Welcome message saved "
+                        "and enabled."
                     ),
                 )
 
@@ -706,20 +776,29 @@ def index():
                     )
                 )
 
+                test_settings = (
+                    submitted_settings(
+                        guild=guild,
+                        existing=settings,
+                    )
+                )
+
                 if (
-                    settings.channel_id
+                    test_settings.channel_id
                     is None
                 ):
                     raise ValueError(
-                        "No welcome channel "
-                        "is configured."
+                        "Choose a welcome channel "
+                        "before sending a test."
                     )
 
                 message_result = (
                     context.run_coro(
                         send_welcome_message(
                             bot=context.bot,
-                            settings=settings,
+                            settings=(
+                                test_settings
+                            ),
                             member=test_member,
                         )
                     )
@@ -731,17 +810,21 @@ def index():
                     ),
                     guild_id=guild.id,
                     detail=(
-                        f"Test welcome sent "
-                        f"for user "
+                        "Test welcome sent "
+                        "using current unsaved form "
+                        f"values for user "
                         f"{test_member.id}."
                     ),
                 )
 
                 return render_page(
                     guild=guild,
-                    settings=settings,
+                    settings=(
+                        test_settings
+                    ),
                     message=(
-                        "Test welcome sent: "
+                        "Test welcome sent using "
+                        "the current form values: "
                         f"{message_result.jump_url}"
                     ),
                 )
@@ -759,28 +842,35 @@ def index():
                     )
                 )
 
-                preview = (
-                    context.run_coro(
-                        build_welcome_embed(
-                            bot=context.bot,
-                            guild=guild,
-                            member=(
-                                test_member
-                            ),
-                            embed_data=(
-                                parse_embed_form()
-                            ),
-                        )
+                preview_settings = (
+                    submitted_settings(
+                        guild=guild,
+                        existing=settings,
+                    )
+                )
+
+                context.run_coro(
+                    build_welcome_embed(
+                        bot=context.bot,
+                        guild=guild,
+                        member=(
+                            test_member
+                        ),
+                        embed_data=(
+                            preview_settings
+                            .embed_data
+                        ),
                     )
                 )
 
                 return render_page(
                     guild=guild,
-                    settings=settings,
+                    settings=(
+                        preview_settings
+                    ),
                     message=(
-                        "Preview generated in Discord "
-                        "format. Browser preview is "
-                        "shown below."
+                        "Preview validated using "
+                        "the current form values."
                     ),
                 )
 
