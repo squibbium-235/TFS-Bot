@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from src.services.database import open_sync_database
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from src.services.database import open_sync_database
 
 
 SETTING_REVIEW_CHANNEL_ID = "review_channel_id"
@@ -13,10 +14,10 @@ SETTING_VERIFICATION_FORM_KEY = "verification_form_key"
 SETTING_APPROVED_ADD_ROLE_ID = "approved_add_role_id"
 SETTING_APPROVED_REMOVE_ROLE_ID = "approved_remove_role_id"
 SETTING_AUTOMOD_ENABLED = "automod_enabled"
-SETTING_MODERATION_LOG_CHANNEL_ID = ("moderation_log_channel_id")
+SETTING_MODERATION_LOG_CHANNEL_ID = "moderation_log_channel_id"
 
-# Optional deployment-provided preset. Put one blocked term per line. Lines starting with # are ignored.
-# This keeps the repo from hardcoding nasty terms while still letting the owner load a default list.
+# Optional deployment-provided preset. Put one blocked term per line.
+# Lines starting with # are ignored.
 DEFAULT_AUTOMOD_TERMS_PATH = Path("data/default_automod_terms.txt")
 BUILT_IN_DEFAULT_AUTOMOD_TERMS: tuple[str, ...] = ()
 
@@ -69,7 +70,6 @@ class GuildSettingsStore:
         try:
             with self.legacy_json_path.open("r", encoding="utf-8") as file:
                 data: dict[str, Any] = json.load(file)
-
         except (OSError, json.JSONDecodeError):
             return
 
@@ -110,6 +110,9 @@ class GuildSettingsStore:
     def set_review_channel_id(self, guild_id: int, channel_id: int) -> None:
         self._set_value(guild_id, SETTING_REVIEW_CHANNEL_ID, str(channel_id))
 
+    def clear_review_channel_id(self, guild_id: int) -> None:
+        self._delete_value(guild_id, SETTING_REVIEW_CHANNEL_ID)
+
     def get_application_log_channel_id(self, guild_id: int) -> int | None:
         return self._get_int_value(guild_id, SETTING_APPLICATION_LOG_CHANNEL_ID)
 
@@ -118,8 +121,15 @@ class GuildSettingsStore:
         guild_id: int,
         channel_id: int,
     ) -> None:
-        self._set_value(guild_id, SETTING_APPLICATION_LOG_CHANNEL_ID, str(channel_id))
-        
+        self._set_value(
+            guild_id,
+            SETTING_APPLICATION_LOG_CHANNEL_ID,
+            str(channel_id),
+        )
+
+    def clear_application_log_channel_id(self, guild_id: int) -> None:
+        self._delete_value(guild_id, SETTING_APPLICATION_LOG_CHANNEL_ID)
+
     def get_moderation_log_channel_id(
         self,
         guild_id: int,
@@ -128,7 +138,6 @@ class GuildSettingsStore:
             guild_id,
             SETTING_MODERATION_LOG_CHANNEL_ID,
         )
-
 
     def set_moderation_log_channel_id(
         self,
@@ -140,7 +149,6 @@ class GuildSettingsStore:
             SETTING_MODERATION_LOG_CHANNEL_ID,
             str(channel_id),
         )
-
 
     def clear_moderation_log_channel_id(
         self,
@@ -184,7 +192,11 @@ class GuildSettingsStore:
         return value == "1"
 
     def set_automod_enabled(self, guild_id: int, enabled: bool) -> None:
-        self._set_value(guild_id, SETTING_AUTOMOD_ENABLED, "1" if enabled else "0")
+        self._set_value(
+            guild_id,
+            SETTING_AUTOMOD_ENABLED,
+            "1" if enabled else "0",
+        )
 
     def add_automod_term(self, guild_id: int, term: str) -> None:
         cleaned = self._normalise_automod_term(term)
@@ -281,7 +293,6 @@ class GuildSettingsStore:
 
     def add_automod_terms(self, guild_id: int, terms: list[str]) -> int:
         cleaned_terms = self._normalise_automod_terms_list(terms)
-
         added_count = 0
 
         with open_sync_database(self.database_path) as database:
@@ -310,7 +321,9 @@ class GuildSettingsStore:
 
         if DEFAULT_AUTOMOD_TERMS_PATH.exists():
             try:
-                raw_lines = DEFAULT_AUTOMOD_TERMS_PATH.read_text(encoding="utf-8").splitlines()
+                raw_lines = DEFAULT_AUTOMOD_TERMS_PATH.read_text(
+                    encoding="utf-8"
+                ).splitlines()
             except OSError:
                 raw_lines = []
 
@@ -421,7 +434,10 @@ class GuildSettingsStore:
             database.commit()
 
     @classmethod
-    def _normalise_automod_terms_list(cls, terms: list[str] | tuple[str, ...]) -> list[str]:
+    def _normalise_automod_terms_list(
+        cls,
+        terms: list[str] | tuple[str, ...],
+    ) -> list[str]:
         cleaned_terms: list[str] = []
         seen: set[str] = set()
 

@@ -21,6 +21,11 @@
     >
 
     {% block head %}{% endblock %}
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/admin_compact.css') }}"
+    >
 </head>
 
 <body>
@@ -32,98 +37,70 @@
             <a
                 href="{{ url_for('overview.index') }}"
                 class="{{ 'active' if active_page == 'overview' else '' }}"
-            >
-                Overview
-            </a>
+            >Overview</a>
 
             {% if is_owner %}
-
                 <a
                     href="{{ url_for('embed_builder.index') }}"
                     class="{{ 'active' if active_page == 'embed_builder' else '' }}"
-                >
-                    Embed Builder
-                </a>
+                >Embed Builder</a>
 
                 <a
                     href="{{ url_for('custom_commands.index') }}"
                     class="{{ 'active' if active_page == 'custom_commands' else '' }}"
-                >
-                    Custom Commands
-                </a>
+                >Custom Commands</a>
 
                 <a
                     href="{{ url_for('dm_templates.index') }}"
                     class="{{ 'active' if active_page == 'dm_templates' else '' }}"
-                >
-                    DM Templates
-                </a>
+                >DM Templates</a>
 
                 <a
                     href="{{ url_for('forms.index') }}"
                     class="{{ 'active' if active_page == 'forms' else '' }}"
-                >
-                    Forms
-                </a>
+                >Forms</a>
 
                 <a
                     href="{{ url_for('uploads.index') }}"
                     class="{{ 'active' if active_page == 'uploads' else '' }}"
-                >
-                    Uploads
-                </a>
+                >Uploads</a>
 
                 <a
                     href="{{ url_for('verification.index') }}"
                     class="{{ 'active' if active_page == 'verification' else '' }}"
-                >
-                    Verification
-                </a>
+                >Verification</a>
 
                 <a
                     href="{{ url_for('permissions.index') }}"
                     class="{{ 'active' if active_page == 'permissions' else '' }}"
-                >
-                    Permissions
-                </a>
+                >Permissions</a>
 
                 <a
                     href="{{ url_for('backups.index') }}"
                     class="{{ 'active' if active_page == 'backups' else '' }}"
-                >
-                    Backups
-                </a>
-
+                >Backups</a>
             {% endif %}
 
             <span class="badge">
                 {{ display_name }} · {{ webui_role|title }}
             </span>
 
-            <a href="{{ url_for('auth.logout') }}">
-                Logout
-            </a>
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
         </nav>
     </header>
 
     <main>
-
         {% if message %}
-            <p class="message">
-                {{ message }}
-            </p>
+            <p class="message">{{ message }}</p>
         {% endif %}
 
         {% if error %}
-            <p class="error">
-                {{ error }}
-            </p>
+            <p class="error">{{ error }}</p>
         {% endif %}
 
         {% block content %}
             {{ body|safe }}
         {% endblock %}
-
     </main>
 
     <script
@@ -133,5 +110,4 @@
     {% block scripts %}{% endblock %}
 
 </body>
-
 </html>

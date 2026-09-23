@@ -33,10 +33,16 @@ DEFAULT_COMMAND_LEVELS = {
     "ping": LEVEL_PUBLIC,
     "info": LEVEL_PUBLIC,
 
-    # Users can check their own permission level
+    # Permission commands default to owner, except users can inspect their own level.
+    "permissions": LEVEL_OWNER,
     "permissions.my_level": LEVEL_PUBLIC,
+    "permissions.view": LEVEL_OWNER,
+    "permissions.set_role": LEVEL_OWNER,
+    "permissions.clear_role": LEVEL_OWNER,
+    "permissions.set_command": LEVEL_OWNER,
+    "permissions.reset_command": LEVEL_OWNER,
 
-    # Form commands
+    # Form commands have mixed access levels, so keep child defaults explicit.
     "form.create": LEVEL_OWNER,
     "form.list": LEVEL_OWNER,
     "form.view": LEVEL_OWNER,
@@ -50,15 +56,13 @@ DEFAULT_COMMAND_LEVELS = {
     "form.publish": LEVEL_OWNER,
     "form.submissions": LEVEL_STAFF,
 
-    # Verification administration.
-    #
-    # The parent default means any new /verification command
-    # automatically inherits owner access unless explicitly
-    # overridden below or in the database.
+    # Verification administration. The parent default protects future subcommands.
     "verification": LEVEL_OWNER,
 
-    # Keep known child commands listed so they remain visible
-    # in /permissions view and command autocomplete.
+    # Keep known children listed so they remain visible in permission autocomplete/UI.
+    "verification.setup": LEVEL_OWNER,
+    "verification.help": LEVEL_OWNER,
+    "verification.status": LEVEL_OWNER,
     "verification.panel": LEVEL_OWNER,
     "verification.review_channel": LEVEL_OWNER,
     "verification.log_channel": LEVEL_OWNER,
@@ -73,17 +77,21 @@ DEFAULT_COMMAND_LEVELS = {
     "verification.cancel_user": LEVEL_OWNER,
     "verification.cancel_all": LEVEL_OWNER,
 
-    # Welcome administration.
-    #
-    # Individual /welcome commands inherit this automatically.
+    # Welcome administration. The parent default protects future subcommands.
     "welcome": LEVEL_OWNER,
-
-    # Permission config commands
-    "permissions.view": LEVEL_OWNER,
-    "permissions.set_role": LEVEL_OWNER,
-    "permissions.clear_role": LEVEL_OWNER,
-    "permissions.set_command": LEVEL_OWNER,
-    "permissions.reset_command": LEVEL_OWNER,
+    "welcome.setup": LEVEL_OWNER,
+    "welcome.edit": LEVEL_OWNER,
+    "welcome.extras": LEVEL_OWNER,
+    "welcome.channel": LEVEL_OWNER,
+    "welcome.add_field": LEVEL_OWNER,
+    "welcome.fields": LEVEL_OWNER,
+    "welcome.remove_field": LEVEL_OWNER,
+    "welcome.clear_fields": LEVEL_OWNER,
+    "welcome.enable": LEVEL_OWNER,
+    "welcome.disable": LEVEL_OWNER,
+    "welcome.status": LEVEL_OWNER,
+    "welcome.preview": LEVEL_OWNER,
+    "welcome.test": LEVEL_OWNER,
 
     # Custom commands
     "custom_command": LEVEL_OWNER,
@@ -93,9 +101,7 @@ DEFAULT_COMMAND_LEVELS = {
 }
 
 
-def normalise_level(
-    level: str,
-) -> str:
+def normalise_level(level: str) -> str:
     cleaned = (
         level.lower()
         .strip()
@@ -112,9 +118,7 @@ def normalise_level(
     return cleaned
 
 
-def normalise_command_key(
-    command_key: str,
-) -> str:
+def normalise_command_key(command_key: str) -> str:
     return (
         command_key.lower()
         .strip()
@@ -124,11 +128,7 @@ def normalise_command_key(
 
 
 def get_bot_dev_user_ids() -> set[int]:
-    raw_value = os.getenv(
-        "BOT_DEV_USER_IDS",
-        "",
-    )
-
+    raw_value = os.getenv("BOT_DEV_USER_IDS", "")
     user_ids: set[int] = set()
 
     for item in raw_value.split(","):
@@ -138,10 +138,7 @@ def get_bot_dev_user_ids() -> set[int]:
             continue
 
         try:
-            user_ids.add(
-                int(item)
-            )
-
+            user_ids.add(int(item))
         except ValueError:
             continue
 
@@ -149,29 +146,14 @@ def get_bot_dev_user_ids() -> set[int]:
 
 
 class PermissionStore:
-    def __init__(
-        self,
-        db_path: str = "data/tfsbot.sqlite3",
-    ) -> None:
-        db_path_object = Path(
-            db_path
-        )
+    def __init__(self, db_path: str = "data/tfsbot.sqlite3") -> None:
+        db_path_object = Path(db_path)
+        db_path_object.parent.mkdir(parents=True, exist_ok=True)
 
-        db_path_object.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        self.db_path = str(db_path_object)
 
-        self.db_path = str(
-            db_path_object
-        )
-
-    async def initialise(
-        self,
-    ) -> None:
-        async with open_database(
-            self.db_path
-        ) as database:
+    async def initialise(self) -> None:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 CREATE TABLE IF NOT EXISTS permission_roles (
@@ -201,20 +183,11 @@ class PermissionStore:
         guild_id: int,
         command_key: str,
     ) -> str:
-        command_key = normalise_command_key(
-            command_key
-        )
+        command_key = normalise_command_key(command_key)
+        parent_key = command_key.split(".")[0]
 
-        parent_key = (
-            command_key.split(".")[0]
-        )
-
-        async with open_database(
-            self.db_path
-        ) as database:
-            database.row_factory = (
-                DatabaseRow
-            )
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -242,41 +215,26 @@ class PermissionStore:
             row = await cursor.fetchone()
 
         if row is not None:
-            return normalise_level(
-                str(
-                    row["level"]
-                )
-            )
+            return normalise_level(str(row["level"]))
 
         raw_level = (
-            DEFAULT_COMMAND_LEVELS.get(
-                command_key
-            )
-            or DEFAULT_COMMAND_LEVELS.get(
-                parent_key
-            )
+            DEFAULT_COMMAND_LEVELS.get(command_key)
+            or DEFAULT_COMMAND_LEVELS.get(parent_key)
             or LEVEL_PUBLIC
         )
 
-        return normalise_level(
-            raw_level
-        )
+        return normalise_level(raw_level)
 
     async def get_required_level_value(
         self,
         guild_id: int,
         command_key: str,
     ) -> int:
-        level_name = (
-            await self.get_required_level_name(
-                guild_id,
-                command_key,
-            )
+        level_name = await self.get_required_level_name(
+            guild_id,
+            command_key,
         )
-
-        return LEVEL_VALUES[
-            level_name
-        ]
+        return LEVEL_VALUES[level_name]
 
     async def set_command_level(
         self,
@@ -284,19 +242,10 @@ class PermissionStore:
         command_key: str,
         level: str,
     ) -> None:
-        command_key = (
-            normalise_command_key(
-                command_key
-            )
-        )
+        command_key = normalise_command_key(command_key)
+        level = normalise_level(level)
 
-        level = normalise_level(
-            level
-        )
-
-        async with open_database(
-            self.db_path
-        ) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 INSERT INTO permission_command_levels (
@@ -308,11 +257,7 @@ class PermissionStore:
                 ON CONFLICT(guild_id, command_key)
                 DO UPDATE SET level = excluded.level
                 """,
-                (
-                    guild_id,
-                    command_key,
-                    level,
-                ),
+                (guild_id, command_key, level),
             )
 
             await database.commit()
@@ -322,25 +267,16 @@ class PermissionStore:
         guild_id: int,
         command_key: str,
     ) -> None:
-        command_key = (
-            normalise_command_key(
-                command_key
-            )
-        )
+        command_key = normalise_command_key(command_key)
 
-        async with open_database(
-            self.db_path
-        ) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 DELETE FROM permission_command_levels
                 WHERE guild_id = ?
                 AND command_key = ?
                 """,
-                (
-                    guild_id,
-                    command_key,
-                ),
+                (guild_id, command_key),
             )
 
             await database.commit()
@@ -349,17 +285,10 @@ class PermissionStore:
         self,
         guild_id: int,
     ) -> dict[str, str]:
-        custom_levels: dict[
-            str,
-            str,
-        ] = {}
+        custom_levels: dict[str, str] = {}
 
-        async with open_database(
-            self.db_path
-        ) as database:
-            database.row_factory = (
-                DatabaseRow
-            )
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -367,66 +296,32 @@ class PermissionStore:
                 FROM permission_command_levels
                 WHERE guild_id = ?
                 """,
-                (
-                    guild_id,
-                ),
+                (guild_id,),
             )
 
-            rows = (
-                await cursor.fetchall()
-            )
+            rows = await cursor.fetchall()
 
         for row in rows:
-            custom_levels[
-                str(
-                    row["command_key"]
-                )
-            ] = normalise_level(
-                str(
-                    row["level"]
-                )
+            custom_levels[str(row["command_key"])] = normalise_level(
+                str(row["level"])
             )
 
-        keys = (
-            set(
-                DEFAULT_COMMAND_LEVELS.keys()
-            )
-            | set(
-                custom_levels.keys()
-            )
-        )
+        keys = set(DEFAULT_COMMAND_LEVELS.keys()) | set(custom_levels.keys())
 
-        command_levels: dict[
-            str,
-            str,
-        ] = {}
+        command_levels: dict[str, str] = {}
 
         for key in sorted(keys):
             command_levels[key] = (
-                custom_levels.get(
-                    key
-                )
-                or DEFAULT_COMMAND_LEVELS.get(
-                    key
-                )
+                custom_levels.get(key)
+                or DEFAULT_COMMAND_LEVELS.get(key)
                 or LEVEL_PUBLIC
             )
 
         return command_levels
 
-    async def get_known_command_keys(
-        self,
-        guild_id: int,
-    ) -> list[str]:
-        command_levels = (
-            await self.get_all_command_levels(
-                guild_id
-            )
-        )
-
-        return list(
-            command_levels.keys()
-        )
+    async def get_known_command_keys(self, guild_id: int) -> list[str]:
+        command_levels = await self.get_all_command_levels(guild_id)
+        return list(command_levels.keys())
 
     async def set_role(
         self,
@@ -434,18 +329,12 @@ class PermissionStore:
         level: str,
         role_id: int,
     ) -> None:
-        level = normalise_level(
-            level
-        )
+        level = normalise_level(level)
 
         if level == LEVEL_PUBLIC:
-            raise ValueError(
-                "Public does not use a role."
-            )
+            raise ValueError("Public does not use a role.")
 
-        async with open_database(
-            self.db_path
-        ) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 INSERT INTO permission_roles (
@@ -457,11 +346,7 @@ class PermissionStore:
                 ON CONFLICT(guild_id, level)
                 DO UPDATE SET role_id = excluded.role_id
                 """,
-                (
-                    guild_id,
-                    level,
-                    role_id,
-                ),
+                (guild_id, level, role_id),
             )
 
             await database.commit()
@@ -471,28 +356,19 @@ class PermissionStore:
         guild_id: int,
         level: str,
     ) -> None:
-        level = normalise_level(
-            level
-        )
+        level = normalise_level(level)
 
         if level == LEVEL_PUBLIC:
-            raise ValueError(
-                "Public does not use a role."
-            )
+            raise ValueError("Public does not use a role.")
 
-        async with open_database(
-            self.db_path
-        ) as database:
+        async with open_database(self.db_path) as database:
             await database.execute(
                 """
                 DELETE FROM permission_roles
                 WHERE guild_id = ?
                 AND level = ?
                 """,
-                (
-                    guild_id,
-                    level,
-                ),
+                (guild_id, level),
             )
 
             await database.commit()
@@ -502,16 +378,10 @@ class PermissionStore:
         guild_id: int,
         level: str,
     ) -> int | None:
-        level = normalise_level(
-            level
-        )
+        level = normalise_level(level)
 
-        async with open_database(
-            self.db_path
-        ) as database:
-            database.row_factory = (
-                DatabaseRow
-            )
+        async with open_database(self.db_path) as database:
+            database.row_factory = DatabaseRow
 
             cursor = await database.execute(
                 """
@@ -521,10 +391,7 @@ class PermissionStore:
                 AND level = ?
                 LIMIT 1
                 """,
-                (
-                    guild_id,
-                    level,
-                ),
+                (guild_id, level),
             )
 
             row = await cursor.fetchone()
@@ -532,34 +399,14 @@ class PermissionStore:
         if row is None:
             return None
 
-        return int(
-            row["role_id"]
-        )
+        return int(row["role_id"])
 
     async def get_role_ids(
         self,
         guild_id: int,
-    ) -> dict[
-        str,
-        int | None,
-    ]:
+    ) -> dict[str, int | None]:
         return {
-            LEVEL_STAFF: (
-                await self.get_role_id(
-                    guild_id,
-                    LEVEL_STAFF,
-                )
-            ),
-            LEVEL_ADMIN: (
-                await self.get_role_id(
-                    guild_id,
-                    LEVEL_ADMIN,
-                )
-            ),
-            LEVEL_OWNER: (
-                await self.get_role_id(
-                    guild_id,
-                    LEVEL_OWNER,
-                )
-            ),
+            LEVEL_STAFF: await self.get_role_id(guild_id, LEVEL_STAFF),
+            LEVEL_ADMIN: await self.get_role_id(guild_id, LEVEL_ADMIN),
+            LEVEL_OWNER: await self.get_role_id(guild_id, LEVEL_OWNER),
         }
