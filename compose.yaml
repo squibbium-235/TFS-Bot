@@ -1,0 +1,18 @@
+services:
+  tfsbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: tfsbot
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./data:/app/data
+
+    expose:
+      - "5050"
