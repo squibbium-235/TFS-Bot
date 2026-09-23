@@ -5,6 +5,8 @@ import time
 
 from datetime import timedelta
 
+from waitress import serve
+
 import discord
 
 from flask import (
@@ -259,9 +261,7 @@ def create_webui(
 def start_webui(
     bot: discord.Client,
 ) -> None:
-    if not (
-        bot.config.webui_enabled
-    ):
+    if not bot.config.webui_enabled:
         return
 
     app = create_webui(
@@ -269,15 +269,11 @@ def start_webui(
     )
 
     thread = threading.Thread(
-        target=lambda: app.run(
-            host=(
-                bot.config.webui_host
-            ),
-            port=(
-                bot.config.webui_port
-            ),
-            debug=False,
-            use_reloader=False,
+        target=lambda: serve(
+            app,
+            host=bot.config.webui_host,
+            port=bot.config.webui_port,
+            threads=8,
         ),
         daemon=True,
         name="TFSBot-WebUI",
