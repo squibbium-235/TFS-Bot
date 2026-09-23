@@ -498,6 +498,40 @@ class ApplicationStore:
             rows = await cursor.fetchall()
 
         return [self._row_to_application(row) for row in rows]
+    
+    async def list_applications_for_user(
+        self,
+        *,
+        guild_id: int,
+        user_id: int,
+    ) -> list[StoredApplication]:
+        async with open_database(
+            self.database_path
+        ) as database:
+            database.row_factory = DatabaseRow
+
+            cursor = await database.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE guild_id = ?
+                AND user_id = ?
+                ORDER BY submitted_at DESC
+                """,
+                (
+                    guild_id,
+                    user_id,
+                ),
+            )
+
+            rows = await cursor.fetchall()
+
+        return [
+            self._row_to_application(
+                row
+            )
+            for row in rows
+        ]
 
     async def get_previous_application_links(
         self,
