@@ -1,0 +1,594 @@
+{% extends "base.html" %}
+
+
+{% block head %}
+
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/embed_builder.css') }}"
+>
+
+{% endblock %}
+
+
+{% block content %}
+
+<div class="panel page-intro">
+
+    <h2>Verification Welcome Message</h2>
+
+    <p class="hint">
+        Configure the embed sent when a verification
+        application is approved.
+        The applicant is already DM'd separately.
+    </p>
+
+    <div class="quick-actions">
+
+        <a
+            class="button-link secondary"
+            href="{{ url_for('verification.index', guild_id=selected_guild_id) }}"
+        >
+            Back to Verification
+        </a>
+
+        <a
+            class="button-link secondary"
+            href="#welcome-settings"
+        >
+            Settings
+        </a>
+
+        <a
+            class="button-link secondary"
+            href="#welcome-embed"
+        >
+            Embed
+        </a>
+
+        <a
+            class="button-link secondary"
+            href="#welcome-preview"
+        >
+            Preview
+        </a>
+
+    </div>
+
+</div>
+
+
+{% if message %}
+    <p class="message">
+        {{ message }}
+    </p>
+{% endif %}
+
+{% if error %}
+    <p class="error">
+        {{ error }}
+    </p>
+{% endif %}
+
+
+<div class="panel">
+
+    <form
+        method="get"
+        action="{{ url_for('verification_welcome.index') }}"
+    >
+
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+
+            {% for guild in guilds %}
+
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+    </form>
+
+</div>
+
+
+{% if selected_guild_id %}
+
+<div class="embed-builder-grid">
+
+<section>
+
+<div class="panel">
+
+<form
+    method="post"
+    action="{{ url_for('verification_welcome.index') }}"
+    id="welcome-form"
+>
+
+    <input
+        type="hidden"
+        name="guild_id"
+        value="{{ selected_guild_id }}"
+    >
+
+
+    <h2 id="welcome-settings">
+        Welcome Settings
+    </h2>
+
+
+    <div class="stat-grid">
+
+        <div class="stat-card">
+            <strong>Status</strong>
+
+            {% if values.enabled %}
+                Enabled
+            {% else %}
+                Disabled
+            {% endif %}
+        </div>
+
+        <div class="stat-card">
+            <strong>Trigger</strong>
+            Verification approved
+        </div>
+
+        <div class="stat-card">
+            <strong>Notification</strong>
+            Approval DM is sent separately
+        </div>
+
+    </div>
+
+
+    <label>Welcome channel</label>
+
+    <select name="channel_id">
+
+        <option value="">
+            Not configured
+        </option>
+
+        {% for channel in text_channels %}
+
+            <option
+                value="{{ channel.id }}"
+                {{ 'selected' if channel.id == values.channel_id else '' }}
+            >
+                #{{ channel.name }}
+            </option>
+
+        {% endfor %}
+
+    </select>
+
+
+    <div class="actions">
+
+        <button
+            type="submit"
+            name="action"
+            value="save"
+        >
+            Save
+        </button>
+
+        {% if values.enabled %}
+
+            <button
+                type="submit"
+                name="action"
+                value="disable"
+                class="danger"
+                formnovalidate
+            >
+                Disable
+            </button>
+
+        {% else %}
+
+            <button
+                type="submit"
+                name="action"
+                value="enable"
+                class="secondary"
+                formnovalidate
+            >
+                Enable
+            </button>
+
+        {% endif %}
+
+    </div>
+
+
+    <h2
+        id="welcome-embed"
+        class="form-section-title"
+    >
+        Welcome Embed
+    </h2>
+
+
+    <p class="hint section-note">
+        Template variables can be used in the title,
+        description, author, footer, image URLs and fields.
+    </p>
+
+
+    <details>
+
+        <summary>
+            Template Variables
+        </summary>
+
+        <div class="upload-details-inner">
+
+            {% for placeholder, description in placeholders %}
+
+                <p>
+                    <code>{{ placeholder }}</code>
+                    - {{ description }}
+                </p>
+
+            {% endfor %}
+
+        </div>
+
+    </details>
+
+
+    <label>Title</label>
+
+    <input
+        name="title"
+        id="title"
+        maxlength="256"
+        value="{{ values.title }}"
+        placeholder="Welcome {user}!"
+    >
+
+
+    <label>Description</label>
+
+    <textarea
+        name="description"
+        id="description"
+        maxlength="4000"
+        rows="6"
+        placeholder="Welcome to {server}!"
+    >{{ values.description }}</textarea>
+
+
+    <label>Colour</label>
+
+    <div class="colour-input-wrap">
+
+        <input
+            type="text"
+            name="colour"
+            id="colour"
+            value="{{ values.colour }}"
+            placeholder="#5865F2"
+            autocomplete="off"
+        >
+
+        <input
+            type="color"
+            id="colour_picker"
+            value="{{ values.colour }}"
+        >
+
+    </div>
+
+
+    <h2 class="form-section-title">
+        Images
+    </h2>
+
+
+    <p class="hint section-note">
+        Use an external URL, or use
+        <code>{avatar}</code>
+        for the approved user's avatar.
+    </p>
+
+
+    <label>Thumbnail URL</label>
+
+    <input
+        name="thumbnail_url"
+        id="thumbnail_url"
+        value="{{ values.thumbnail_url }}"
+        placeholder="{avatar}"
+    >
+
+
+    <label>Large image URL</label>
+
+    <input
+        name="image_url"
+        id="image_url"
+        value="{{ values.image_url }}"
+        placeholder="https://example.com/welcome.png"
+    >
+
+
+    <h2 class="form-section-title">
+        Author + Footer
+    </h2>
+
+
+    <label>Author name</label>
+
+    <input
+        name="author_name"
+        id="author_name"
+        maxlength="256"
+        value="{{ values.author_name }}"
+    >
+
+
+    <label>Author icon URL</label>
+
+    <input
+        name="author_icon_url"
+        id="author_icon_url"
+        value="{{ values.author_icon_url }}"
+        placeholder="{avatar}"
+    >
+
+
+    <label>Footer</label>
+
+    <input
+        name="footer"
+        id="footer"
+        maxlength="2048"
+        value="{{ values.footer }}"
+    >
+
+
+    <h2 class="form-section-title">
+        Fields
+    </h2>
+
+
+    <div id="fields"></div>
+
+
+    <div class="actions">
+
+        <button
+            type="button"
+            class="secondary"
+            onclick="addWelcomeField()"
+        >
+            Add Field
+        </button>
+
+        <button
+            type="submit"
+            name="action"
+            value="save"
+        >
+            Save Welcome Message
+        </button>
+
+    </div>
+
+
+    <h2 class="form-section-title">
+        Test
+    </h2>
+
+
+    <p class="hint section-note">
+        Send the configured welcome message as if the
+        selected user had just been approved.
+    </p>
+
+
+    <label>Test user ID</label>
+
+    <input
+        name="test_user_id"
+        id="test_user_id"
+        placeholder="123456789012345678"
+    >
+
+
+    <div class="actions">
+
+        <button
+            type="submit"
+            name="action"
+            value="test"
+            class="secondary"
+            formnovalidate
+        >
+            Send Test to Welcome Channel
+        </button>
+
+    </div>
+
+</form>
+
+</div>
+
+</section>
+
+
+<section
+    class="preview-wrap"
+    id="welcome-preview"
+>
+
+<div class="panel">
+
+    <h2>Live Preview</h2>
+
+    <p class="hint">
+        Template values are shown literally here.
+        Discord replaces them when the message is actually sent.
+    </p>
+
+
+    <div class="discord-preview">
+
+        <div class="discord-message">
+
+            <div class="avatar">
+                T
+            </div>
+
+
+            <div class="message-body">
+
+                <span class="bot-name">
+                    TFSBot
+                </span>
+
+                <span class="bot-tag">
+                    BOT
+                </span>
+
+
+                <div
+                    class="embed-preview"
+                    id="preview-embed"
+                >
+
+                    <div class="embed-body-row">
+
+                        <div class="embed-main-content">
+
+                            <div
+                                class="embed-author"
+                                id="preview-author-wrap"
+                                style="display: none;"
+                            >
+
+                                <img
+                                    id="preview-author-icon"
+                                    style="display: none;"
+                                >
+
+                                <span id="preview-author"></span>
+
+                            </div>
+
+
+                            <div
+                                class="embed-title"
+                                id="preview-title"
+                            >
+                                Welcome {user}!
+                            </div>
+
+
+                            <div
+                                class="embed-description"
+                                id="preview-description"
+                            >
+                                Welcome to {server}!
+                            </div>
+
+
+                            <div
+                                class="embed-fields"
+                                id="preview-fields"
+                            ></div>
+
+                        </div>
+
+
+                        <div class="embed-thumbnail-wrap">
+
+                            <img
+                                class="embed-thumbnail"
+                                id="preview-thumbnail"
+                                style="display: none;"
+                            >
+
+                            <div
+                                class="image-preview-error"
+                                id="preview-thumbnail-error"
+                            >
+                                Thumbnail could not be loaded.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <img
+                        class="embed-image"
+                        id="preview-image"
+                        style="display: none;"
+                    >
+
+
+                    <div
+                        class="image-preview-error"
+                        id="preview-image-error"
+                    >
+                        Image could not be loaded.
+                    </div>
+
+
+                    <div
+                        class="embed-footer"
+                        id="preview-footer"
+                    ></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</section>
+
+</div>
+
+
+<script
+    id="welcome-loaded-fields"
+    type="application/json"
+>{{ values.fields | tojson }}</script>
+
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+
+{% if selected_guild_id %}
+
+<script
+    src="{{ url_for('static', filename='js/verification_welcome.js') }}"
+></script>
+
+{% endif %}
+
+{% endblock %}
