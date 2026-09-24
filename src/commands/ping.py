@@ -1,3 +1,8 @@
+"""Slash and prefix liveness checks.
+
+Both commands answer with the same fixed reply. They do not measure gateway latency.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -6,6 +11,8 @@ from discord.ext import commands
 
 
 class PingCommand(commands.Cog):
+    """Confirms the bot process can receive a command."""
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 

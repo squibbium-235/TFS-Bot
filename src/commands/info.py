@@ -1,3 +1,9 @@
+"""Runtime status for slash and prefix `/info`.
+
+Uptime is measured from process start with a monotonic clock, so it resets on
+restart and is not a wall-clock timestamp.
+"""
+
 from __future__ import annotations
 
 import platform
@@ -10,10 +16,12 @@ from discord.ext import commands
 from ..utils.embed_builder import EmbedFactory
 
 
+# Monotonic process start. Subtracting this from time.monotonic() is uptime.
 STARTED_AT = time.monotonic()
 
 
 def format_uptime(seconds: float) -> str:
+    """Format uptime, dropping seconds once the process has been up for an hour."""
     seconds = int(seconds)
 
     days, seconds = divmod(seconds, 86_400)
@@ -30,6 +38,7 @@ def format_uptime(seconds: float) -> str:
 
 
 def build_info_embed(bot: commands.Bot, guild: discord.Guild | None) -> discord.Embed:
+    """Build the status embed. Member count is omitted outside a guild."""
     uptime = format_uptime(time.monotonic() - STARTED_AT)
 
     embed = EmbedFactory.base(
@@ -50,6 +59,8 @@ def build_info_embed(bot: commands.Bot, guild: discord.Guild | None) -> discord.
 
 
 class InfoCommand(commands.Cog):
+    """Publishes the same status embed from slash and prefix commands."""
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 

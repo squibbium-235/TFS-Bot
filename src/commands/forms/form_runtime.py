@@ -1,3 +1,12 @@
+"""Runtime for published generic forms, not only the verification application.
+
+A modal can hold five inputs, so questions are split into pages. The next page
+is opened from a Continue button because the submit handler cannot attach every
+remaining question to the same modal. Sessions live in process memory and are
+lost on restart. GenericFormStartView is persistent: its custom id is stable
+and the form is resolved from the message the button was published on.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,12 +21,15 @@ from src.utils.form_builder import FormAnswer, build_form_modal
 
 @dataclass
 class GenericFormSession:
+    """Answers collected so far for one user filling one published form."""
+
     user_id: int
     guild_id: int
     form_key: str
     answers: list[FormAnswer] = field(default_factory=list)
 
 
+# Keyed by session id. Not restored after a restart, so Continue then fails closed.
 GENERIC_FORM_SESSIONS: dict[str, GenericFormSession] = {}
 
 
@@ -32,6 +44,7 @@ async def build_generic_form_page_modal(
     session_id: str,
     page_index: int,
 ) -> discord.ui.Modal:
+    """Build one page. The title keeps a page suffix inside Discord's 45-character limit."""
     form_store = get_form_store(client)
 
     if form_store is None:
@@ -82,6 +95,7 @@ async def handle_generic_form_page_submit(
     page_index: int,
     answers: list[FormAnswer],
 ) -> None:
+    """Append this page's answers. The session is deleted only after the last page."""
     session = GENERIC_FORM_SESSIONS.get(session_id)
 
     if session is None:
@@ -149,6 +163,12 @@ async def handle_generic_form_page_submit(
 
 
 class ContinueGenericFormView(discord.ui.View):
+    """Opens the next modal page. It times out; it is not restored after restart.
+
+    The button custom id is shared. The session id lives on this instance, so
+    the button only works while this process still holds the view.
+    """
+
     def __init__(
         self,
         session_id: str,
@@ -205,6 +225,13 @@ class ContinueGenericFormView(discord.ui.View):
 
 
 class GenericFormStartView(discord.ui.View):
+    """Persistent Open Form button shared by every published panel.
+
+    timeout is None and the custom id stays `form:start`, so the view can be
+    registered once and still receive clicks after a restart. Which form to
+    open is looked up from the message id, not from the button id.
+    """
+
     def __init__(self) -> None:
         super().__init__(timeout=None)
 

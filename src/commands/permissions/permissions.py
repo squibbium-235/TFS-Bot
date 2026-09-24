@@ -1,3 +1,11 @@
+"""Guild permission roles and per-command minimum levels.
+
+Stored command keys are normalised (lower case, spaces become dots, hyphens
+become underscores). Bot developers and the Discord server owner are owner
+level even when the owner role is unset; that rule lives in the permission
+helper, and the settings embed only reminds staff of it.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -16,6 +24,7 @@ from src.utils.permissions import get_member_level_name
 
 
 def get_permission_store(bot: commands.Bot) -> PermissionStore:
+    """Return the bot's permission store, or raise if it has not been attached."""
     permission_store = getattr(bot, "permission_store", None)
 
     if permission_store is None:
@@ -28,6 +37,7 @@ async def command_key_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """Offer known command keys. Discord accepts at most 25 choices."""
     if interaction.guild is None:
         return []
 
@@ -60,6 +70,7 @@ def role_display(
     guild: discord.Guild,
     role_id: int | None,
 ) -> str:
+    """Mention a configured role. A deleted role is shown by its stored id."""
     if role_id is None:
         return "`Not set`"
 
@@ -75,6 +86,11 @@ async def build_permissions_embed(
     guild: discord.Guild,
     permission_store: PermissionStore,
 ) -> discord.Embed:
+    """Summarise roles and overrides.
+
+    Command levels are packed 15 to a field and only the first four fields are
+    added, so a long override list is truncated in this view.
+    """
     embed = discord.Embed(
         title="Permission Settings",
         description=(
@@ -125,6 +141,8 @@ async def build_permissions_embed(
 
 
 class PermissionsCommand(commands.Cog):
+    """Slash commands that read and write the guild permission store."""
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
@@ -270,6 +288,7 @@ class PermissionsCommand(commands.Cog):
         command: str,
         level: app_commands.Choice[str],
     ) -> None:
+        """Store the override under the normalised command key."""
         assert interaction.guild is not None
 
         permission_store = get_permission_store(self.bot)
@@ -297,6 +316,7 @@ class PermissionsCommand(commands.Cog):
         interaction: discord.Interaction,
         command: str,
     ) -> None:
+        """Clear an override. The key is normalised the same way it was stored."""
         assert interaction.guild is not None
 
         permission_store = get_permission_store(self.bot)

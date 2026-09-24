@@ -1,3 +1,11 @@
+"""Welcome embed templates sent after a verification approval.
+
+Staff edit the stored embed JSON from slash commands. Placeholders such as
+`{user}` stay in the template and are filled in when a message is actually
+sent. A background loop delivers approvals that happened after welcome was
+enabled; a failed or skipped delivery is recorded and is not retried.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -22,6 +30,7 @@ from src.services.welcome_store import (
 )
 
 
+# Import-time default: /welcome requires owner unless the guild overrides it.
 DEFAULT_COMMAND_LEVELS.setdefault(
     "welcome",
     LEVEL_OWNER,
@@ -50,6 +59,7 @@ def clean_optional_text(
 def parse_colour(
     raw_value: str | None,
 ) -> int | None:
+    """Parse a 6-digit hex colour. Blank means the colour key should be removed."""
     value = clean_optional_text(
         raw_value
     )
@@ -85,6 +95,7 @@ def parse_colour(
 def colour_text(
     embed_data: dict[str, Any],
 ) -> str:
+    """Read the stored colour. The JSON key is Discord's `color` spelling."""
     raw_colour = embed_data.get(
         "color"
     )
@@ -153,6 +164,7 @@ def settings_summary_embed(
     guild: discord.Guild,
     settings: WelcomeSettings,
 ) -> discord.Embed:
+    """Summarise settings. The footer states that delivery follows approval."""
     status = (
         "Enabled"
         if settings.enabled
@@ -245,6 +257,12 @@ async def get_preview_member(
 class WelcomeEmbedModal(
     discord.ui.Modal
 ):
+    """Edits title, description, colour, and images. Five inputs fill one modal.
+
+    Blank inputs delete those keys. The embed is refused if nothing visible
+    would remain. The stored settings dict is copied before mutation.
+    """
+
     def __init__(
         self,
         *,
@@ -495,6 +513,8 @@ class WelcomeEmbedModal(
 class WelcomeExtrasModal(
     discord.ui.Modal
 ):
+    """Edits author and footer, which do not fit in the main embed modal."""
+
     def __init__(
         self,
         *,
@@ -642,6 +662,8 @@ class WelcomeExtrasModal(
 class WelcomeFieldModal(
     discord.ui.Modal
 ):
+    """Appends one embed field. Discord allows 25 fields; inline accepts yes or no."""
+
     def __init__(
         self,
         *,
@@ -785,6 +807,13 @@ class WelcomeFieldModal(
 class WelcomeCommands(
     commands.Cog
 ):
+    """Slash editor for the welcome template, plus the approval delivery loop.
+
+    The loop starts in cog_load. It only considers approvals at or after
+    `enabled_since`, and it marks each one sent, skipped, or failed so the
+    same application is not picked up again.
+    """
+
     def __init__(
         self,
         bot: commands.Bot,
@@ -1289,6 +1318,7 @@ class WelcomeCommands(
     async def approval_welcome_worker(
         self,
     ) -> None:
+        """Deliver unprocessed approvals for every guild with welcome enabled."""
         settings_rows = (
             await self.store
             .list_enabled_settings()
@@ -1418,6 +1448,7 @@ class WelcomeCommands(
 async def setup(
     bot: commands.Bot,
 ) -> None:
+    """Open the welcome store on the application database and attach it to the bot."""
     database_path = getattr(
         getattr(
             bot,

@@ -1,3 +1,12 @@
+"""Moderation profile: verification attempts, bot cases, and recent audit history.
+
+`/modprofile` replies ephemerally and keeps the durable record as a message in
+the moderation log, with a thread for staff notes. Reopening an existing
+profile refreshes that message and unarchives the thread. Name lookup is an
+exact match against current members; someone who has left must be requested
+by id or mention.
+"""
+
 from __future__ import annotations
 
 import re
@@ -35,6 +44,7 @@ from src.services.moderation_store import (
 )
 
 
+# Accepts a raw id or a mention. Display names are handled separately.
 USER_ID_PATTERN = re.compile(
     r"^(?:<@!?)?(\d+)>?$"
 )
@@ -110,6 +120,11 @@ async def resolve_profile_user(
     discord.User | discord.Member | None,
     str | None,
 ]:
+    """Resolve an id, mention, or exact current-member name.
+
+    Several members sharing a name is an error rather than a guess. A name
+    search cannot see people who have left; their id still can.
+    """
     value = value.strip()
 
     id_match = USER_ID_PATTERN.fullmatch(
@@ -277,6 +292,7 @@ def split_embed_lines(
     *,
     maximum_length: int = 1000,
 ) -> list[str]:
+    """Pack lines into chunks that stay under an embed field's length limit."""
     if not lines:
         return []
 
@@ -386,6 +402,11 @@ def format_case(
 def audit_action_name(
     entry: discord.AuditLogEntry,
 ) -> str | None:
+    """Name the audit actions this profile shows. Other actions are ignored.
+
+    A timeout is a member update whose timeout timestamp changed, not its own
+    audit action. Clearing the timestamp is reported as the timeout ending.
+    """
     if (
         entry.action
         == discord.AuditLogAction.ban
@@ -446,6 +467,12 @@ async def get_recent_audit_history(
     list[str],
     bool,
 ]:
+    """Scan the newest 250 guild audit entries for this user.
+
+    Discord is not asked to filter by user, so a busy server can push this
+    user's older actions out of the window. The bool is False when the audit
+    log cannot be read, which is distinct from a readable log with no hits.
+    """
     lines: list[str] = []
 
     try:
@@ -543,6 +570,11 @@ def build_profile_embed(
     audit_available: bool,
     thread_url: str | None,
 ) -> discord.Embed:
+    """Combine verification, bot cases, and audit lines into one profile embed.
+
+    A missing thread URL is shown as still being created. An unreadable audit
+    log is explained; an empty readable log says no recent actions were found.
+    """
     embed = discord.Embed(
         title="User Moderation Profile",
         colour=discord.Colour.blurple(),
@@ -752,6 +784,13 @@ def build_profile_embed(
 class ModProfileCommands(
     commands.Cog
 ):
+    """Opens or creates a user's moderation profile in the configured log channel.
+
+    If the saved message can no longer be edited, the stored profile is deleted
+    and a new message plus thread are created. If saving the new profile fails,
+    that message and thread are removed before the error propagates.
+    """
+
     def __init__(
         self,
         bot: commands.Bot,
@@ -1145,6 +1184,7 @@ class ModProfileCommands(
         self,
         profile: UserModProfile,
     ) -> discord.Thread | None:
+        """Return the notes thread from cache, or fetch it. Missing threads are None."""
         channel = self.bot.get_channel(
             profile.thread_id
         )
@@ -1182,6 +1222,7 @@ class ModProfileCommands(
         profile: UserModProfile,
         embed: discord.Embed,
     ) -> bool:
+        """Rewrite the stored profile message. False means it should be recreated."""
         channel = self.bot.get_channel(
             profile.channel_id
         )
