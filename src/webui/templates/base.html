@@ -31,54 +31,68 @@
 
 <body>
 
-    <header>
-        <h1>{{ title }}</h1>
+    <a class="skip-link" href="#content">Skip to content</a>
 
-        <nav>
+    <header>
+        <div class="brand">
+            <a class="brand-mark" href="{{ url_for('overview.index') }}">Sanctuary Servo</a>
+            <h1>{{ title }}</h1>
+        </div>
+
+        <nav aria-label="Web UI">
             <a
                 href="{{ url_for('overview.index') }}"
                 class="{{ 'active' if active_page == 'overview' else '' }}"
+                {% if active_page == 'overview' %}aria-current="page"{% endif %}
             >Overview</a>
 
             {% if is_owner %}
                 <a
                     href="{{ url_for('embed_builder.index') }}"
                     class="{{ 'active' if active_page == 'embed_builder' else '' }}"
+                    {% if active_page == 'embed_builder' %}aria-current="page"{% endif %}
                 >Embed Builder</a>
 
                 <a
                     href="{{ url_for('custom_commands.index') }}"
                     class="{{ 'active' if active_page == 'custom_commands' else '' }}"
+                    {% if active_page == 'custom_commands' %}aria-current="page"{% endif %}
                 >Custom Commands</a>
 
                 <a
                     href="{{ url_for('dm_templates.index') }}"
                     class="{{ 'active' if active_page == 'dm_templates' else '' }}"
+                    {% if active_page == 'dm_templates' %}aria-current="page"{% endif %}
                 >DM Templates</a>
 
                 <a
                     href="{{ url_for('forms.index') }}"
                     class="{{ 'active' if active_page == 'forms' else '' }}"
+                    {% if active_page == 'forms' %}aria-current="page"{% endif %}
                 >Forms</a>
 
                 <a
                     href="{{ url_for('uploads.index') }}"
                     class="{{ 'active' if active_page == 'uploads' else '' }}"
+                    {% if active_page == 'uploads' %}aria-current="page"{% endif %}
                 >Uploads</a>
 
                 <a
                     href="{{ url_for('verification.index') }}"
                     class="{{ 'active' if active_page == 'verification' else '' }}"
+                    {% if active_page == 'verification' %}aria-current="page"{% endif %}
                 >Verification</a>
 
                 <a
                     href="{{ url_for('permissions.index') }}"
                     class="{{ 'active' if active_page == 'permissions' else '' }}"
+                    {% if active_page == 'permissions' %}aria-current="page"{% endif %}
                 >Permissions</a>
 
                 <a
                     href="{{ url_for('backups.index') }}"
                     class="{{ 'active' if active_page == 'backups' else '' }}"
+                    {% if active_page == 'backups' %}aria-current="page"{% endif %}
                 >Backups</a>
             {% endif %}
 
@@ -86,11 +100,11 @@
                 {{ display_name }} · {{ webui_role|title }}
             </span>
 
-            <a href="{{ url_for('auth.logout') }}">Logout</a>
+            <a class="nav-logout" href="{{ url_for('auth.logout') }}">Log out</a>
         </nav>
     </header>
 
-    <main>
+    <main id="content">
         {% if message %}
             <p class="message">{{ message }}</p>
         {% endif %}
