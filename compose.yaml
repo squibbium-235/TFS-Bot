@@ -20,3 +20,21 @@ services:
     # it is not published on the host.
     expose:
       - "5050"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+
+    container_name: cloudflared
+
+    restart: unless-stopped
+
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+
+    env_file:
+      - .env.cloudflare
+
+    depends_on:
+      - tfsbot
