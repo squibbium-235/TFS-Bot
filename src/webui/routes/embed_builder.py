@@ -1,8 +1,13 @@
-"""Owner embed builder: save payloads, upload images, and send to a channel.
+"""
+Owner Embed Builder for Sanctuary Servo.
 
-A saved-embed store is created on the bot the first time this page needs
-one. Uploaded images win over a typed URL. Discord file handles are
-closed after send, including when send fails.
+Saved embeds are stored globally for the bot.
+
+Channel selection is restricted to guilds the
+current Web UI session is authorised to access.
+A forged channel ID is rejected server-side,
+rather than merely being hidden from the HTML
+select element.
 """
 
 from __future__ import annotations
@@ -23,9 +28,11 @@ from src.services.saved_embed_store import (
     SavedEmbed,
     SavedEmbedStore,
 )
+
 from src.utils.embed_builder import (
     EmbedFactory,
 )
+
 from src.webui.helpers import (
     require_owner,
     webui_context,
@@ -38,11 +45,13 @@ blueprint = Blueprint(
 )
 
 
-def get_saved_embed_store(
-) -> SavedEmbedStore:
-    """Return the bot's saved-embed store, creating and initialising it if needed.
+def get_saved_embed_store() -> SavedEmbedStore:
+    """
+    Return the bot's saved-embed store.
 
-    The new store is attached to the bot so later requests reuse it.
+    The store is created and attached to the
+    bot the first time the Embed Builder needs
+    it.
     """
     context = webui_context()
 
@@ -85,11 +94,20 @@ def get_saved_embed_store(
     return store
 
 
-def get_available_channels(
-) -> list[dict[str, str]]:
-    """Text channels where this bot can view and send, across every guild.
+def get_available_channels() -> list[dict[str, str]]:
+    """
+    Return channels the current Web UI session
+    is allowed to use.
 
-    Guilds whose member cache has no bot member are skipped.
+    Two restrictions are applied:
+
+    1. The guild must be accessible to the
+       current Web UI user.
+    2. Sanctuary Servo itself must be able to
+       view and send messages in the channel.
+
+    This deliberately does not iterate over
+    context.bot.guilds directly.
     """
     context = webui_context()
 
@@ -97,7 +115,9 @@ def get_available_channels(
         dict[str, str]
     ] = []
 
-    for guild in context.bot.guilds:
+    for guild in (
+        context.accessible_guild_objects()
+    ):
         member = guild.me
 
         if member is None:
@@ -128,14 +148,50 @@ def get_available_channels(
                 }
             )
 
+    channels.sort(
+        key=lambda item: (
+            item["label"].lower()
+        )
+    )
+
     return channels
 
 
-def parse_embed_form_payload(
-) -> dict[str, Any]:
-    """Read the embed form. A field is kept only when name and value are both set.
+def get_available_channel_ids() -> set[int]:
+    """
+    Return the channel IDs currently available
+    to this Web UI session.
 
-    The inline checkbox posts the value on, matching an HTML checkbox.
+    The send endpoint uses this separately
+    from the HTML dropdown so a forged POST
+    cannot target another guild.
+    """
+    channel_ids: set[int] = set()
+
+    for channel in get_available_channels():
+        try:
+            channel_ids.add(
+                int(
+                    channel["id"]
+                )
+            )
+
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            continue
+
+    return channel_ids
+
+
+def parse_embed_form_payload() -> dict[str, Any]:
+    """
+    Read the Embed Builder form.
+
+    A field is retained only when both its
+    name and value are present.
     """
     field_ids = request.form.getlist(
         "field_id[]"
@@ -163,10 +219,7 @@ def parse_embed_form_payload(
             == "on"
         )
 
-        if (
-            name
-            and value
-        ):
+        if name and value:
             fields.append(
                 {
                     "name": name,
@@ -233,11 +286,14 @@ def parse_embed_form_payload(
 def normalise_form_values(
     payload: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Fill defaults before the template renders.
+    """
+    Fill values required by the template.
 
-    A missing or blank colour becomes #5865F2. A missing footer becomes
-    Sanctuary Servo; a blank footer stays blank because an empty value replaces
-    the default.
+    A missing colour defaults to Discord blue.
+
+    A missing footer defaults to Sanctuary
+    Servo. An explicitly blank footer remains
+    blank.
     """
     payload = payload or {}
 
@@ -337,30 +393,84 @@ def normalise_form_values(
 async def send_embeds_to_channel(
     bot: discord.Client,
     channel_id: int,
+    allowed_channel_ids: set[int],
     embeds: list[discord.Embed],
     files: list[discord.File],
 ) -> None:
-    """Send to a cached text channel, fetching it when the cache misses.
-
-    An empty file list is passed as None so Discord is not given an empty
-    attachment set.
     """
+    Send embeds only to a channel authorised
+    for this Web UI session.
+
+    The channel ID is checked again here so
+    this function cannot accidentally be used
+    to bypass the HTML channel list.
+
+    The channel is deliberately not fetched
+    from Discord by arbitrary ID. It must
+    already belong to an accessible cached
+    guild/channel.
+    """
+    if (
+        channel_id
+        not in allowed_channel_ids
+    ):
+        raise RuntimeError(
+            "That channel is not available "
+            "to your Web UI session."
+        )
+
     channel = bot.get_channel(
         channel_id
     )
-
-    if channel is None:
-        channel = await bot.fetch_channel(
-            channel_id
-        )
 
     if not isinstance(
         channel,
         discord.TextChannel,
     ):
         raise RuntimeError(
-            "Selected channel is "
-            "not a text channel."
+            "Selected channel is not "
+            "an available text channel."
+        )
+
+    if (
+        channel.guild.id
+        not in {
+            guild.id
+            for guild in (
+                webui_context()
+                .accessible_guild_objects()
+            )
+        }
+    ):
+        raise RuntimeError(
+            "You do not have Web UI access "
+            "to that server."
+        )
+
+    member = channel.guild.me
+
+    if member is None:
+        raise RuntimeError(
+            "Sanctuary Servo could not "
+            "resolve its server member."
+        )
+
+    permissions = (
+        channel.permissions_for(
+            member
+        )
+    )
+
+    if not permissions.view_channel:
+        raise RuntimeError(
+            "Sanctuary Servo cannot view "
+            "that channel."
+        )
+
+    if not permissions.send_messages:
+        raise RuntimeError(
+            "Sanctuary Servo cannot send "
+            "messages in that channel."
         )
 
     await channel.send(
@@ -379,7 +489,13 @@ def build_embeds_from_payload(
     list[discord.Embed],
     list[discord.File],
 ]:
-    """Build embeds. An uploaded file's attachment URL replaces a typed URL."""
+    """
+    Build embeds and any required attachment
+    files from a saved/current payload.
+
+    Uploaded files take precedence over typed
+    external URLs.
+    """
     context = webui_context()
 
     raw_fields = payload.get(
@@ -427,10 +543,7 @@ def build_embeds_from_payload(
                 )
             )
 
-            if (
-                name
-                and value
-            ):
+            if name and value:
                 fields.append(
                     (
                         name,
@@ -566,7 +679,10 @@ def build_embeds_from_payload(
         )
     )
 
-    return embeds, files
+    return (
+        embeds,
+        files,
+    )
 
 
 def render_page(
@@ -576,14 +692,18 @@ def render_page(
     loaded_embed: SavedEmbed | None = None,
     form_payload: dict[str, Any] | None = None,
 ) -> str:
-    """Render the builder. An explicit payload wins over a loaded embed.
+    """
+    Render the Embed Builder.
 
-    That lets a failed send keep what the user typed instead of reloading
-    the last saved copy.
+    An explicit form payload wins over a
+    loaded saved embed, allowing failed
+    actions to preserve what the user typed.
     """
     context = webui_context()
 
-    store = get_saved_embed_store()
+    store = (
+        get_saved_embed_store()
+    )
 
     saved_embeds = context.run_coro(
         store.list_embeds()
@@ -597,17 +717,22 @@ def render_page(
             loaded_embed.payload
         )
 
-    form_values = normalise_form_values(
-        form_payload
+    form_values = (
+        normalise_form_values(
+            form_payload
+        )
     )
 
     return render_template(
         "embed_builder/index.html",
         **context.template_context(
             title=(
-                "Sanctuary Servo Embed Builder"
+                "Sanctuary Servo "
+                "Embed Builder"
             ),
-            active_page="embed_builder",
+            active_page=(
+                "embed_builder"
+            ),
             channels=(
                 get_available_channels()
             ),
@@ -619,9 +744,15 @@ def render_page(
                 context.uploads
                 .list_folders()
             ),
-            saved_embeds=saved_embeds,
-            loaded_embed=loaded_embed,
-            form_values=form_values,
+            saved_embeds=(
+                saved_embeds
+            ),
+            loaded_embed=(
+                loaded_embed
+            ),
+            form_values=(
+                form_values
+            ),
             message=message,
             error=error,
         ),
@@ -632,7 +763,9 @@ def render_page(
     "/embed-builder"
 )
 def index():
-    owner_error = require_owner()
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
@@ -655,11 +788,14 @@ def index():
     except ValueError:
         return render_page(
             error=(
-                "Saved embed ID is invalid."
+                "Saved embed ID "
+                "is invalid."
             ),
         )
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     saved_embed = context.run_coro(
         get_saved_embed_store()
@@ -677,7 +813,9 @@ def index():
         )
 
     return render_page(
-        loaded_embed=saved_embed
+        loaded_embed=(
+            saved_embed
+        )
     )
 
 
@@ -688,12 +826,16 @@ def index():
     ],
 )
 def upload_image():
-    owner_error = require_owner()
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     try:
         folder = (
@@ -738,35 +880,45 @@ def upload_image():
     ],
 )
 def save_embed():
-    owner_error = require_owner()
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     payload = (
         parse_embed_form_payload()
     )
 
     try:
-        saved_embed = context.run_coro(
-            get_saved_embed_store()
-            .create_embed(
-                name=request.form.get(
-                    "saved_name",
-                    "",
-                ),
-                payload=payload,
+        saved_embed = (
+            context.run_coro(
+                get_saved_embed_store()
+                .create_embed(
+                    name=(
+                        request.form.get(
+                            "saved_name",
+                            "",
+                        )
+                    ),
+                    payload=payload,
+                )
             )
         )
 
         return render_page(
             message=(
-                f"Saved embed "
+                "Saved embed "
                 f"“{saved_embed.name}”."
             ),
-            loaded_embed=saved_embed,
+            loaded_embed=(
+                saved_embed
+            ),
         )
 
     except Exception as caught_error:
@@ -785,12 +937,16 @@ def save_embed():
     ],
 )
 def update_embed():
-    owner_error = require_owner()
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     payload = (
         parse_embed_form_payload()
@@ -803,26 +959,32 @@ def update_embed():
             ]
         )
 
-        saved_embed = context.run_coro(
-            get_saved_embed_store()
-            .update_embed(
-                saved_embed_id=(
-                    saved_embed_id
-                ),
-                name=request.form.get(
-                    "saved_name",
-                    "",
-                ),
-                payload=payload,
+        saved_embed = (
+            context.run_coro(
+                get_saved_embed_store()
+                .update_embed(
+                    saved_embed_id=(
+                        saved_embed_id
+                    ),
+                    name=(
+                        request.form.get(
+                            "saved_name",
+                            "",
+                        )
+                    ),
+                    payload=payload,
+                )
             )
         )
 
         return render_page(
             message=(
-                f"Updated embed "
+                "Updated embed "
                 f"“{saved_embed.name}”."
             ),
-            loaded_embed=saved_embed,
+            loaded_embed=(
+                saved_embed
+            ),
         )
 
     except Exception as caught_error:
@@ -841,13 +1003,20 @@ def update_embed():
     ],
 )
 def delete_embed():
-    """Delete a saved embed and redirect back to a blank builder."""
-    owner_error = require_owner()
+    """
+    Delete a saved embed and return to a
+    blank Embed Builder.
+    """
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     try:
         saved_embed_id = int(
@@ -856,10 +1025,12 @@ def delete_embed():
             ]
         )
 
-        deleted = context.run_coro(
-            get_saved_embed_store()
-            .delete_embed(
-                saved_embed_id
+        deleted = (
+            context.run_coro(
+                get_saved_embed_store()
+                .delete_embed(
+                    saved_embed_id
+                )
             )
         )
 
@@ -890,17 +1061,25 @@ def delete_embed():
     ],
 )
 def send_embed():
-    """Send the current form, then close any attachment handles.
-
-    The finally block runs on success and failure so a File is not left
-    open on the waitress thread.
     """
-    owner_error = require_owner()
+    Send the current Embed Builder payload.
+
+    The selected channel is validated against
+    the current Web UI session before Discord
+    is touched.
+
+    Attachment handles are always closed.
+    """
+    owner_error = (
+        require_owner()
+    )
 
     if owner_error is not None:
         return owner_error
 
-    context = webui_context()
+    context = (
+        webui_context()
+    )
 
     payload = (
         parse_embed_form_payload()
@@ -917,17 +1096,36 @@ def send_embed():
             ]
         )
 
+        allowed_channel_ids = (
+            get_available_channel_ids()
+        )
+
+        if (
+            channel_id
+            not in allowed_channel_ids
+        ):
+            raise RuntimeError(
+                "That channel is not "
+                "available to your "
+                "Web UI session."
+            )
+
         (
             embeds,
             files,
-        ) = build_embeds_from_payload(
-            payload
+        ) = (
+            build_embeds_from_payload(
+                payload
+            )
         )
 
         context.run_coro(
             send_embeds_to_channel(
                 bot=context.bot,
                 channel_id=channel_id,
+                allowed_channel_ids=(
+                    allowed_channel_ids
+                ),
                 embeds=embeds,
                 files=files,
             )
@@ -961,9 +1159,12 @@ def send_embed():
         return render_page(
             message=(
                 "Embed sent. Used "
-                f"{len(embeds)} embed(s)."
+                f"{len(embeds)} "
+                "embed(s)."
             ),
-            loaded_embed=loaded_embed,
+            loaded_embed=(
+                loaded_embed
+            ),
             form_payload=payload,
         )
 
