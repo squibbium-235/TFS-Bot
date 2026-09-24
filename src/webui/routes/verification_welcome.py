@@ -1,3 +1,11 @@
+"""Owner editor for the post-approval welcome embed.
+
+The nav stays on verification. Asset choice is a new upload, then a
+typed URL, then a stored reference. Disable flips the stored flag and
+does not save the form. Test sends the current form; preview only
+builds the embed. A failed POST redisplays the stored settings.
+"""
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -46,6 +54,7 @@ PLACEHOLDER_HELP = [
 
 
 def get_welcome_store() -> WelcomeStore:
+    """Return the bot's welcome store, creating and initialising it if needed."""
     context = webui_context()
 
     store = getattr(
@@ -90,6 +99,10 @@ def get_welcome_store() -> WelcomeStore:
 def parse_colour(
     raw_value: str,
 ) -> int | None:
+    """Parse exactly six hex digits, or None when the field is empty.
+
+    A leading # or 0x is removed. Anything else raises.
+    """
     cleaned = (
         raw_value
         .strip()
@@ -121,6 +134,10 @@ def parse_colour(
 def colour_text(
     embed_data: dict[str, Any],
 ) -> str:
+    """Read the stored American ``color`` integer and render #RRGGBB.
+
+    A missing or non-integer colour becomes the blurple default.
+    """
     colour = embed_data.get(
         "color"
     )
@@ -163,6 +180,11 @@ def nested_value(
 def split_asset_value(
     value: str,
 ) -> tuple[str, str]:
+    """Split a stored asset into an external URL or an upload reference.
+
+    upload_reference recognises the upload marker. A plain URL is
+    returned in the first position with an empty reference.
+    """
     reference = upload_reference(
         value
     )
@@ -180,6 +202,11 @@ def parse_uploaded_asset(
     reference_field: str,
     url_field: str,
 ) -> str | None:
+    """Resolve one image: new file, then typed URL, then stored upload.
+
+    A typed URL intentionally beats a selected stored upload. New files
+    are saved under welcome/<guild id> and wrapped with the upload marker.
+    """
     context = webui_context()
 
     uploaded_file = request.files.get(
@@ -235,6 +262,11 @@ def parse_uploaded_asset(
 def parse_embed_form(
     guild: discord.Guild,
 ) -> dict[str, Any]:
+    """Build Discord embed JSON. Empty parts are omitted, and an empty embed raises.
+
+    The colour is stored under ``color``. An author icon is kept only
+    when an author name was posted, because the icon lives on that object.
+    """
     embed_data: dict[
         str,
         Any,
@@ -434,6 +466,10 @@ def submitted_settings(
     guild: discord.Guild,
     existing: WelcomeSettings,
 ) -> WelcomeSettings:
+    """Copy the form onto the existing settings without changing enabled.
+
+    replace keeps the stored enabled flag until an enable or disable action.
+    """
     return replace(
         existing,
         channel_id=parse_channel_id(
@@ -545,6 +581,11 @@ async def resolve_test_member(
     guild: discord.Guild,
     user_id_text: str,
 ) -> discord.Member:
+    """Find a member from a raw id or a pasted mention.
+
+    ``<@id>`` and ``<@!id>`` are stripped down to the digits. The cache
+    is tried before a fetch.
+    """
     cleaned = (
         user_id_text
         .strip()
@@ -655,6 +696,14 @@ def render_page(
     ],
 )
 def index():
+    """Save, enable, disable, test, or validate the welcome embed.
+
+    Enable writes the form and then turns the feature on, and it refuses
+    a missing channel. Disable only clears the flag. Test posts the
+    unsaved form. Preview builds the embed and does not send it. On any
+    error the page reloads the stored settings, so the rejected form is
+    not shown again.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:
@@ -784,6 +833,7 @@ def index():
                     ),
                 )
 
+            # Does not write channel or embed changes from this POST.
             if action == "disable":
                 settings = context.run_coro(
                     store.set_enabled(
@@ -805,6 +855,7 @@ def index():
                     ),
                 )
 
+            # Uses the submitted form, which may not have been saved.
             if action == "test":
                 test_member = context.run_coro(
                     resolve_test_member(
@@ -855,6 +906,7 @@ def index():
                     ),
                 )
 
+            # Validates the embed build and does not post a Discord message.
             if action == "preview":
                 test_member = context.run_coro(
                     resolve_test_member(

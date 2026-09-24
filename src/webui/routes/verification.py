@@ -1,3 +1,11 @@
+"""Owner verification settings, panel posting, and pending-application cancel.
+
+Automod terms drop blank lines and lines whose first character is #.
+Posting a panel uses an uploaded thumbnail or, failing that, the guild
+icon. Cancel and invite refresh write their own audit rows as well as
+the generic successful-POST audit.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -32,6 +40,7 @@ blueprint = Blueprint(
 def parse_terms_from_text(
     raw_text: str,
 ) -> list[str]:
+    """One term per line. Blank lines and # comments are ignored."""
     terms: list[str] = []
 
     for raw_line in raw_text.splitlines():
@@ -271,6 +280,11 @@ async def post_verification_panel(
     image_upload_filename: str | None = None,
     thumbnail_upload_filename: str | None = None,
 ) -> discord.Message:
+    """Post the verify button. Attachment files are closed in a finally block.
+
+    A thumbnail upload replaces the guild icon. The form title is
+    markdown-escaped before it is placed in the description.
+    """
     context = webui_context()
     bot = context.bot
 
@@ -470,6 +484,14 @@ def render_page(
     ],
 )
 def index():
+    """Save verification settings, post the panel, or cancel pending applications.
+
+    Cancel requires the confirmation text CANCEL and uses the bot user as
+    the moderator. An empty channel or role field clears that setting.
+    save_and_post_panel saves first, then posts. A newly uploaded panel
+    image wins over a previously selected reference. Adding default
+    automod terms happens after the textarea is saved, so both are kept.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:

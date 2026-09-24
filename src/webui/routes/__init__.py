@@ -1,3 +1,10 @@
+"""Register every Web UI blueprint on the Flask app.
+
+Each route module exposes a module-level blueprint. custom_commands
+builds that object with a factory; the instance created at import is
+what gets registered here.
+"""
+
 from __future__ import annotations
 
 from flask import Flask
@@ -40,6 +47,7 @@ from src.webui.routes.auth import (
 def register_blueprints(
     app: Flask,
 ) -> None:
+    """Attach the route blueprints. Their URL prefixes do not overlap."""
     app.register_blueprint(
         auth_blueprint
     )

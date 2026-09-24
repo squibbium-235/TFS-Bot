@@ -1,3 +1,11 @@
+"""Owner page for Web UI role allow-lists and Discord command levels.
+
+Web UI owner and viewer roles are stored by WebUIAccessManager. Slash
+command roles and per-command levels go through the permission store on
+the bot loop. Command field names cannot contain the raw key, so a
+parallel safe key is used for the level select.
+"""
+
 from __future__ import annotations
 
 from flask import (
@@ -27,6 +35,10 @@ blueprint = Blueprint(
 def make_safe_command_key(
     command_key: str,
 ) -> str:
+    """Encode dots, dashes, and spaces so the key can be a form field name.
+
+    The original key is still posted separately and is what gets stored.
+    """
     return (
         command_key
         .replace(".", "__dot__")
@@ -91,6 +103,13 @@ def role_ids_from_form(
     ],
 )
 def index():
+    """Save Web UI access and Discord permission levels for one guild.
+
+    Clearing every owner role is refused when the environment has no
+    owner-role fallback. An empty slash-command role select clears that
+    level. Public has no role select. A failed POST renders empty lists
+    rather than a mix of old and new values.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:

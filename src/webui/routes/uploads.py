@@ -1,3 +1,9 @@
+"""Owner upload manager, plus a login-gated file route for any role.
+
+Mutations require an owner. Fetching a stored image only requires a
+logged-in session, after the reference has been checked for traversal.
+"""
+
 from __future__ import annotations
 
 from flask import (
@@ -30,6 +36,11 @@ blueprint = Blueprint(
     ],
 )
 def index():
+    """Create folders, save images, and delete files or empty folders.
+
+    A new folder name wins over the selected folder when both are posted.
+    Folder deletion requires the confirmation field to be exactly DELETE.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:
@@ -180,6 +191,10 @@ def index():
 def file(
     filename: str,
 ):
+    """Send one validated upload. Viewers may download; they cannot manage.
+
+    A reference that fails validation is 400. A missing file is 404.
+    """
     context = webui_context()
 
     login_error = (

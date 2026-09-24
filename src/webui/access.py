@@ -1,3 +1,10 @@
+"""Discord role allow-lists that decide Web UI owner and viewer access.
+
+Stored role ids in the application database replace the environment
+lists for that guild and level. An empty stored set falls back to the
+environment. Owner matching wins over viewer matching.
+"""
+
 from __future__ import annotations
 
 from datetime import (
@@ -16,6 +23,8 @@ from src.services.database import (
 
 
 class WebUIAccessManager:
+    """Read and replace the per-guild Web UI role allow-lists."""
+
     def __init__(
         self,
         bot: discord.Client,
@@ -25,6 +34,7 @@ class WebUIAccessManager:
     def database_path(
         self,
     ) -> Path:
+        """Prefer the live application store path, then config, then the default file."""
         application_store = getattr(
             self.bot,
             "application_store",
@@ -54,6 +64,7 @@ class WebUIAccessManager:
     def ensure_tables(
         self,
     ) -> None:
+        """Create the role table if this database does not have it yet."""
         database_path = (
             self.database_path()
         )
@@ -117,6 +128,11 @@ class WebUIAccessManager:
         access_level: str,
         role_ids: list[int],
     ) -> None:
+        """Replace every stored role for one guild and access level.
+
+        Ids are deduplicated. An empty list deletes the rows, which makes
+        later lookups fall back to the environment.
+        """
         self.ensure_tables()
 
         cleaned_role_ids = sorted(
@@ -167,6 +183,11 @@ class WebUIAccessManager:
     def env_owner_role_ids(
         self,
     ) -> tuple[int, ...]:
+        """Owner role ids from the environment, else the older allowed-role list.
+
+        ``webui_discord_allowed_role_ids`` is used only when the owner list
+        is empty.
+        """
         owner_role_ids = tuple(
             getattr(
                 self.bot.config,
@@ -202,6 +223,11 @@ class WebUIAccessManager:
         guild_id: int,
         access_level: str,
     ) -> tuple[int, ...]:
+        """Stored ids when present, otherwise the environment list for that level.
+
+        A database error is treated as no stored rows, not as a hard failure.
+        Unknown access levels do not consult the environment.
+        """
         try:
             stored_role_ids = (
                 self.stored_role_ids(
@@ -233,6 +259,7 @@ class WebUIAccessManager:
         guild_id: int,
         access_level: str,
     ) -> str:
+        """Label the list as SQLite, the environment fallback, or unset."""
         try:
             stored_role_ids = (
                 self.stored_role_ids(
@@ -275,6 +302,10 @@ class WebUIAccessManager:
     def password_login_enabled(
         self,
     ) -> bool:
+        """True when the flag is on and at least one credential exists.
+
+        The flag defaults to on when the config attribute is missing.
+        """
         return bool(
             getattr(
                 self.bot.config,
@@ -387,6 +418,12 @@ class WebUIAccessManager:
         self,
         member_data: dict[str, Any],
     ) -> str | None:
+        """Map one guild member payload to ``owner``, ``viewer``, or None.
+
+        Only ``webui_discord_guild_id`` is considered. Owner is returned
+        when any owner role overlaps, even if a viewer role also matches.
+        No configured guild id refuses the login.
+        """
         guild_id = getattr(
             self.bot.config,
             "webui_discord_guild_id",

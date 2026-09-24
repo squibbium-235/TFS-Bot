@@ -1,3 +1,10 @@
+"""Owner backup and restore over the SQLCipher database via BackupService.
+
+Creating a backup returns the encrypted file immediately. Restore
+requires a login from the last ten minutes and the confirmation text
+RESTORE. The fresh-login clock is authenticated_at, not last activity.
+"""
+
 from __future__ import annotations
 
 from io import BytesIO
@@ -28,6 +35,7 @@ blueprint = Blueprint(
 
 
 def get_database_path() -> Path:
+    """Live application-store path, else config, else data/tfsbot.sqlite3."""
     context = webui_context()
 
     application_store = getattr(
@@ -94,6 +102,13 @@ def format_file_size(
     ],
 )
 def index():
+    """Create or restore an encrypted .tfsbackup for an owner.
+
+    Create checks that the two passwords match, then sends the bytes
+    with the backup's own filename. Restore refuses a stale login before
+    it checks the confirmation word, and only accepts a name ending in
+    .tfsbackup. After a restore the page tells the operator to restart.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:

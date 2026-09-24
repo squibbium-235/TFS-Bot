@@ -1,3 +1,8 @@
+// Adds the session CSRF token to POST forms that do not already have one.
+// The token is read from the csrf-token meta tag. GET forms are left
+// alone. This does not set X-CSRF-Token; the server accepts that header
+// as well, but these pages send the form field _csrf_token.
+
 document.addEventListener(
     "DOMContentLoaded",
     () => {

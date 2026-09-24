@@ -1,3 +1,12 @@
+"""Owner editor for Discord modal forms, including the verification form.
+
+The built-in verification form is inserted into the list when the guild
+has not stored one yet. Saving questions always passes the clear flags,
+and the store then writes no placeholder and no lengths. Discord modal
+pages use the form config default of five questions. The active
+verification form cannot be deleted.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -32,12 +41,14 @@ blueprint = Blueprint(
 def clean_form_key(
     raw_value: str,
 ) -> str:
+    """Lower-case and strip a form or question key before it is stored."""
     return raw_value.lower().strip()
 
 
 def parse_optional_int(
     raw_value: str | None,
 ) -> int | None:
+    """None for a missing or blank field. A non-numeric value raises ValueError."""
     if raw_value is None:
         return None
 
@@ -52,6 +63,7 @@ def parse_optional_int(
 async def get_guild_forms(
     guild: discord.Guild,
 ) -> list[dict[str, str]]:
+    """Stored forms, with the built-in verification form first if it is absent."""
     context = webui_context()
 
     form_store = (
@@ -96,6 +108,15 @@ async def get_guild_forms(
     ],
 )
 def index():
+    """Create, edit, publish, and delete forms for one guild.
+
+    Saving questions always passes clear_placeholder and clear_lengths.
+    The store treats those flags as "store none", so the posted
+    placeholder and length values are not kept. A blank sort order
+    sorts as 9999. Publishing needs at least one question plus a title and
+    description, and closes attachment files afterwards. Deleting the
+    form currently selected as verification is refused.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:
@@ -452,6 +473,7 @@ def index():
                                     )
                                 )
                             ),
+                            # These flags force the store to write None, ignoring the values above.
                             clear_placeholder=True,
                             clear_lengths=True,
                             fallback_json_path=(
@@ -989,6 +1011,7 @@ def index():
     ],
 )
 def viewer():
+    """Read-only modal layout. pages() groups questions five to a page."""
     owner_error = require_owner()
 
     if owner_error is not None:

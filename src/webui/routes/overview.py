@@ -1,3 +1,10 @@
+"""Read-only dashboard for viewers and owners.
+
+Counts come from the application database. "Today" is the UTC date
+prefix of actioned_at. A pending row with a questioning thread is shown
+as Questioning. A missing database or a database error yields zeros.
+"""
+
 from __future__ import annotations
 
 import sqlite3
@@ -98,6 +105,7 @@ def format_file_size(
 def format_datetime_text(
     value: str | None,
 ) -> str:
+    """Format an ISO timestamp in local time. Naive values are treated as UTC."""
     if not value:
         return "Unknown"
 
@@ -217,6 +225,7 @@ def display_status(
     status: str,
     questioning_thread_id: int | None = None,
 ) -> str:
+    """Show pending-with-a-thread as Questioning, and denied as Rejected."""
     cleaned = (
         status
         .lower()
@@ -276,6 +285,13 @@ def empty_application_stats(
 def count_applications_for_overview(
     guild: discord.Guild,
 ) -> dict[str, Any]:
+    """Aggregate one guild's applications for the dashboard.
+
+    denied is folded into rejected. Today's buckets use the first ten
+    characters of actioned_at, compared with today's UTC date. Pending
+    rows are the oldest ten; outcomes are the newest ten by action time
+    or, if that is missing, updated_at.
+    """
     database_path = (
         get_database_path()
     )
@@ -742,6 +758,7 @@ def build_overview_context(
 
 @blueprint.route("/")
 def index():
+    """Overview for any logged-in role. Owners are not required."""
     context = webui_context()
 
     login_error = (

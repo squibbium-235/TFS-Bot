@@ -341,6 +341,7 @@ button,
     gap: 10px !important;
 }
 
+/* Clears the compact sticky header. Narrow layouts drop both together. */
 .sticky-preview {
     position: sticky;
     top: 68px;

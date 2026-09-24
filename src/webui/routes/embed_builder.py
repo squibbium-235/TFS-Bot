@@ -1,3 +1,10 @@
+"""Owner embed builder: save payloads, upload images, and send to a channel.
+
+A saved-embed store is created on the bot the first time this page needs
+one. Uploaded images win over a typed URL. Discord file handles are
+closed after send, including when send fails.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -33,6 +40,10 @@ blueprint = Blueprint(
 
 def get_saved_embed_store(
 ) -> SavedEmbedStore:
+    """Return the bot's saved-embed store, creating and initialising it if needed.
+
+    The new store is attached to the bot so later requests reuse it.
+    """
     context = webui_context()
 
     store = getattr(
@@ -76,6 +87,10 @@ def get_saved_embed_store(
 
 def get_available_channels(
 ) -> list[dict[str, str]]:
+    """Text channels where this bot can view and send, across every guild.
+
+    Guilds whose member cache has no bot member are skipped.
+    """
     context = webui_context()
 
     channels: list[
@@ -118,6 +133,10 @@ def get_available_channels(
 
 def parse_embed_form_payload(
 ) -> dict[str, Any]:
+    """Read the embed form. A field is kept only when name and value are both set.
+
+    The inline checkbox posts the value on, matching an HTML checkbox.
+    """
     field_ids = request.form.getlist(
         "field_id[]"
     )
@@ -214,6 +233,12 @@ def parse_embed_form_payload(
 def normalise_form_values(
     payload: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    """Fill defaults before the template renders.
+
+    A missing or blank colour becomes #5865F2. A missing footer becomes
+    TFSBot; a blank footer stays blank because an empty value replaces
+    the default.
+    """
     payload = payload or {}
 
     fields = payload.get(
@@ -315,6 +340,11 @@ async def send_embeds_to_channel(
     embeds: list[discord.Embed],
     files: list[discord.File],
 ) -> None:
+    """Send to a cached text channel, fetching it when the cache misses.
+
+    An empty file list is passed as None so Discord is not given an empty
+    attachment set.
+    """
     channel = bot.get_channel(
         channel_id
     )
@@ -349,6 +379,7 @@ def build_embeds_from_payload(
     list[discord.Embed],
     list[discord.File],
 ]:
+    """Build embeds. An uploaded file's attachment URL replaces a typed URL."""
     context = webui_context()
 
     raw_fields = payload.get(
@@ -545,6 +576,11 @@ def render_page(
     loaded_embed: SavedEmbed | None = None,
     form_payload: dict[str, Any] | None = None,
 ) -> str:
+    """Render the builder. An explicit payload wins over a loaded embed.
+
+    That lets a failed send keep what the user typed instead of reloading
+    the last saved copy.
+    """
     context = webui_context()
 
     store = get_saved_embed_store()
@@ -805,6 +841,7 @@ def update_embed():
     ],
 )
 def delete_embed():
+    """Delete a saved embed and redirect back to a blank builder."""
     owner_error = require_owner()
 
     if owner_error is not None:
@@ -853,6 +890,11 @@ def delete_embed():
     ],
 )
 def send_embed():
+    """Send the current form, then close any attachment handles.
+
+    The finally block runs on success and failure so a File is not left
+    open on the waitress thread.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:
