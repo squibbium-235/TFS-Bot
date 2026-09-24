@@ -1,4 +1,14 @@
-{# Shell for signed-in pages. Owner links are hidden from viewers. base.js reads the csrf-token meta and adds _csrf_token to POST forms. admin_compact.css is linked after the head block so it overrides page styles. The content block falls back to body only when a page does not replace it. #}
+{#
+    Shared shell for signed-in Sanctuary Servo Web UI pages.
+
+    Page-specific titles remain in the browser tab through `title`, but the
+    visible application header always shows only the Sanctuary Servo brand.
+
+    base.js reads the csrf-token meta tag and adds _csrf_token to POST forms.
+    admin_compact.css is loaded after page-specific CSS so compact admin layout
+    rules remain consistent throughout the application.
+#}
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,6 +27,12 @@
     >
 
     <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='img/sanctuary-servo-logo.png') }}"
+    >
+
+    <link
         rel="stylesheet"
         href="{{ url_for('static', filename='css/base.css') }}"
     >
@@ -31,86 +47,161 @@
 
 <body>
 
-    <a class="skip-link" href="#content">Skip to content</a>
+    <a class="skip-link" href="#content">
+        Skip to content
+    </a>
 
-    <header>
-        <div class="brand">
-            <a class="brand-mark" href="{{ url_for('overview.index') }}">Sanctuary Servo</a>
-            <h1>{{ title }}</h1>
-        </div>
+    <header class="app-header">
+        <div class="app-header-inner">
 
-        <nav aria-label="Web UI">
             <a
+                class="brand"
                 href="{{ url_for('overview.index') }}"
-                class="{{ 'active' if active_page == 'overview' else '' }}"
-                {% if active_page == 'overview' %}aria-current="page"{% endif %}
-            >Overview</a>
+                aria-label="Sanctuary Servo home"
+            >
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', filename='img/sanctuary-servo-logo.png') }}"
+                    alt=""
+                    aria-hidden="true"
+                >
 
-            {% if is_owner %}
+                <span class="brand-name">
+                    Sanctuary Servo
+                </span>
+            </a>
+
+            <nav
+                class="app-nav"
+                aria-label="Sanctuary Servo Web UI"
+            >
                 <a
-                    href="{{ url_for('embed_builder.index') }}"
-                    class="{{ 'active' if active_page == 'embed_builder' else '' }}"
-                    {% if active_page == 'embed_builder' %}aria-current="page"{% endif %}
-                >Embed Builder</a>
+                    href="{{ url_for('overview.index') }}"
+                    class="{{ 'active' if active_page == 'overview' else '' }}"
+                    {% if active_page == 'overview' %}
+                        aria-current="page"
+                    {% endif %}
+                >
+                    Overview
+                </a>
+
+                {% if is_owner %}
+                    <a
+                        href="{{ url_for('embed_builder.index') }}"
+                        class="{{ 'active' if active_page == 'embed_builder' else '' }}"
+                        {% if active_page == 'embed_builder' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Embed Builder
+                    </a>
+
+                    <a
+                        href="{{ url_for('custom_commands.index') }}"
+                        class="{{ 'active' if active_page == 'custom_commands' else '' }}"
+                        {% if active_page == 'custom_commands' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Custom Commands
+                    </a>
+
+                    <a
+                        href="{{ url_for('dm_templates.index') }}"
+                        class="{{ 'active' if active_page == 'dm_templates' else '' }}"
+                        {% if active_page == 'dm_templates' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        DM Templates
+                    </a>
+
+                    <a
+                        href="{{ url_for('forms.index') }}"
+                        class="{{ 'active' if active_page == 'forms' else '' }}"
+                        {% if active_page == 'forms' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Forms
+                    </a>
+
+                    <a
+                        href="{{ url_for('uploads.index') }}"
+                        class="{{ 'active' if active_page == 'uploads' else '' }}"
+                        {% if active_page == 'uploads' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Uploads
+                    </a>
+
+                    <a
+                        href="{{ url_for('verification.index') }}"
+                        class="{{ 'active' if active_page == 'verification' else '' }}"
+                        {% if active_page == 'verification' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Verification
+                    </a>
+
+                    <a
+                        href="{{ url_for('permissions.index') }}"
+                        class="{{ 'active' if active_page == 'permissions' else '' }}"
+                        {% if active_page == 'permissions' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Permissions
+                    </a>
+
+                    <a
+                        href="{{ url_for('backups.index') }}"
+                        class="{{ 'active' if active_page == 'backups' else '' }}"
+                        {% if active_page == 'backups' %}
+                            aria-current="page"
+                        {% endif %}
+                    >
+                        Backups
+                    </a>
+                {% endif %}
+
+                <span
+                    class="account-summary"
+                    title="Signed in as {{ display_name }}"
+                >
+                    <span class="account-name">
+                        {{ display_name }}
+                    </span>
+
+                    <span class="account-role">
+                        {{ webui_role|title }}
+                    </span>
+                </span>
 
                 <a
-                    href="{{ url_for('custom_commands.index') }}"
-                    class="{{ 'active' if active_page == 'custom_commands' else '' }}"
-                    {% if active_page == 'custom_commands' %}aria-current="page"{% endif %}
-                >Custom Commands</a>
+                    class="nav-logout"
+                    href="{{ url_for('auth.logout') }}"
+                >
+                    Log out
+                </a>
+            </nav>
 
-                <a
-                    href="{{ url_for('dm_templates.index') }}"
-                    class="{{ 'active' if active_page == 'dm_templates' else '' }}"
-                    {% if active_page == 'dm_templates' %}aria-current="page"{% endif %}
-                >DM Templates</a>
-
-                <a
-                    href="{{ url_for('forms.index') }}"
-                    class="{{ 'active' if active_page == 'forms' else '' }}"
-                    {% if active_page == 'forms' %}aria-current="page"{% endif %}
-                >Forms</a>
-
-                <a
-                    href="{{ url_for('uploads.index') }}"
-                    class="{{ 'active' if active_page == 'uploads' else '' }}"
-                    {% if active_page == 'uploads' %}aria-current="page"{% endif %}
-                >Uploads</a>
-
-                <a
-                    href="{{ url_for('verification.index') }}"
-                    class="{{ 'active' if active_page == 'verification' else '' }}"
-                    {% if active_page == 'verification' %}aria-current="page"{% endif %}
-                >Verification</a>
-
-                <a
-                    href="{{ url_for('permissions.index') }}"
-                    class="{{ 'active' if active_page == 'permissions' else '' }}"
-                    {% if active_page == 'permissions' %}aria-current="page"{% endif %}
-                >Permissions</a>
-
-                <a
-                    href="{{ url_for('backups.index') }}"
-                    class="{{ 'active' if active_page == 'backups' else '' }}"
-                    {% if active_page == 'backups' %}aria-current="page"{% endif %}
-                >Backups</a>
-            {% endif %}
-
-            <span class="badge">
-                {{ display_name }} · {{ webui_role|title }}
-            </span>
-
-            <a class="nav-logout" href="{{ url_for('auth.logout') }}">Log out</a>
-        </nav>
+        </div>
     </header>
 
     <main id="content">
         {% if message %}
-            <p class="message">{{ message }}</p>
+            <p class="message">
+                {{ message }}
+            </p>
         {% endif %}
 
         {% if error %}
-            <p class="error">{{ error }}</p>
+            <p class="error">
+                {{ error }}
+            </p>
         {% endif %}
 
         {% block content %}

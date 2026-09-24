@@ -1,35 +1,29 @@
 /*
- * Compact admin override.
+ * Sanctuary Servo compact operator layout.
  *
- * base.css remains the design-token/source stylesheet. This file deliberately
- * tightens spacing, removes excess rounding/shadows, and turns the WebUI into
- * an admin interface rather than a collection of giant decorative cards.
+ * base.css owns the main visual system.
+ * This file contains only the tighter admin-layout overrides that are useful
+ * across the configuration pages.
  */
 
-header {
-    padding: 10px 18px;
-    gap: 12px;
-}
 
-header h1 {
-    font-size: 18px;
-}
-
-.brand-mark {
-    font-size: 12px;
-}
-
-nav {
-    gap: 9px;
-}
-
-nav a {
-    font-size: 13px;
-}
+/* -------------------------------------------------------------------------- */
+/* General density                                                            */
+/* -------------------------------------------------------------------------- */
 
 main {
     max-width: 1280px;
-    padding: 16px 18px 40px;
+}
+
+.panel {
+    margin-bottom: 10px;
+    padding: 14px;
+    box-shadow: none;
+}
+
+.compact-panel,
+.compact-intro {
+    padding: 12px 14px;
 }
 
 h2 {
@@ -38,37 +32,32 @@ h2 {
 }
 
 h3 {
-    margin: 0 0 6px;
+    margin:
+        0 0 6px;
+
     font-size: 14px;
 }
 
-.panel {
-    border-radius: 7px;
-    padding: 14px;
-    margin-bottom: 10px;
-    box-shadow: none;
-}
 
-.compact-panel {
-    padding: 12px 14px;
-}
-
-.compact-intro {
-    padding: 12px 14px;
-}
+/* -------------------------------------------------------------------------- */
+/* Page structure                                                             */
+/* -------------------------------------------------------------------------- */
 
 .page-title-row,
 .section-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
+
     gap: 12px;
 }
 
 .section-bar {
-    border-bottom: 1px solid var(--border-soft);
-    padding-bottom: 7px;
     margin-bottom: 8px;
+    padding-bottom: 7px;
+
+    border-bottom:
+        1px solid var(--border-soft);
 }
 
 .section-bar h2 {
@@ -79,17 +68,24 @@ h3 {
     margin-top: 18px;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Forms                                                                      */
+/* -------------------------------------------------------------------------- */
+
 label {
     margin-top: 9px;
     margin-bottom: 4px;
+
     font-size: 12px;
 }
 
 input,
 textarea,
 select {
-    border-radius: 5px;
-    padding: 8px 9px;
+    padding:
+        8px 9px;
+
     font-size: 13px;
 }
 
@@ -97,64 +93,90 @@ textarea {
     min-height: 84px;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Buttons                                                                    */
+/* -------------------------------------------------------------------------- */
+
 button,
 .button-link {
-    border-radius: 5px !important;
-    padding: 8px 10px !important;
-    font-size: 13px !important;
+    min-height: 32px;
+
+    padding:
+        7px 10px;
+
+    font-size: 13px;
 }
 
 .small-button {
-    padding: 5px 8px !important;
-    font-size: 12px !important;
+    min-height: 27px;
+
+    padding:
+        4px 7px;
+
+    font-size: 12px;
 }
 
 .button-row,
 .actions,
 .quick-actions {
-    gap: 6px !important;
+    gap: 6px;
 }
 
 .button-row,
 .actions {
-    margin-top: 10px !important;
+    margin-top: 10px;
 }
 
 .compact-buttons {
     margin-top: 9px !important;
 }
 
-.quick-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-}
+
+/* -------------------------------------------------------------------------- */
+/* Form grids                                                                 */
+/* -------------------------------------------------------------------------- */
 
 .setting-grid,
 .compact-setting-grid {
-    gap: 9px 12px;
+    gap:
+        9px 12px;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Help text                                                                  */
+/* -------------------------------------------------------------------------- */
 
 .hint,
 .section-note {
-    margin: 3px 0 7px;
+    margin:
+        3px 0 7px;
+
     font-size: 12px;
     line-height: 1.35;
 }
 
-.badge,
-.pill {
-    border-radius: 4px;
-    padding: 3px 6px;
-}
+
+/* -------------------------------------------------------------------------- */
+/* Messages                                                                   */
+/* -------------------------------------------------------------------------- */
 
 .message,
 .error {
-    border-radius: 5px;
-    padding: 8px 10px;
-    margin: 0 0 10px;
+    margin:
+        0 0 10px;
+
+    padding:
+        8px 10px;
+
     font-size: 13px;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Cards                                                                      */
+/* -------------------------------------------------------------------------- */
 
 .template-card,
 .command-row,
@@ -165,46 +187,61 @@ button,
 .stat-card,
 .field-card,
 .asset-editor {
-    border-radius: 6px !important;
-    box-shadow: none !important;
+    padding: 10px;
+
+    box-shadow: none;
 }
 
-.template-card,
-.command-row,
-.warning-item,
-.backup-step,
-.health-item,
-.overview-card,
-.field-card,
-.asset-editor {
-    padding: 10px !important;
-}
+
+/* -------------------------------------------------------------------------- */
+/* Stats                                                                      */
+/* -------------------------------------------------------------------------- */
 
 .stat-grid {
     display: flex;
     flex-wrap: wrap;
+
     gap: 0;
+
     margin-top: 8px;
-    border-top: 1px solid var(--border-soft);
-    border-bottom: 1px solid var(--border-soft);
+
+    border-top:
+        1px solid var(--border-soft);
+
+    border-bottom:
+        1px solid var(--border-soft);
 }
 
 .stat-card {
-    flex: 1 1 180px;
-    background: transparent !important;
-    border: 0 !important;
-    border-right: 1px solid var(--border-soft) !important;
-    padding: 8px 10px !important;
+    flex:
+        1 1 180px;
+
+    padding:
+        8px 10px;
+
+    background: transparent;
+
+    border: 0;
+    border-right:
+        1px solid var(--border-soft);
+
+    border-radius: 0;
 }
 
 .stat-card:last-child {
-    border-right: 0 !important;
+    border-right: 0;
 }
 
 .stat-card strong {
     margin-bottom: 2px;
+
     font-size: 12px;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Status strips                                                              */
+/* -------------------------------------------------------------------------- */
 
 .status-strip-panel {
     padding-top: 9px;
@@ -213,12 +250,17 @@ button,
 
 .status-strip {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
 }
 
 .status-strip > div {
-    padding: 2px 12px;
-    border-right: 1px solid var(--border-soft);
+    padding:
+        2px 12px;
+
+    border-right:
+        1px solid var(--border-soft);
 }
 
 .status-strip > div:first-child {
@@ -235,20 +277,21 @@ button,
 }
 
 .status-strip strong {
-    font-size: 11px;
     color: var(--muted-2);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+
+    font-size: 11px;
+    font-weight: 650;
 }
 
 .status-strip span {
     margin-top: 2px;
+
     font-size: 13px;
 }
 
 .status-text {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 650;
 }
 
 .status-text.good {
@@ -259,11 +302,22 @@ button,
     color: var(--muted);
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Server selector                                                            */
+/* -------------------------------------------------------------------------- */
+
 .inline-server-form {
     display: grid;
-    grid-template-columns: 90px minmax(220px, 420px);
+
+    grid-template-columns:
+        90px
+        minmax(220px, 420px);
+
     gap: 8px;
+
     align-items: center;
+
     margin-top: 9px;
 }
 
@@ -271,16 +325,27 @@ button,
     margin: 0;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Assets                                                                     */
+/* -------------------------------------------------------------------------- */
+
 .asset-editor-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
     gap: 10px;
+
     margin-top: 10px;
 }
 
 .asset-editor {
     background: var(--panel-3);
-    border: 1px solid var(--border-soft);
+
+    border:
+        1px solid var(--border-soft);
 }
 
 .compact-asset-editor {
@@ -289,11 +354,19 @@ button,
 
 .asset-editor h3 {
     padding-bottom: 5px;
-    border-bottom: 1px solid var(--border-soft);
+
+    border-bottom:
+        1px solid var(--border-soft);
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Embed fields                                                               */
+/* -------------------------------------------------------------------------- */
 
 .compact-field-card {
     margin-top: 8px !important;
+
     background: var(--panel-3) !important;
 }
 
@@ -301,11 +374,19 @@ button,
     margin-bottom: 4px !important;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Checkboxes                                                                 */
+/* -------------------------------------------------------------------------- */
+
 .compact-checkbox {
     display: flex !important;
     align-items: center;
+
     gap: 7px;
+
     min-height: 34px;
+
     margin-top: 9px;
 }
 
@@ -313,13 +394,23 @@ button,
     width: auto;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Automod                                                                    */
+/* -------------------------------------------------------------------------- */
+
 .compact-terms-box {
     min-height: 150px !important;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Details                                                                    */
+/* -------------------------------------------------------------------------- */
+
 .compact-details {
-    padding-top: 6px;
     margin-top: 6px;
+    padding-top: 6px;
 }
 
 .inline-details {
@@ -328,43 +419,69 @@ button,
 
 .inline-details summary {
     cursor: pointer;
+
     color: var(--muted);
+
     font-size: 12px;
 }
 
 .compact-variable-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px 12px;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap:
+        4px 12px;
+
     margin-top: 8px;
-    font-size: 11px;
+
     color: var(--muted);
+
+    font-size: 11px;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Embed builder                                                              */
+/* -------------------------------------------------------------------------- */
 
 .compact-builder-grid {
     gap: 10px !important;
 }
 
-/* Clears the compact sticky header. Narrow layouts drop both together. */
 .sticky-preview {
     position: sticky;
-    top: 68px;
+
+    top: calc(var(--header-height) + 10px);
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Tables                                                                     */
+/* -------------------------------------------------------------------------- */
+
 .data-table {
-    border-radius: 4px;
     margin-top: 8px;
 }
 
 .data-table th,
 .data-table td {
-    padding: 7px 6px;
+    padding:
+        7px 6px;
+
     font-size: 13px;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Overview                                                                   */
+/* -------------------------------------------------------------------------- */
 
 .overview-grid,
 .health-list {
     gap: 7px;
+
     margin-top: 8px;
 }
 
@@ -372,27 +489,30 @@ button,
     font-size: 19px;
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Code/details                                                               */
+/* -------------------------------------------------------------------------- */
+
 .default-details pre {
-    border-radius: 4px;
-    padding: 8px;
     margin-top: 6px;
+
+    padding: 8px;
 }
 
-code {
-    border-radius: 3px;
+
+/* -------------------------------------------------------------------------- */
+/* Responsive                                                                 */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+    .sticky-preview {
+        top: 10px;
+    }
 }
+
 
 @media (max-width: 900px) {
-    header {
-        position: static;
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    nav {
-        justify-content: flex-start;
-    }
-
     .page-title-row,
     .section-bar {
         align-items: flex-start;
@@ -407,9 +527,13 @@ code {
     }
 
     .status-strip > div {
+        padding:
+            7px 0;
+
         border-right: 0;
-        border-bottom: 1px solid var(--border-soft);
-        padding: 7px 0;
+
+        border-bottom:
+            1px solid var(--border-soft);
     }
 
     .status-strip > div:last-child {
@@ -420,6 +544,7 @@ code {
         position: static;
     }
 }
+
 
 @media (max-width: 640px) {
     main {
