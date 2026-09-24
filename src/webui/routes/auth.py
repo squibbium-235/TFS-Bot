@@ -6,16 +6,15 @@ Password login compares the submitted
 credentials with WEBUI_USER_1 and
 WEBUI_USER_2 and starts an owner session.
 
-Discord login requests identify, guilds,
-and guilds.members.read. The configured
-Web UI guild is still used to determine
-whether the user may log in and whether
-they are an owner or viewer.
+Discord login uses the configured Web UI
+guild to determine whether the user may log
+in and whether they are an owner or viewer.
 
-The user's guild list is also fetched so
-the Web UI can expose only Discord guilds
-that both the bot and the logged-in user
-belong to.
+After authentication, Sanctuary Servo checks
+its own Discord guilds to determine which of
+them the authenticated user is actually a
+member of. Only those shared guild IDs are
+stored in the Web UI session.
 """
 
 from __future__ import annotations
@@ -28,6 +27,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+
+import discord
 
 from flask import (
     Blueprint,
@@ -56,57 +57,46 @@ def discord_api_request(
     access_token: str | None = None,
 ) -> Any:
     """
-    Call Discord with urllib.
+    Call the Discord API with urllib.
 
     Form bodies are URL encoded.
 
-    The access token, when supplied, is sent
-    as a Bearer token.
+    An OAuth access token, when supplied, is
+    sent as a Bearer token.
 
-    HTTP and network failures become
-    RuntimeError so the login route can show
-    one controlled failure message.
+    HTTP and network errors are converted to
+    RuntimeError so the login page can display
+    a controlled error message.
     """
     body: bytes | None = None
 
     headers: dict[str, str] = {
         "Accept": "application/json",
-        "User-Agent": (
-            "Sanctuary Servo WebUI"
-        ),
+        "User-Agent": "Sanctuary Servo WebUI",
     }
 
     if data is not None:
-        body = (
-            urllib.parse.urlencode(
-                data
-            )
-            .encode(
-                "utf-8"
-            )
+        body = urllib.parse.urlencode(
+            data
+        ).encode(
+            "utf-8"
         )
 
-        headers[
-            "Content-Type"
-        ] = (
+        headers["Content-Type"] = (
             "application/"
             "x-www-form-urlencoded"
         )
 
     if access_token is not None:
-        headers[
-            "Authorization"
-        ] = (
+        headers["Authorization"] = (
             f"Bearer {access_token}"
         )
 
-    request_object = (
-        urllib.request.Request(
-            url=url,
-            data=body,
-            headers=headers,
-            method=method,
-        )
+    request_object = urllib.request.Request(
+        url=url,
+        data=body,
+        headers=headers,
+        method=method,
     )
 
     try:
@@ -115,9 +105,7 @@ def discord_api_request(
             timeout=15,
         ) as response:
             return json.loads(
-                response
-                .read()
-                .decode(
+                response.read().decode(
                     "utf-8"
                 )
             )
@@ -125,9 +113,7 @@ def discord_api_request(
     except urllib.error.HTTPError as error:
         try:
             error_body = (
-                error
-                .read()
-                .decode(
+                error.read().decode(
                     "utf-8"
                 )
             )
@@ -150,14 +136,13 @@ def discord_api_request(
 
 def get_discord_redirect_uri() -> str:
     """
-    Use localhost while developing locally.
+    Use a localhost callback during local
+    development.
 
-    All other hosts use the redirect URI
-    configured in the environment.
+    Other hosts use the redirect URI from
+    configuration.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     hostname = (
         request
@@ -189,42 +174,37 @@ def get_discord_authorisation_url(
     redirect_uri: str,
 ) -> str:
     """
-    Build the Discord OAuth authorisation URL.
+    Build the Discord OAuth URL.
 
-    guilds is required so Sanctuary Servo can
-    determine which of the bot's guilds the
-    logged-in user is actually a member of.
+    identify gives us the user's Discord ID.
 
-    guilds.members.read remains required for
-    the configured Web UI guild role check.
+    guilds.members.read allows Sanctuary Servo
+    to retrieve the user's member object from
+    the configured Web UI guild for role
+    authentication.
+
+    The general guilds scope is deliberately
+    not required. Shared guild access is
+    determined by the bot itself.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
-    query = (
-        urllib.parse.urlencode(
-            {
-                "client_id": str(
-                    context
-                    .bot
-                    .config
-                    .discord_oauth_client_id
-                ),
-                "redirect_uri": (
-                    redirect_uri
-                ),
-                "response_type": (
-                    "code"
-                ),
-                "scope": (
-                    "identify "
-                    "guilds "
-                    "guilds.members.read"
-                ),
-                "state": state,
-            }
-        )
+    query = urllib.parse.urlencode(
+        {
+            "client_id": str(
+                context
+                .bot
+                .config
+                .discord_oauth_client_id
+            ),
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": (
+                "identify "
+                "guilds.members.read"
+            ),
+            "state": state,
+        }
     )
 
     return (
@@ -239,42 +219,36 @@ def exchange_discord_code_for_token(
     redirect_uri: str,
 ) -> str:
     """
-    Exchange the OAuth authorisation code for
-    an access token.
+    Exchange a Discord OAuth authorisation
+    code for an access token.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
-    token_data = (
-        discord_api_request(
-            url=(
-                "https://discord.com/"
-                "api/oauth2/token"
+    token_data = discord_api_request(
+        url=(
+            "https://discord.com/"
+            "api/oauth2/token"
+        ),
+        method="POST",
+        data={
+            "client_id": str(
+                context
+                .bot
+                .config
+                .discord_oauth_client_id
             ),
-            method="POST",
-            data={
-                "client_id": str(
-                    context
-                    .bot
-                    .config
-                    .discord_oauth_client_id
-                ),
-                "client_secret": (
-                    context
-                    .bot
-                    .config
-                    .discord_oauth_client_secret
-                ),
-                "grant_type": (
-                    "authorization_code"
-                ),
-                "code": code,
-                "redirect_uri": (
-                    redirect_uri
-                ),
-            },
-        )
+            "client_secret": (
+                context
+                .bot
+                .config
+                .discord_oauth_client_secret
+            ),
+            "grant_type": (
+                "authorization_code"
+            ),
+            "code": code,
+            "redirect_uri": redirect_uri,
+        },
     )
 
     if not isinstance(
@@ -286,10 +260,8 @@ def exchange_discord_code_for_token(
             "OAuth token response."
         )
 
-    access_token = (
-        token_data.get(
-            "access_token"
-        )
+    access_token = token_data.get(
+        "access_token"
     )
 
     if (
@@ -311,18 +283,15 @@ def fetch_discord_user(
     access_token: str,
 ) -> dict[str, Any]:
     """
-    Fetch the current Discord user.
+    Fetch the currently authenticated Discord
+    user.
     """
-    user_data = (
-        discord_api_request(
-            url=(
-                "https://discord.com/"
-                "api/users/@me"
-            ),
-            access_token=(
-                access_token
-            ),
-        )
+    user_data = discord_api_request(
+        url=(
+            "https://discord.com/"
+            "api/users/@me"
+        ),
+        access_token=access_token,
     )
 
     if not isinstance(
@@ -341,15 +310,13 @@ def fetch_discord_member(
     access_token: str,
 ) -> dict[str, Any]:
     """
-    Fetch the current user's member object
-    from the configured Web UI guild.
+    Fetch the authenticated user's member
+    object from WEBUI_DISCORD_GUILD_ID.
 
-    This member object is used for Web UI
-    role matching.
+    This is used only to determine whether
+    they have an allowed Web UI role.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     guild_id = (
         context
@@ -364,17 +331,13 @@ def fetch_discord_member(
             "is not configured."
         )
 
-    member_data = (
-        discord_api_request(
-            url=(
-                "https://discord.com/"
-                "api/users/@me/guilds/"
-                f"{guild_id}/member"
-            ),
-            access_token=(
-                access_token
-            ),
-        )
+    member_data = discord_api_request(
+        url=(
+            "https://discord.com/"
+            "api/users/@me/guilds/"
+            f"{guild_id}/member"
+        ),
+        access_token=access_token,
     )
 
     if not isinstance(
@@ -389,167 +352,74 @@ def fetch_discord_member(
     return member_data
 
 
-def fetch_discord_guilds(
-    access_token: str,
-) -> list[dict[str, Any]]:
-    """
-    Fetch every Discord guild visible to the
-    logged-in user.
-
-    Discord returns at most 200 guilds per
-    request, so continue using the final guild
-    ID as the `after` cursor until all pages
-    have been read.
-    """
-    guilds: list[
-        dict[str, Any]
-    ] = []
-
-    after: str | None = None
-
-    while True:
-        query_values: dict[
-            str,
-            str,
-        ] = {
-            "limit": "200",
-        }
-
-        if after:
-            query_values[
-                "after"
-            ] = after
-
-        query = (
-            urllib.parse.urlencode(
-                query_values
-            )
-        )
-
-        page_data = (
-            discord_api_request(
-                url=(
-                    "https://discord.com/"
-                    "api/users/@me/guilds?"
-                    f"{query}"
-                ),
-                access_token=(
-                    access_token
-                ),
-            )
-        )
-
-        if not isinstance(
-            page_data,
-            list,
-        ):
-            raise RuntimeError(
-                "Discord returned an invalid "
-                "guild-list response."
-            )
-
-        page: list[
-            dict[str, Any]
-        ] = []
-
-        for item in page_data:
-            if isinstance(
-                item,
-                dict,
-            ):
-                page.append(
-                    item
-                )
-
-        guilds.extend(
-            page
-        )
-
-        if len(
-            page_data
-        ) < 200:
-            break
-
-        if not page:
-            break
-
-        next_after = str(
-            page[-1].get(
-                "id"
-            )
-            or ""
-        ).strip()
-
-        if (
-            not next_after
-            or next_after
-            == after
-        ):
-            raise RuntimeError(
-                "Discord guild-list "
-                "pagination did not advance."
-            )
-
-        after = next_after
-
-    return guilds
-
-
-def visible_bot_guild_ids(
-    discord_guilds: list[
-        dict[str, Any]
-    ],
+async def shared_bot_guild_ids(
+    user_id: int,
 ) -> list[str]:
     """
-    Return the intersection of:
+    Return guild IDs shared by Sanctuary Servo
+    and the authenticated Discord user.
 
-    - guilds the OAuth user belongs to
-    - guilds Sanctuary Servo currently belongs to
+    The member cache is checked first.
 
-    Only this intersection is saved into the
-    Discord Web UI session.
+    If the member is not cached, Discord is
+    queried directly through the bot account.
+
+    NotFound means the user is not a member.
+
+    Forbidden also fails closed for that guild
+    rather than exposing its existence.
+
+    A general Discord HTTP failure aborts login
+    because we cannot safely determine access.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
-    user_guild_ids: set[
-        str
-    ] = set()
+    visible_guild_ids: list[str] = []
 
-    for guild in (
-        discord_guilds
+    for guild in list(
+        context.bot.guilds
     ):
-        guild_id = str(
-            guild.get(
-                "id"
-            )
-            or ""
-        ).strip()
+        member = guild.get_member(
+            user_id
+        )
 
-        if guild_id:
-            user_guild_ids.add(
-                guild_id
+        if member is not None:
+            visible_guild_ids.append(
+                str(guild.id)
             )
 
-    bot_guild_ids = {
-        str(
-            guild.id
-        )
-        for guild in (
-            context.bot.guilds
-        )
-    }
+            continue
 
-    visible_ids = (
-        user_guild_ids
-        & bot_guild_ids
+        try:
+            await guild.fetch_member(
+                user_id
+            )
+
+        except discord.NotFound:
+            continue
+
+        except discord.Forbidden:
+            # Fail closed. If the bot cannot
+            # verify membership, do not expose
+            # the guild through the Web UI.
+            continue
+
+        except discord.HTTPException as error:
+            raise RuntimeError(
+                "Sanctuary Servo could not "
+                "verify your server membership "
+                "with Discord. Try again."
+            ) from error
+
+        visible_guild_ids.append(
+            str(guild.id)
+        )
+
+    visible_guild_ids.sort(
+        key=int
     )
 
-    return sorted(
-        visible_ids,
-        key=int,
-    )
+    return visible_guild_ids
 
 
 def render_login_page(
@@ -558,9 +428,7 @@ def render_login_page(
     """
     Render the standalone login page.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     return render_template(
         "auth/login.html",
@@ -582,8 +450,8 @@ def render_login_failure(
     error: str,
 ):
     """
-    Drop any half-finished OAuth session
-    before showing the login error.
+    Clear any partial login session before
+    displaying the error.
     """
     session.clear()
 
@@ -601,23 +469,16 @@ def render_login_failure(
 )
 def login():
     """
-    Password login.
+    Emergency username/password login.
 
-    Password login is the emergency owner
-    mechanism. It deliberately has access to
-    every guild the bot is in.
-
-    Discord-user guild restrictions apply only
-    to Discord OAuth sessions.
+    Password sessions are owner sessions and
+    deliberately retain access to all guilds
+    the bot is in.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     if request.method == "GET":
-        return (
-            render_login_page()
-        )
+        return render_login_page()
 
     if not (
         context
@@ -632,18 +493,14 @@ def login():
             )
         )
 
-    username = (
-        request.form.get(
-            "username",
-            "",
-        )
+    username = request.form.get(
+        "username",
+        "",
     )
 
-    password = (
-        request.form.get(
-            "password",
-            "",
-        )
+    password = request.form.get(
+        "password",
+        "",
     )
 
     login_ok = any(
@@ -665,34 +522,20 @@ def login():
     )
 
     if not login_ok:
-        return (
-            render_login_failure(
-                "Incorrect username "
-                "or password."
-            )
+        return render_login_failure(
+            "Incorrect username "
+            "or password."
         )
 
     session.clear()
 
-    session[
-        "logged_in"
-    ] = True
-
-    session[
-        "auth_method"
-    ] = "password"
-
-    session[
-        "username"
-    ] = username
-
-    session[
-        "display_name"
-    ] = username
-
-    session[
-        "webui_role"
-    ] = "owner"
+    session["logged_in"] = True
+    session["auth_method"] = (
+        "password"
+    )
+    session["username"] = username
+    session["display_name"] = username
+    session["webui_role"] = "owner"
 
     authenticated_at = int(
         time.time()
@@ -720,15 +563,9 @@ def login():
 )
 def discord_login_start():
     """
-    Start a fresh Discord OAuth login.
-
-    The redirect URI is saved beside the state
-    because Discord requires the callback to
-    send the same URI that started the grant.
+    Start a new Discord OAuth flow.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     if not (
         context
@@ -748,10 +585,8 @@ def discord_login_start():
 
     session.clear()
 
-    state = (
-        secrets.token_urlsafe(
-            32
-        )
+    state = secrets.token_urlsafe(
+        32
     )
 
     session[
@@ -777,19 +612,19 @@ def discord_login_callback():
     """
     Finish Discord OAuth login.
 
-    Access is still granted based on the
-    configured Web UI guild and its permitted
-    roles.
+    WEBUI_DISCORD_GUILD_ID and its configured
+    role rules decide whether the user may
+    enter the Web UI.
 
-    Separately, the user's guild list is
-    fetched and intersected with the bot's
-    guild list. Only those shared guild IDs
-    are saved in the session and exposed by
-    WebUIContext.
+    Once authenticated, Sanctuary Servo uses
+    the Discord user ID to independently
+    determine which of its guilds that user
+    belongs to.
+
+    Only those guild IDs are saved into the
+    session.
     """
-    context = (
-        webui_context()
-    )
+    context = webui_context()
 
     if not (
         context
@@ -797,16 +632,12 @@ def discord_login_callback():
         .discord_login_enabled()
     ):
         return render_login_failure(
-            (
-                "Discord login is "
-                "not enabled."
-            )
+            "Discord login is "
+            "not enabled."
         )
 
-    oauth_error = (
-        request.args.get(
-            "error"
-        )
+    oauth_error = request.args.get(
+        "error"
     )
 
     if oauth_error:
@@ -815,48 +646,36 @@ def discord_login_callback():
             f"{oauth_error}"
         )
 
-    code = (
-        request.args.get(
-            "code",
-            "",
-        )
+    code = request.args.get(
+        "code",
+        "",
     )
 
-    state = (
-        request.args.get(
-            "state",
-            "",
-        )
+    state = request.args.get(
+        "state",
+        "",
     )
 
-    expected_state = (
-        session.pop(
-            "discord_oauth_state",
-            "",
-        )
+    expected_state = session.pop(
+        "discord_oauth_state",
+        "",
     )
 
-    redirect_uri = (
-        session.pop(
-            "discord_oauth_redirect_uri",
-            "",
-        )
+    redirect_uri = session.pop(
+        "discord_oauth_redirect_uri",
+        "",
     )
 
     if not redirect_uri:
         return render_login_failure(
-            (
-                "Discord login redirect "
-                "URI was lost. Try again."
-            )
+            "Discord login redirect "
+            "URI was lost. Try again."
         )
 
     if not code:
         return render_login_failure(
-            (
-                "Discord did not return "
-                "an authorisation code."
-            )
+            "Discord did not return "
+            "an authorisation code."
         )
 
     if (
@@ -868,10 +687,8 @@ def discord_login_callback():
         )
     ):
         return render_login_failure(
-            (
-                "Discord login state "
-                "mismatch. Try again."
-            )
+            "Discord login state "
+            "mismatch. Try again."
         )
 
     try:
@@ -882,10 +699,8 @@ def discord_login_callback():
             )
         )
 
-        user_data = (
-            fetch_discord_user(
-                access_token
-            )
+        user_data = fetch_discord_user(
+            access_token
         )
 
         member_data = (
@@ -903,51 +718,10 @@ def discord_login_callback():
         )
 
         if webui_role is None:
-            return (
-                render_login_failure(
-                    (
-                        "Your Discord account "
-                        "does not have an "
-                        "allowed WebUI role."
-                    )
-                )
-            )
-
-        discord_guilds = (
-            fetch_discord_guilds(
-                access_token
-            )
-        )
-
-        allowed_guild_ids = (
-            visible_bot_guild_ids(
-                discord_guilds
-            )
-        )
-
-        configured_login_guild_id = (
-            context
-            .bot
-            .config
-            .webui_discord_guild_id
-        )
-
-        if (
-            configured_login_guild_id
-            is not None
-            and str(
-                configured_login_guild_id
-            )
-            not in allowed_guild_ids
-        ):
-            return (
-                render_login_failure(
-                    (
-                        "Your Discord account "
-                        "is not a member of the "
-                        "configured WebUI server."
-                    )
-                )
+            return render_login_failure(
+                "Your Discord account "
+                "does not have an "
+                "allowed WebUI role."
             )
 
         username = str(
@@ -964,18 +738,37 @@ def discord_login_callback():
             or ""
         ).strip()
 
-        user_id = str(
+        user_id_text = str(
             user_data.get(
                 "id"
             )
             or ""
         ).strip()
 
-        if not user_id:
+        if not user_id_text:
             raise RuntimeError(
                 "Discord did not return "
                 "a user ID."
             )
+
+        try:
+            user_id = int(
+                user_id_text
+            )
+
+        except ValueError as error:
+            raise RuntimeError(
+                "Discord returned an invalid "
+                "user ID."
+            ) from error
+
+        allowed_guild_ids = (
+            context.run_coro(
+                shared_bot_guild_ids(
+                    user_id
+                )
+            )
+        )
 
         display_name = (
             global_name
@@ -994,7 +787,7 @@ def discord_login_callback():
 
         session[
             "discord_user_id"
-        ] = user_id
+        ] = user_id_text
 
         session[
             "discord_username"
@@ -1045,7 +838,7 @@ def discord_login_callback():
 )
 def logout():
     """
-    End the Web UI session.
+    End the current Web UI session.
     """
     session.clear()
 
