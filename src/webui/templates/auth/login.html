@@ -1,6 +1,12 @@
-{# Standalone page, so it does not inherit the shell script. The password form carries its own CSRF field. Discord login is a GET and is not CSRF-checked. #}
-<!doctype html>
+{#
+    Standalone Sanctuary Servo login page.
 
+    This page intentionally does not inherit the signed-in application shell.
+    The password form carries its own CSRF token. Discord login is a GET and
+    therefore is not CSRF checked.
+#}
+
+<!doctype html>
 <html lang="en">
 
 <head>
@@ -11,9 +17,13 @@
         content="width=device-width, initial-scale=1"
     >
 
-    <title>
-        Sanctuary Servo Login
-    </title>
+    <title>Sanctuary Servo</title>
+
+    <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='img/sanctuary-servo-logo.png') }}"
+    >
 
     <link
         rel="stylesheet"
@@ -23,117 +33,160 @@
 
 <body>
 
-    <div class="login-card">
+    <main class="login-page">
 
-        <p class="product-kicker">Sanctuary Servo</p>
+        <section
+            class="login-card"
+            aria-labelledby="login-title"
+        >
 
-        <h1>
-            Web UI
-        </h1>
-
-        <p class="lede">
-            Sign in to configure verification,
-            forms, and the rest of this server.
-        </p>
-
-        {% if discord_login_enabled %}
-
-            <form
-                method="get"
-                action="{{ url_for('auth.discord_login_start') }}"
-            >
-
-                <button
-                    type="submit"
-                    class="discord-button"
+            <div class="brand">
+                <img
+                    class="brand-logo"
+                    src="{{ url_for('static', filename='img/sanctuary-servo-logo.png') }}"
+                    alt=""
+                    aria-hidden="true"
                 >
-                    Log in with Discord
-                </button>
 
-            </form>
+                <div class="brand-text">
+                    <h1 id="login-title">
+                        Sanctuary Servo
+                    </h1>
 
-            <p class="hint">
-                Access is granted only if your
-                Discord account has an allowed
-                server role.
-            </p>
-
-        {% endif %}
-
-
-        {% if discord_login_enabled and password_login_enabled %}
-
-            <div class="divider">
-                or emergency log in
+                    <p>
+                        Server administration
+                    </p>
+                </div>
             </div>
 
-        {% endif %}
-
-
-        {% if password_login_enabled %}
-
-            <form
-                method="post"
-                action="{{ url_for('auth.login') }}"
-            >
-
-                <input
-                    type="hidden"
-                    name="_csrf_token"
-                    value="{{ csrf_token }}"
-                >
-
-                <label>
-                    Username
-                </label>
-
-                <input
-                    type="text"
-                    name="username"
-                    autocomplete="username"
-                    {% if not discord_login_enabled %}
-                        autofocus
-                    {% endif %}
-                >
-
-                <label>
-                    Password
-                </label>
-
-                <input
-                    type="password"
-                    name="password"
-                    autocomplete="current-password"
-                >
-
-                <button type="submit">
-                    Log in
-                </button>
-
-            </form>
-
-        {% endif %}
-
-
-        {% if not discord_login_enabled and not password_login_enabled %}
-
-            <p class="error">
-                No WebUI login methods
-                are configured.
+            <p class="lede">
+                Sign in to manage verification, forms,
+                permissions and server configuration.
             </p>
 
-        {% endif %}
+
+            {% if discord_login_enabled %}
+
+                <form
+                    method="get"
+                    action="{{ url_for('auth.discord_login_start') }}"
+                    class="discord-login-form"
+                >
+                    <button
+                        type="submit"
+                        class="discord-button"
+                    >
+                        <svg
+                            class="discord-icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path
+                                fill="currentColor"
+                                d="M19.54 5.34A16.3 16.3 0 0 0 15.44 4a11.4 11.4 0 0 0-.52 1.07 15.1 15.1 0 0 0-4.54 0A11 11 0 0 0 9.85 4a16.6 16.6 0 0 0-4.11 1.34C3.14 9.2 2.44 12.95 2.8 16.64a16.5 16.5 0 0 0 5.03 2.54 12.8 12.8 0 0 0 1.08-1.76 10.5 10.5 0 0 1-1.7-.81l.42-.33a11.7 11.7 0 0 0 10.04 0l.43.33a11 11 0 0 1-1.71.81c.31.62.67 1.21 1.08 1.76a16.4 16.4 0 0 0 5.03-2.54c.43-4.28-.73-7.99-2.96-11.3ZM8.79 14.39c-1.01 0-1.84-.92-1.84-2.04 0-1.13.81-2.05 1.84-2.05 1.04 0 1.86.93 1.84 2.05 0 1.12-.81 2.04-1.84 2.04Zm6.42 0c-1.01 0-1.84-.92-1.84-2.04 0-1.13.81-2.05 1.84-2.05 1.04 0 1.86.93 1.84 2.05 0 1.12-.8 2.04-1.84 2.04Z"
+                            />
+                        </svg>
+
+                        <span>
+                            Continue with Discord
+                        </span>
+                    </button>
+                </form>
+
+                <p class="hint">
+                    Your Discord account must have an allowed
+                    role in the configured server.
+                </p>
+
+            {% endif %}
 
 
-        {% if error %}
+            {% if discord_login_enabled and password_login_enabled %}
 
-            <p class="error">
-                {{ error }}
-            </p>
+                <div class="divider">
+                    <span>
+                        Emergency login
+                    </span>
+                </div>
 
-        {% endif %}
+            {% endif %}
 
-    </div>
+
+            {% if password_login_enabled %}
+
+                <form
+                    method="post"
+                    action="{{ url_for('auth.login') }}"
+                    class="password-login-form"
+                >
+
+                    <input
+                        type="hidden"
+                        name="_csrf_token"
+                        value="{{ csrf_token }}"
+                    >
+
+                    <div class="field">
+                        <label for="username">
+                            Username
+                        </label>
+
+                        <input
+                            id="username"
+                            type="text"
+                            name="username"
+                            autocomplete="username"
+                            {% if not discord_login_enabled %}
+                                autofocus
+                            {% endif %}
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="password">
+                            Password
+                        </label>
+
+                        <input
+                            id="password"
+                            type="password"
+                            name="password"
+                            autocomplete="current-password"
+                        >
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="login-button"
+                    >
+                        Log in
+                    </button>
+
+                </form>
+
+            {% endif %}
+
+
+            {% if not discord_login_enabled and not password_login_enabled %}
+
+                <p class="error">
+                    No Web UI login methods are configured.
+                </p>
+
+            {% endif %}
+
+
+            {% if error %}
+
+                <p class="error">
+                    {{ error }}
+                </p>
+
+            {% endif %}
+
+        </section>
+
+    </main>
 
 </body>
 
