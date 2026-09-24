@@ -14,7 +14,10 @@ venv/
 *.sqlite3
 data/uploads/
 data/backups/
+# The restore safety copy is data/restore_safety (underscore).
+# The hyphenated name is ignored as well, in case an older copy exists.
 data/restore-safety/
+data/restore_safety/
 
 # OS / editor junk
 .DS_Store

@@ -21,7 +21,7 @@
     padding: 11px 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #151820;
+    background: var(--panel-3);
     color: var(--text);
     text-decoration: none;
 }
@@ -68,7 +68,7 @@
 
 .cc-action-number {
     background: var(--accent);
-    color: white;
+    color: var(--on-accent);
     border-radius: 999px;
     min-width: 28px;
     height: 28px;
@@ -117,7 +117,7 @@
     border-radius: 10px;
     padding: 12px;
     margin-top: 10px;
-    background: #151820;
+    background: var(--panel-3);
 }
 
 .cc-field-header {
@@ -145,7 +145,7 @@
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #151820;
+    background: var(--panel-3);
     cursor: pointer;
     color: var(--text);
 }
@@ -188,7 +188,7 @@
 }
 
 .cc-danger-zone {
-    border-color: #ed4245;
+    border-color: var(--danger);
 }
 
 @media (max-width: 900px) {

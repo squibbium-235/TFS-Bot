@@ -161,12 +161,12 @@ class TFSBot(commands.Bot):
             "Moderation database initialised."
         )
 
-        await self.load_extension(
-            "src.commands.modprofile.modprofile"
-        )
-
         self.log.info(
             "Loading moderation profile commands..."
+        )
+
+        await self.load_extension(
+            "src.commands.modprofile.modprofile"
         )
 
         await self.dm_template_store.initialise()
@@ -490,9 +490,9 @@ class TFSBot(commands.Bot):
         rebuilding every guild's invite cache.
         """
         if self.user is None:
-            self.log.info(
-                "Bot is ready, but self.user "
-                "is somehow None. Very normal."
+            self.log.warning(
+                "Bot is ready, but self.user is None. "
+                "Invite tracking was not synchronised."
             )
             return
 
@@ -628,16 +628,85 @@ class TFSBot(commands.Bot):
                 ),
             )
 
+    @staticmethod
+    def _prefix_command_error_message(
+        error: commands.CommandError,
+    ) -> str | None:
+        """
+        Return a reply for an expected prefix
+        failure, or None when it should be logged.
+
+        These are the same cases the slash
+        handler explains. Anything else, including
+        a command that raised, stays None so the
+        caller records it.
+        """
+        if isinstance(
+            error,
+            commands.MissingRequiredArgument,
+        ):
+            return (
+                "Missing required argument: "
+                f"`{error.param.name}`."
+            )
+
+        if isinstance(
+            error,
+            commands.BadArgument,
+        ):
+            return (
+                "That argument could not "
+                "be understood."
+            )
+
+        if isinstance(
+            error,
+            commands.CommandOnCooldown,
+        ):
+            return (
+                "That command is on cooldown. "
+                "Try again in "
+                f"{error.retry_after:.0f} seconds."
+            )
+
+        if isinstance(
+            error,
+            commands.MissingPermissions,
+        ):
+            return (
+                "You do not have permission "
+                "to use this command."
+            )
+
+        if isinstance(
+            error,
+            commands.BotMissingPermissions,
+        ):
+            return (
+                "I do not have the permissions "
+                "needed to do that."
+            )
+
+        if isinstance(
+            error,
+            commands.CheckFailure,
+        ):
+            return "You cannot use this command here."
+
+        return None
+
     async def on_command_error(
         self,
         ctx: commands.Context,
         error: commands.CommandError,
     ) -> None:
         """
-        Log prefix-command failures.
+        Reply to prefix-command failures.
 
         Unknown commands are ignored so a
-        typo does not produce a reply.
+        typo does not produce a reply. Expected
+        check and argument errors get a short
+        explanation and are not logged as faults.
         """
         if isinstance(
             error,
@@ -645,18 +714,34 @@ class TFSBot(commands.Bot):
         ):
             return
 
-        self.log.exception(
-            "Unhandled prefix command error: %s",
-            error,
-            exc_info=error,
+        message = self._prefix_command_error_message(
+            error
         )
+
+        if message is None:
+            cause = (
+                error.original
+                if isinstance(
+                    error,
+                    commands.CommandInvokeError,
+                )
+                else error
+            )
+
+            self.log.error(
+                "Unhandled prefix command error: %s",
+                error,
+                exc_info=cause,
+            )
+
+            message = (
+                "Something went wrong while "
+                "running that command."
+            )
 
         try:
             await ctx.reply(
-                (
-                    "Something went wrong while "
-                    "running that command."
-                ),
+                message,
                 mention_author=False,
             )
 
