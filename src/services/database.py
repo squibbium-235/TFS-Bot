@@ -1,5 +1,5 @@
 """
-Shared SQLCipher database used by every TFSBot store.
+Shared SQLCipher database used by every Sanctuary Servo store.
 
 TFSBOT_DATABASE_KEY must be 64 hexadecimal characters.
 Async stores call open_database, which runs aiosqlite
@@ -150,7 +150,7 @@ async def open_database(
     AsyncDatabaseConnection
 ]:
     """
-    Open an asynchronous encrypted TFSBot
+    Open an asynchronous encrypted Sanctuary Servo
     database connection.
 
     SQLCipher performs the actual database
@@ -274,7 +274,7 @@ def open_sync_database(
     SyncDatabaseConnection
 ]:
     """
-    Open a synchronous encrypted TFSBot
+    Open a synchronous encrypted Sanctuary Servo
     database connection.
 
     Leaving the block without an error

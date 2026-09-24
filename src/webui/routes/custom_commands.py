@@ -533,7 +533,7 @@ def create_custom_commands_blueprint(
             "custom_commands/index.html",
             **context.template_context(
                 title=(
-                    "TFSBot Custom Commands"
+                    "Sanctuary Servo Custom Commands"
                 ),
                 active_page=(
                     "custom_commands"

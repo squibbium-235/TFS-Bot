@@ -1,5 +1,5 @@
 """
-Copy a plaintext TFS-Bot SQLite file into
+Copy a plaintext Sanctuary Servo SQLite file into
 a new SQLCipher database.
 
 The source is left unchanged. The target
@@ -387,7 +387,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Create an encrypted SQLCipher copy "
-            "of a plaintext TFSBot database."
+            "of a plaintext Sanctuary Servo database."
         )
     )
 

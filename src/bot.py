@@ -1,5 +1,5 @@
 """
-Discord client for TFS-Bot.
+Discord client for Sanctuary Servo.
 
 setup_hook opens the SQLCipher stores, loads
 cogs, optionally starts the Web UI, restores

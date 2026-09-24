@@ -1,4 +1,4 @@
-# TFSBot
+# Sanctuary Servo
 ## Features included
 
 - `discord.py`

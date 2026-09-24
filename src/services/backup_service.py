@@ -102,7 +102,7 @@ class BackupService:
         created_at = datetime.now(timezone.utc)
 
         filename = (
-            f"TFSBot_Backup_"
+            f"Sanctuary_Servo_Backup_"
             f"{created_at.strftime('%Y-%m-%d_%H%M%S')}"
             f"{BACKUP_EXTENSION}"
         )
@@ -260,7 +260,7 @@ class BackupService:
         password = password.strip()
 
         if not encrypted_data.startswith(BACKUP_MAGIC):
-            raise BackupError("This is not a valid TFSBot backup file.")
+            raise BackupError("This is not a valid Sanctuary Servo backup file.")
 
         remaining = encrypted_data[len(BACKUP_MAGIC):]
 
@@ -455,7 +455,7 @@ class BackupService:
                 "You will need to recreate .env manually or copy it from the VPS.\n"
             )
 
-        return f"""TFSBot Backup
+        return f"""Sanctuary Servo Backup
 
 This .tfsbackup file is encrypted.
 You need the backup password to decrypt it.

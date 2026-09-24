@@ -53,7 +53,7 @@ def discord_api_request(
 
     headers: dict[str, str] = {
         "Accept": "application/json",
-        "User-Agent": "TFSBot WebUI",
+        "User-Agent": "Sanctuary Servo WebUI",
     }
 
     if data is not None:

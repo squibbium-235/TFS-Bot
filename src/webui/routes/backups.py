@@ -361,7 +361,7 @@ def index():
     return render_template(
         "backups/index.html",
         **context.template_context(
-            title="TFSBot Backups",
+            title="Sanctuary Servo Backups",
             active_page="backups",
             database_path=str(
                 database_path
