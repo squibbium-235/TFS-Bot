@@ -1,3 +1,16 @@
+"""
+Guild forms, published panels, and submissions.
+
+A missing form is seeded from its JSON file, or from
+the built-in verification questions when that file is
+absent and the key is verification. Seeding does not
+overwrite a form that already exists. The verification
+form cannot be deleted. Question order is a sort_order
+column, compacted after a delete. SQLite foreign keys
+are off unless a connection turns them on, so deleting
+a form enables them before relying on CASCADE.
+"""
+
 from __future__ import annotations
 
 import re
@@ -24,6 +37,12 @@ VALID_QUESTION_KEY_PATTERN = re.compile(r"^[a-z0-9_]{1,80}$")
 
 
 def get_default_verification_form_config() -> FormConfig:
+    """
+    Return the built-in verification form.
+
+    Used when data/forms/verification.json is missing.
+    The JSON file wins whenever it exists.
+    """
     return FormConfig(
         title="Verification Application",
         custom_id_prefix="verify:application",
@@ -150,6 +169,12 @@ class StoredFormSubmission:
 
 
 class FormStore:
+    """
+    Async store for forms on the shared SQLCipher database.
+
+    Reads that need a form call ensure_form_from_json
+    first, so the first read creates the row.
+    """
     def __init__(self, database_path: str) -> None:
         self.database_path = Path(database_path)
 
@@ -264,6 +289,12 @@ class FormStore:
         form_key: str,
         json_path: str,
     ) -> None:
+        """
+        Insert the form from JSON when the guild has none.
+
+        An existing form is left unchanged, including
+        questions that staff have edited.
+        """
         existing_form = await self.get_form_config_or_none(
             guild_id=guild_id,
             form_key=form_key,
@@ -341,6 +372,13 @@ class FormStore:
         form_key: str,
         json_path: str,
     ) -> None:
+        """
+        Replace questions with the JSON or built-in form.
+
+        The form row is inserted or updated. created_at
+        on an existing row is kept. Submissions and
+        published panels are not removed.
+        """
         form = self._load_form_or_default(form_key, json_path)
         now = self._now()
 
@@ -521,12 +559,23 @@ class FormStore:
         guild_id: int,
         form_key: str,
     ) -> bool:
+        """
+        Delete a form, its submissions, and its panels.
+
+        The verification form cannot be deleted.
+        Foreign keys are enabled on this connection
+        so question rows cascade. Submission answers
+        are removed explicitly. Returns whether the
+        form row existed.
+        """
         form_key = form_key.lower().strip()
 
         if form_key == FORM_KEY_VERIFICATION:
             raise ValueError("The built-in verification form cannot be deleted.")
 
         async with open_database(self.database_path) as database:
+            # Foreign keys default to off, so CASCADE
+            # would not remove questions without this.
             await database.execute("PRAGMA foreign_keys = ON")
 
             cursor = await database.execute(
@@ -589,6 +638,13 @@ class FormStore:
         form_key: str,
         question_keys: list[str],
     ) -> None:
+        """
+        Set sort_order for the keys that were passed.
+
+        Keys not in the list keep their old order, so
+        a partial list can leave gaps or duplicates.
+        Blank keys are ignored.
+        """
         form_key = form_key.lower().strip()
         cleaned_question_keys = [key.lower().strip() for key in question_keys if key.strip()]
         now = self._now()
@@ -628,6 +684,13 @@ class FormStore:
         title: str,
         description: str,
     ) -> None:
+        """
+        Remember the Discord message that posts a form.
+
+        The primary key is the guild and message, so
+        publishing again to the same message updates
+        that row instead of inserting another.
+        """
         form_key = form_key.lower().strip()
         now = self._now()
 
@@ -761,6 +824,12 @@ class FormStore:
         form_key: str,
         limit: int = 10,
     ) -> list[StoredFormSubmission]:
+        """
+        Return the newest submissions and their answers.
+
+        The limit is clamped to the range 1 to 25.
+        Answers are loaded in sort_order for each row.
+        """
         form_key = form_key.lower().strip()
         limit = max(1, min(limit, 25))
 
@@ -855,6 +924,13 @@ class FormStore:
         form_key: str,
         fallback_json_path: str | None = None,
     ) -> FormConfig:
+        """
+        Return the form, seeding it from JSON first.
+
+        The fallback path defaults to the verification
+        file even for other form keys. A form that
+        still cannot be read raises RuntimeError.
+        """
         fallback_json_path = fallback_json_path or "data/forms/verification.json"
         await self.ensure_form_from_json(
             guild_id=guild_id,
@@ -1098,6 +1174,15 @@ class FormStore:
         clear_lengths: bool = False,
         fallback_json_path: str | None = None,
     ) -> bool:
+        """
+        Change the fields that were passed.
+
+        None leaves the stored value in place.
+        clear_placeholder and clear_lengths are
+        how a caller removes those optional values,
+        because None already means "do not change".
+        Returns false when the question does not exist.
+        """
         fallback_json_path = fallback_json_path or "data/forms/verification.json"
         existing = await self.get_question(
             guild_id=guild_id,
@@ -1223,6 +1308,13 @@ class FormStore:
         new_position: int,
         fallback_json_path: str | None = None,
     ) -> bool:
+        """
+        Move a question to a 1-based position.
+
+        The position is clamped to the current list.
+        Every question is then renumbered from 1.
+        Returns false when the key is missing.
+        """
         fallback_json_path = fallback_json_path or "data/forms/verification.json"
         questions = await self.list_questions(
             guild_id=guild_id,
@@ -1286,6 +1378,12 @@ class FormStore:
         guild_id: int,
         form_key: str,
     ) -> None:
+        """
+        Renumber sort_order from 1 in current order.
+
+        Called after a question is deleted so later
+        positions do not keep a gap.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -1318,6 +1416,13 @@ class FormStore:
 
     @staticmethod
     def _load_form_or_default(form_key: str, json_path: str) -> FormConfig:
+        """
+        Load JSON when the file exists.
+
+        A missing verification file uses the built-in
+        questions. Any other missing file raises
+        FileNotFoundError.
+        """
         form_path = Path(json_path)
 
         if form_path.exists():
@@ -1361,6 +1466,13 @@ class FormStore:
         min_length: int | None,
         max_length: int | None,
     ) -> None:
+        """
+        Reject question fields Discord will not accept.
+
+        Labels stop at 45 characters, placeholders at
+        100, and max_length at 4000. min_length may
+        not exceed max_length.
+        """
         if not VALID_QUESTION_KEY_PATTERN.fullmatch(question_key):
             raise ValueError(
                 "Question key must be 1-80 characters and only use lowercase letters, numbers, and underscores."
@@ -1396,6 +1508,12 @@ class FormStore:
 
     @staticmethod
     def _style_to_string(style: discord.TextStyle | str) -> str:
+        """
+        Store a style as short or paragraph.
+
+        Anything that is not short, including an
+        unknown string, is stored as paragraph.
+        """
         if isinstance(style, str):
             lowered = style.lower().strip()
 

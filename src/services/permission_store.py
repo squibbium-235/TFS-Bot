@@ -1,3 +1,15 @@
+"""
+Ordered command permissions stored per guild.
+
+Levels run public, staff, admin, then owner. Each
+guild maps at most one role to staff, admin, and
+owner. Public has no role. A command's required
+level is the guild override for that exact key,
+then the override for its parent key, then the
+built-in default for the key, then the parent's
+default, then public.
+"""
+
 from __future__ import annotations
 
 import os
@@ -102,6 +114,12 @@ DEFAULT_COMMAND_LEVELS = {
 
 
 def normalise_level(level: str) -> str:
+    """
+    Return public, staff, admin, or owner.
+
+    Hyphens and spaces become underscores. Any
+    other text raises ValueError.
+    """
     cleaned = (
         level.lower()
         .strip()
@@ -119,6 +137,12 @@ def normalise_level(level: str) -> str:
 
 
 def normalise_command_key(command_key: str) -> str:
+    """
+    Canonicalise a command key.
+
+    The text is stripped and lower-cased. Spaces
+    become dots and hyphens become underscores.
+    """
     return (
         command_key.lower()
         .strip()
@@ -128,6 +152,12 @@ def normalise_command_key(command_key: str) -> str:
 
 
 def get_bot_dev_user_ids() -> set[int]:
+    """
+    Parse BOT_DEV_USER_IDS as a comma-separated set.
+
+    Blank items and values that are not integers
+    are skipped. An unset variable yields an empty set.
+    """
     raw_value = os.getenv("BOT_DEV_USER_IDS", "")
     user_ids: set[int] = set()
 
@@ -146,6 +176,14 @@ def get_bot_dev_user_ids() -> set[int]:
 
 
 class PermissionStore:
+    """
+    Guild role levels and per-command level overrides.
+
+    Enforcement uses parent-key fallback. The listing
+    used by the settings UI does not: a child key shows
+    its own override or its built-in default, not the
+    parent's custom level.
+    """
     def __init__(self, db_path: str = "data/tfsbot.sqlite3") -> None:
         db_path_object = Path(db_path)
         db_path_object.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +221,15 @@ class PermissionStore:
         guild_id: int,
         command_key: str,
     ) -> str:
+        """
+        Return the level name required to run a command.
+
+        A stored exact key beats a stored parent key.
+        With no stored row, the built-in default for
+        the exact key wins, then the parent's default,
+        then public. Unknown children of verification
+        and welcome therefore stay owner-level.
+        """
         command_key = normalise_command_key(command_key)
         parent_key = command_key.split(".")[0]
 
@@ -242,6 +289,13 @@ class PermissionStore:
         command_key: str,
         level: str,
     ) -> None:
+        """
+        Store an override for one command key.
+
+        Child keys are not updated. Set the parent
+        key itself when future subcommands should
+        inherit the level at enforcement time.
+        """
         command_key = normalise_command_key(command_key)
         level = normalise_level(level)
 
@@ -267,6 +321,10 @@ class PermissionStore:
         guild_id: int,
         command_key: str,
     ) -> None:
+        """
+        Remove one override so the built-in default,
+        or the parent override, applies again.
+        """
         command_key = normalise_command_key(command_key)
 
         async with open_database(self.db_path) as database:
@@ -285,6 +343,13 @@ class PermissionStore:
         self,
         guild_id: int,
     ) -> dict[str, str]:
+        """
+        Return every known command key and its displayed level.
+
+        Custom rows override the built-in default for that
+        same key only. Parent fallback is not applied here,
+        unlike get_required_level_name.
+        """
         custom_levels: dict[str, str] = {}
 
         async with open_database(self.db_path) as database:
@@ -329,6 +394,12 @@ class PermissionStore:
         level: str,
         role_id: int,
     ) -> None:
+        """
+        Map one Discord role to staff, admin, or owner.
+
+        Each level holds a single role. Public is rejected
+        because it means everyone, not a role.
+        """
         level = normalise_level(level)
 
         if level == LEVEL_PUBLIC:

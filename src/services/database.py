@@ -1,3 +1,15 @@
+"""
+Shared SQLCipher database used by every TFSBot store.
+
+TFSBOT_DATABASE_KEY must be 64 hexadecimal characters.
+Async stores call open_database, which runs aiosqlite
+over a SQLCipher connector. Guild settings use the
+synchronous helper. Snapshots are made with SQLCipher
+backup(), then checked with both integrity_check and
+cipher_integrity_check, because a copied file can look
+fine while its cipher pages are wrong.
+"""
+
 from __future__ import annotations
 
 import os
@@ -55,6 +67,13 @@ load_dotenv(
 
 
 def _get_database_key() -> str:
+    """
+    Return the SQLCipher key from the environment.
+
+    The value must be exactly 64 hexadecimal
+    characters. The project .env file is loaded
+    when this module is imported.
+    """
     key = os.getenv(
         "TFSBOT_DATABASE_KEY",
         "",
@@ -74,6 +93,10 @@ def _get_database_key() -> str:
 def _prepare_database_path(
     database_path: DatabasePath,
 ) -> Path:
+    """
+    Return the database path, creating any
+    missing parent directories first.
+    """
     path = Path(
         database_path
     )
@@ -159,6 +182,19 @@ def create_database_snapshot(
     source_path: DatabasePath,
     snapshot_path: DatabasePath,
 ) -> None:
+    """
+    Write a consistent encrypted copy of the
+    database to snapshot_path.
+
+    SQLCipher backup() copies pages through
+    open connections, rather than copying the
+    file on disk. The destination is removed
+    first so backup starts from an empty
+    encrypted database. integrity_check must
+    return ok, and cipher_integrity_check must
+    return no rows. A failed check leaves the
+    new snapshot file in place.
+    """
     source = Path(source_path)
     snapshot = Path(snapshot_path)
 
@@ -208,6 +244,10 @@ def create_database_snapshot(
                 "integrity check."
             )
 
+        # integrity_check can pass when cipher
+        # pages are corrupt. An empty result
+        # from this pragma means the snapshot
+        # can be decrypted and read.
         cipher_errors = (
             snapshot_database.execute(
                 """
@@ -236,6 +276,11 @@ def open_sync_database(
     """
     Open a synchronous encrypted TFSBot
     database connection.
+
+    Leaving the block without an error
+    commits. An exception rolls the
+    transaction back, then the connection
+    is closed.
     """
     path = _prepare_database_path(
         database_path

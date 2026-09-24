@@ -1,3 +1,12 @@
+"""
+Append-only audit log in the shared SQLCipher database.
+
+Entries record who did what, from which source. Detail
+text is truncated. Listing returns newest ids first,
+which follows insertion order rather than the created_at
+clock.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +39,10 @@ class AuditEntry:
 
 
 class AuditStore:
+    """
+    Write and list audit rows. There is no update or
+    delete API; rows stay until the database is replaced.
+    """
     def __init__(
         self,
         database_path: str,
@@ -78,6 +91,13 @@ class AuditStore:
         guild_id: int | None = None,
         detail: str = "",
     ) -> None:
+        """
+        Append one audit row.
+
+        detail is cut at 2000 characters. actor_id is
+        text so non-Discord actors can be recorded.
+        guild_id may be omitted for bot-wide actions.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -111,6 +131,11 @@ class AuditStore:
         self,
         limit: int = 20,
     ) -> list[AuditEntry]:
+        """
+        Return the newest audit rows, by id.
+
+        The limit is clamped to the range 1 to 100.
+        """
         limit = max(
             1,
             min(

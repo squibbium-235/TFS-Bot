@@ -1,3 +1,13 @@
+"""
+Welcome settings and delivery records.
+
+Enabling welcome sets enabled_since when it is not
+already set. Disabling clears it. Only approvals
+actioned at or after that time, and not already
+recorded in welcome_deliveries, are eligible to be
+sent. Embed colour is stored as Discord's "color".
+"""
+
 from __future__ import annotations
 
 import json
@@ -41,6 +51,13 @@ class ApprovedApplication:
 
 
 class WelcomeStore:
+    """
+    Persist welcome embeds and which approvals
+    have already been welcomed.
+
+    get_settings returns defaults without writing
+    when the guild has no row yet.
+    """
     def __init__(
         self,
         database_path: str,
@@ -101,6 +118,12 @@ class WelcomeStore:
         self,
         guild_id: int,
     ) -> WelcomeSettings:
+        """
+        Return stored settings, or defaults.
+
+        A missing row is not inserted. The default
+        embed is a copy, so callers can edit it.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -139,6 +162,10 @@ class WelcomeStore:
         channel_id: int | None,
         embed_data: dict[str, Any],
     ) -> WelcomeSettings:
+        """
+        Store the channel and embed, keeping enabled
+        and enabled_since as they already are.
+        """
         existing = await self.get_settings(
             guild_id
         )
@@ -200,6 +227,14 @@ class WelcomeStore:
         guild_id: int,
         enabled: bool,
     ) -> WelcomeSettings:
+        """
+        Turn welcome on or off for this guild.
+
+        Turning it on keeps enabled_since when welcome
+        was already on. Otherwise the window starts
+        now, so older approvals are not welcomed.
+        Turning it off clears enabled_since.
+        """
         existing = await self.get_settings(
             guild_id
         )
@@ -232,6 +267,13 @@ class WelcomeStore:
     async def list_enabled_settings(
         self,
     ) -> list[WelcomeSettings]:
+        """
+        Return guilds that can send welcomes.
+
+        Enabled, a channel, and enabled_since are
+        all required. A guild missing any of those
+        is omitted.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -262,6 +304,15 @@ class WelcomeStore:
         since: str,
         limit: int = 25,
     ) -> list[ApprovedApplication]:
+        """
+        Return approved applications not yet welcomed.
+
+        actioned_at must be at or after since, compared
+        as text. Anything already in welcome_deliveries
+        is excluded, including a failed attempt.
+        Oldest approvals come first. The limit is
+        clamped to the range 1 to 100.
+        """
         safe_limit = max(
             1,
             min(limit, 100),
@@ -342,6 +393,13 @@ class WelcomeStore:
         message_id: int | None = None,
         detail: str | None = None,
     ) -> None:
+        """
+        Record that this application has been processed.
+
+        A second call for the same application replaces
+        the result, so the row still blocks another send.
+        result is cut at 40 characters and detail at 1000.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -477,6 +535,9 @@ class WelcomeStore:
     @staticmethod
     def default_embed_data(
     ) -> dict[str, Any]:
+        """
+        Return a fresh copy of the built-in welcome embed.
+        """
         return json.loads(
             json.dumps(
                 DEFAULT_WELCOME_EMBED
@@ -488,6 +549,13 @@ class WelcomeStore:
         cls,
         value: dict[str, Any],
     ) -> dict[str, Any]:
+        """
+        Return JSON-safe embed data using the key color.
+
+        A colour key is copied to color and removed.
+        Values that cannot be serialised, or a value
+        that is not an object, become the default embed.
+        """
         try:
             cleaned = json.loads(
                 json.dumps(value)

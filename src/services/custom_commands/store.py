@@ -1,3 +1,15 @@
+"""
+Per-guild custom commands and their action lists.
+
+Names are 1 to 32 characters: lower-case letters,
+digits, hyphens, or underscores. Actions are one
+JSON list on the command row. Edits load that list,
+change it in memory, then write the whole list
+back, so two overlapping edits can overwrite each
+other. Cooldowns are clamped to 0 through 86400
+seconds.
+"""
+
 from __future__ import annotations
 
 import json
@@ -41,6 +53,12 @@ VALID_ACTIONS = {
 
 @dataclass
 class CustomCommand:
+    """
+    One custom command, including its action list.
+
+    The list is mutable. Action helpers edit it in
+    place and then save the JSON.
+    """
     guild_id: int
     name: str
     description: str
@@ -54,6 +72,13 @@ class CustomCommand:
     updated_at: str
     
 class CustomCommandStore:
+    """
+    Create and edit custom commands for one guild.
+
+    New commands start enabled, with no actions.
+    required_level uses the same names as the
+    permission store.
+    """
     def __init__(
         self,
         db_path: str = "data/tfsbot.sqlite3",
@@ -74,6 +99,13 @@ class CustomCommandStore:
         
     @staticmethod
     def normalise_name(name: str) -> str:
+        """
+        Return a stored command name.
+
+        The name is stripped and lower-cased, then
+        must match 1-32 characters of letters,
+        digits, hyphens, or underscores.
+        """
         name = name.lower().strip()
         
         if not COMMAND_NAME_RE.fullmatch(name):
@@ -120,6 +152,12 @@ class CustomCommandStore:
         cooldown_seconds: int = 0,
         delete_trigger: bool = False,
     ) -> None:
+        """
+        Insert a command with an empty action list.
+
+        A duplicate name raises ValueError. The
+        cooldown is clamped to 0 through 86400.
+        """
         name = self.normalise_name(name)
         required_level = normalise_level(
             required_level
@@ -250,6 +288,9 @@ class CustomCommandStore:
         name = self.normalise_name(name)
         
         async with open_database(self.db_path) as database:
+            # guild_ID matches guild_id: SQLite folds
+            # unquoted identifiers, so this still
+            # deletes the intended row.
             cursor = await database.execute(
                 """
                 DELETE FROM custom_commands
@@ -277,6 +318,14 @@ class CustomCommandStore:
         cooldown_seconds: int | None = None,
         delete_trigger: bool | None = None,
     ) -> bool:
+        """
+        Change only the fields that were passed.
+
+        None means leave that column alone. If no
+        field was passed, the row is not touched
+        and this returns false. A missing command
+        also returns false.
+        """
         name = self.normalise_name(name)
         
         fields: list[str] = []
@@ -368,6 +417,13 @@ class CustomCommandStore:
         old_name: str,
         new_name: str,
     ) -> bool:
+        """
+        Rename a command inside the same guild.
+
+        The same name returns true without writing.
+        A name that is already taken raises
+        ValueError. A missing old name returns false.
+        """
         old_name = self.normalise_name(old_name)
         new_name = self.normalise_name(new_name)
 
@@ -423,6 +479,13 @@ class CustomCommandStore:
         action_type: str,
         data: dict[str, Any],
     ) -> bool:
+        """
+        Replace one action. action_number is 1-based.
+
+        Returns false when the command or the action
+        slot does not exist. The whole action object
+        is replaced, not merged.
+        """
         if action_type not in VALID_ACTIONS:
             raise ValueError(
                 f"Unknown action type `{action_type}`."
@@ -463,6 +526,11 @@ class CustomCommandStore:
         action_type: str,
         data: dict[str, Any],
     ) -> int:
+        """
+        Append an action and return its 1-based number.
+
+        A missing command raises ValueError.
+        """
         if action_type not in VALID_ACTIONS:
             raise ValueError(
                 f"Unknown action type "
@@ -500,6 +568,13 @@ class CustomCommandStore:
         action_number: int,
         field: dict[str, Any],
     ) -> None:
+        """
+        Append a field to a send_embed action.
+
+        The action must already be an embed. A
+        non-list fields value is replaced with a
+        list. Discord's limit of 25 fields is enforced.
+        """
         command = await self.get(
             guild_id,
             name,
@@ -592,6 +667,13 @@ class CustomCommandStore:
         action_number: int,
         new_position: int,
     ) -> bool:
+        """
+        Move an action to another 1-based position.
+
+        Both positions must already be inside the
+        list; they are not clamped. Returns false
+        when the command or either position is missing.
+        """
         command = await self.get(
             guild_id,
             name,
@@ -638,6 +720,11 @@ class CustomCommandStore:
         guild_id: int,
         name: str,
     ) -> int:
+        """
+        Remove every action and return how many went.
+
+        A missing command returns 0.
+        """
         command = await self.get(
             guild_id,
             name,
@@ -662,6 +749,13 @@ class CustomCommandStore:
         self,
         command: CustomCommand,
     ) -> None:
+        """
+        Write the in-memory action list back to the row.
+
+        This replaces the whole JSON blob. It does
+        not re-read the row, so a concurrent edit
+        saved earlier is overwritten.
+        """
         async with open_database(
             self.db_path
         ) as database:
@@ -690,6 +784,12 @@ class CustomCommandStore:
     def _from_row(
         row: DatabaseRow,
     ) -> CustomCommand:
+        """
+        Build a command from a row.
+
+        actions_json that is not a JSON list becomes
+        an empty list, so a damaged row still loads.
+        """
         try:
             actions = json.loads(
                 row["actions_json"]

@@ -1,3 +1,14 @@
+"""
+Invite attribution stored in the shared database.
+
+Snapshots remember each invite's use count. When a
+member joins, the first invite whose uses went up
+is treated as the one they used. Invites with no
+previous snapshot, or with a missing use count, are
+skipped. A failed invite fetch stores the join with
+no inviter and leaves the old snapshots in place.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,6 +36,13 @@ class TrackedInviteInfo:
 
 
 class InviteTrackerStore:
+    """
+    Remember guild invite use counts and which invite
+    each member joined with.
+
+    member_invites keeps one row per guild member.
+    A later join replaces that row, including joined_at.
+    """
     def __init__(self, database_path: str = "data/tfsbot.sqlite3") -> None:
         database_path_object = Path(database_path)
         database_path_object.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +85,14 @@ class InviteTrackerStore:
             await database.commit()
 
     async def sync_guild_invites(self, guild: discord.Guild) -> bool:
+        """
+        Replace this guild's invite snapshots.
+
+        Returns false when the invite list cannot be
+        fetched, and leaves the previous snapshots alone.
+        Otherwise every snapshot for the guild is
+        deleted and the current invites are inserted.
+        """
         invites = await self._fetch_invites(guild)
 
         if invites is None:
@@ -111,6 +137,12 @@ class InviteTrackerStore:
         return True
 
     async def sync_invite(self, invite: discord.Invite) -> None:
+        """
+        Insert or update one invite snapshot.
+
+        Group invites and other invites with no guild
+        are ignored.
+        """
         if invite.guild is None:
             return
 
@@ -162,6 +194,16 @@ class InviteTrackerStore:
             await database.commit()
 
     async def track_member_join(self, member: discord.Member) -> TrackedInviteInfo | None:
+        """
+        Attribute this join and store the result.
+
+        The match is the first current invite whose
+        use count is greater than the snapshot. A new
+        invite code, or a use count Discord did not
+        send, is not a match. Snapshots are refreshed
+        only after a successful fetch. The member row
+        is written even when no invite matched.
+        """
         old_snapshots = await self._get_invite_snapshots(member.guild.id)
         current_invites = await self._fetch_invites(member.guild)
 
@@ -179,6 +221,8 @@ class InviteTrackerStore:
                     continue
 
                 if current_uses > old_uses:
+                    # Discord's list order decides ties.
+                    # Later invites that also grew are ignored.
                     matched_invite = invite
                     break
 
@@ -303,6 +347,10 @@ class InviteTrackerStore:
 
     @staticmethod
     async def _fetch_invites(guild: discord.Guild) -> list[discord.Invite] | None:
+        """
+        Return the guild's invites, or None when Discord
+        denies the request or the call fails.
+        """
         try:
             return await guild.invites()
         except (discord.Forbidden, discord.HTTPException):

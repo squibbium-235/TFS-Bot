@@ -1,3 +1,12 @@
+"""
+Load a form definition from a JSON file.
+
+Questions become FormQuestion objects. Only the
+styles short and paragraph are accepted. A missing
+style is paragraph, and a missing required flag
+defaults to required.
+"""
+
 from __future__ import annotations
 
 import json
@@ -15,11 +24,20 @@ STYLE_MAP = {
 
 @dataclass(frozen=True)
 class FormConfig:
+    """
+    An in-memory form ready to show as Discord modals.
+    """
     title: str
     custom_id_prefix: str
     questions: list[FormQuestion]
 
     def pages(self, page_size: int = 5) -> list[list[FormQuestion]]:
+        """
+        Split questions into modal pages.
+
+        Discord allows at most five inputs on a modal,
+        which is why the default page size is 5.
+        """
         return [
             self.questions[index:index + page_size]
             for index in range(0, len(self.questions), page_size)
@@ -27,8 +45,18 @@ class FormConfig:
 
 
 class FormLoader:
+    """
+    Read one form JSON file into a FormConfig.
+    """
     @staticmethod
     def load_form(path: str | Path) -> FormConfig:
+        """
+        Load title, custom-id prefix, and questions.
+
+        A missing file raises FileNotFoundError. An
+        unknown style raises ValueError. Question
+        length limits are not checked here.
+        """
         form_path = Path(path)
 
         if not form_path.exists():

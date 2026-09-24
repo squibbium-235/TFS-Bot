@@ -1,3 +1,12 @@
+"""
+Named Discord embed payloads in the shared database.
+
+Names are unique without regard to case. A duplicate
+name raises ValueError rather than the underlying
+integrity error. Payload JSON that cannot be read
+comes back as an empty object.
+"""
+
 from __future__ import annotations
 
 import json
@@ -24,6 +33,13 @@ class SavedEmbed:
 
 
 class SavedEmbedStore:
+    """
+    Create, update, and delete saved embeds.
+
+    The payload is stored as compact JSON and must
+    be an object. Names are stripped and limited
+    to 100 characters.
+    """
     def __init__(
         self,
         database_path: str | Path,
@@ -125,6 +141,12 @@ class SavedEmbedStore:
         name: str,
         payload: dict[str, Any],
     ) -> SavedEmbed:
+        """
+        Insert an embed and return the stored row.
+
+        A name that matches an existing embed,
+        ignoring case, raises ValueError.
+        """
         cleaned_name = self._clean_name(
             name
         )
@@ -186,6 +208,12 @@ class SavedEmbedStore:
         name: str,
         payload: dict[str, Any],
     ) -> SavedEmbed:
+        """
+        Replace an embed's name and payload.
+
+        A missing id raises ValueError, as does a
+        rename that collides with another embed.
+        """
         cleaned_name = self._clean_name(
             name
         )
@@ -305,6 +333,13 @@ class SavedEmbedStore:
     def _deserialise_payload(
         raw_value: str,
     ) -> dict[str, Any]:
+        """
+        Parse a stored payload.
+
+        Invalid JSON, or JSON that is not an object,
+        becomes an empty dict so a bad row can still
+        be listed.
+        """
         try:
             value = json.loads(
                 raw_value

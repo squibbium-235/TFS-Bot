@@ -1,3 +1,15 @@
+"""
+Password-encrypted zip backups of the bot's files.
+
+The archive holds the SQLCipher database file as
+data/tfsbot.sqlite3, plus data/uploads, and .env
+only when requested. Fernet encrypts the zip; the
+database inside is still the original SQLCipher
+file, not a re-keyed copy. Restore writes a safety
+copy under data/restore_safety before replacing
+anything.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -19,6 +31,12 @@ BACKUP_EXTENSION = ".tfsbackup"
 
 
 class BackupError(RuntimeError):
+    """
+    A backup or restore could not be completed.
+
+    Wrong passwords and damaged files raise this
+    as well as validation failures.
+    """
     pass
 
 
@@ -37,6 +55,14 @@ class RestoreResult:
 
 
 class BackupService:
+    """
+    Create and restore .tfsbackup files for this install.
+
+    The live database path may differ from the name
+    stored in the archive. Restore always reads
+    data/tfsbot.sqlite3 from the zip and writes it
+    to database_path.
+    """
     def __init__(
         self,
         project_root: str | Path = ".",
@@ -53,6 +79,15 @@ class BackupService:
         password: str,
         include_env: bool = False,
     ) -> BackupResult:
+        """
+        Return a filename and the encrypted backup bytes.
+
+        The password is stripped and must be at least
+        10 characters. .env is omitted unless
+        include_env is set, because it can hold the
+        Discord token. The database is copied as a
+        file; this does not use SQLCipher backup().
+        """
         password = password.strip()
 
         if len(password) < 10:
@@ -84,6 +119,21 @@ class BackupService:
         restore_uploads: bool = True,
         restore_env: bool = False,
     ) -> RestoreResult:
+        """
+        Replace the live database from an encrypted backup.
+
+        The current database is copied into
+        data/restore_safety first, then the archive
+        copy is written to a temporary file and
+        renamed into place. Uploads are replaced
+        only when requested and the archive contains
+        files. Existing uploads are removed before
+        those files are extracted. .env is restored
+        only when requested, and is required to be
+        in the archive in that case. If a later step
+        fails, the database file has already been
+        replaced.
+        """
         plain_archive = self.decrypt_backup(
             encrypted_data=encrypted_data,
             password=password,
@@ -111,6 +161,8 @@ class BackupService:
             database_target.parent.mkdir(parents=True, exist_ok=True)
 
             if database_target.exists():
+                # Keep the live file before replace(),
+                # so a bad restore can be put back by hand.
                 database_safety_path = (
                     safety_backup_directory / "data" / "tfsbot.sqlite3"
                 )
@@ -197,6 +249,14 @@ class BackupService:
         encrypted_data: bytes,
         password: str,
     ) -> bytes:
+        """
+        Return the zip bytes inside a .tfsbackup file.
+
+        The header is the magic line, a url-safe
+        base64 salt, a newline, then the Fernet token.
+        A wrong password and a damaged token both
+        surface as BackupError.
+        """
         password = password.strip()
 
         if not encrypted_data.startswith(BACKUP_MAGIC):
@@ -311,6 +371,13 @@ class BackupService:
         self,
         archive: zipfile.ZipFile,
     ) -> None:
+        """
+        Reject path traversal and unknown backup versions.
+
+        Absolute member names and any ".." part are
+        refused before a file is written. The manifest
+        must declare format tfsbot-backup version 1.
+        """
         for member in archive.namelist():
             member_path = Path(member)
 
@@ -356,6 +423,13 @@ class BackupService:
         password: str,
         salt: bytes,
     ) -> bytes:
+        """
+        Derive a Fernet key from the backup password.
+
+        Scrypt uses the salt stored in the file header,
+        so the same password produces a different key
+        for each backup.
+        """
         kdf = Scrypt(
             salt=salt,
             length=32,
