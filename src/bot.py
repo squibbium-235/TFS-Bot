@@ -44,12 +44,13 @@ class TFSBot(commands.Bot):
 
     def __init__(self, config: BotConfig) -> None:
         """
-        Hold config and unopened stores.
+        Hold config and the data stores.
 
-        Each store creates its tables when
-        initialise runs in setup_hook. Guild
-        settings uses the synchronous opener;
-        the other stores are async.
+        Guild settings opens the database in
+        its constructor. The other stores stay
+        closed until initialise runs in
+        setup_hook. Guild settings uses the
+        synchronous opener; the rest are async.
         """
         self.config = config
 

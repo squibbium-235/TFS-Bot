@@ -34,10 +34,10 @@ The Web UI is optional. It starts only when `WEBUI_ENABLED` is true.
 
 ## Discord Developer Portal
 
-Enable these intents for text commands and verification work:
+Enable these intents. Prefix commands need message content, and verification needs the member list:
 
 - Message Content Intent
-- Server Members Intent, later when roles/verification are added properly
+- Server Members Intent
 
 Invite scopes:
 
