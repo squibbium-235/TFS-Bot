@@ -18,6 +18,9 @@ RUN python -m pip install --upgrade pip \
 
 COPY src ./src
 
+# Non-root system user with a nologin shell.
+# /app/data is the encrypted SQLite directory
+# mounted from the host in compose.yaml.
 RUN groupadd \
         --system \
         --gid 10001 \

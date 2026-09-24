@@ -1,3 +1,13 @@
+"""
+Moderation cases and per-user profile threads.
+
+Case numbers are allocated per guild inside
+BEGIN IMMEDIATE, so two creates cannot take the
+same number. A failed insert rolls the counter
+back as well. The same source reference cannot
+be stored twice for one guild when it is not null.
+"""
+
 from __future__ import annotations
 
 import json
@@ -55,6 +65,13 @@ class UserModProfile:
 
 
 class ModerationStore:
+    """
+    Store moderation cases and the Discord thread
+    used as a member's moderation profile.
+
+    Each profile is one row per guild member. The
+    thread id is unique across the whole table.
+    """
     def __init__(
         self,
         database_path: str | Path,
@@ -190,6 +207,14 @@ class ModerationStore:
         source_reference: str | None = None,
         details: dict[str, Any] | None = None,
     ) -> ModerationCase:
+        """
+        Allocate the next case number and insert the case.
+
+        The counter update and the insert share one
+        immediate transaction. A duplicate source
+        reference, or any other error, rolls both
+        back, so the number is not consumed.
+        """
         created_at = self._now()
 
         async with open_database(
@@ -198,6 +223,8 @@ class ModerationStore:
             database.row_factory = DatabaseRow
 
             try:
+                # Lock the database before reading the
+                # counter so overlapping creates queue.
                 await database.execute(
                     "BEGIN IMMEDIATE"
                 )
@@ -394,6 +421,12 @@ class ModerationStore:
         source: str,
         source_reference: str,
     ) -> ModerationCase | None:
+        """
+        Return the case recorded for this external id.
+
+        The unique index ignores null references, so
+        only a real reference can be looked up here.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -431,6 +464,12 @@ class ModerationStore:
         user_id: int,
         limit: int = 25,
     ) -> list[ModerationCase]:
+        """
+        Return this user's newest cases in the guild.
+
+        The limit is clamped to the range 1 to 100.
+        Order is case number, not created_at.
+        """
         safe_limit = max(
             1,
             min(
@@ -571,6 +610,13 @@ class ModerationStore:
         message_id: int,
         thread_id: int,
     ) -> UserModProfile:
+        """
+        Insert or replace this member's profile pointers.
+
+        created_at on an existing row is left as it
+        was. A thread id already used by another
+        member raises an integrity error.
+        """
         now = self._now()
 
         async with open_database(
@@ -658,6 +704,10 @@ class ModerationStore:
     def _row_to_case(
         row: DatabaseRow,
     ) -> ModerationCase:
+        """
+        Map a case row, treating bad details JSON
+        as an empty object.
+        """
         try:
             details = json.loads(
                 row["details_json"]

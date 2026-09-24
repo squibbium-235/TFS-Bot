@@ -1,3 +1,12 @@
+"""Password login and Discord OAuth restricted to one guild.
+
+Password login compares the form with every entry in
+bot.config.webui_credentials, which configuration loads only from
+WEBUI_USER_1 and WEBUI_USER_2, and always starts an owner session.
+Discord login asks for identify and guilds.members.read, checks the
+OAuth state, then maps the member's roles to owner or viewer.
+"""
+
 from __future__ import annotations
 
 import hmac
@@ -35,6 +44,11 @@ def discord_api_request(
     data: dict[str, str] | None = None,
     access_token: str | None = None,
 ) -> dict[str, Any]:
+    """Call Discord with urllib and raise RuntimeError on HTTP or network failure.
+
+    Form bodies are URL-encoded. The access token is sent as a bearer
+    header. The timeout is 15 seconds.
+    """
     body: bytes | None = None
 
     headers: dict[str, str] = {
@@ -107,6 +121,11 @@ def discord_api_request(
         ) from error
         
 def get_discord_redirect_uri() -> str:
+    """Use a fixed localhost callback, otherwise the configured redirect URI.
+
+    Only a hostname of localhost, with any port stripped, takes the local
+    branch. 127.0.0.1 keeps the configured URI.
+    """
     context = webui_context()
 
     hostname = (
@@ -280,6 +299,7 @@ def render_login_page(
 def render_login_failure(
     error: str,
 ):
+    """Drop any half-finished OAuth session before showing the login error."""
     session.clear()
 
     return render_login_page(
@@ -295,6 +315,12 @@ def render_login_failure(
     ],
 )
 def login():
+    """Password login. A match clears the session and stores an owner session.
+
+    Both username and password are compared with hmac.compare_digest.
+    authenticated_at and last_activity share one timestamp so the fresh
+    window and the idle clock start together.
+    """
     context = webui_context()
 
     if request.method == "GET":
@@ -377,6 +403,11 @@ def login():
     "/auth/discord/start"
 )
 def discord_login_start():
+    """Clear the session, store a new OAuth state, and redirect to Discord.
+
+    The redirect URI is saved beside the state because the callback must
+    send Discord the same URI that started the grant.
+    """
     context = webui_context()
 
     if not (
@@ -419,6 +450,12 @@ def discord_login_start():
     "/auth/discord/callback"
 )
 def discord_login_callback():
+    """Finish Discord login for one guild member with an allowed role.
+
+    State and redirect URI are popped before they are checked, so a
+    second callback cannot reuse them. Role matching happens before the
+    logged-in session is written. Failure clears the session.
+    """
     context = webui_context()
 
     if not (
@@ -526,6 +563,7 @@ def discord_login_callback():
             or "Discord user"
         )
 
+        # Discord display name, falling back to the unique username below.
         global_name = str(
             user_data.get(
                 "global_name"

@@ -1,3 +1,12 @@
+"""
+Read-only health checks for one guild's bot setup.
+
+Nothing here writes settings or opens SQLCipher.
+The database item only checks that the file exists
+and can be opened for append. A report is healthy
+when no item is bad; warnings still count as healthy.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +39,12 @@ class DiagnosticItem:
     frozen=True
 )
 class DiagnosticReport:
+    """
+    Collected diagnostic items for one guild.
+
+    healthy is true when nothing is bad. Warnings
+    do not make the report unhealthy.
+    """
     items: list[DiagnosticItem]
 
     @property
@@ -61,6 +76,12 @@ class DiagnosticReport:
 def channel_permissions_text(
     permissions: discord.Permissions,
 ) -> list[str]:
+    """
+    Return the channel permissions the bot still lacks.
+
+    Only view, send, embed, attach, and history are
+    checked. An empty list means those are present.
+    """
     missing: list[str] = []
 
     if not permissions.view_channel:
@@ -97,6 +118,13 @@ def check_channel(
     channel_id: int | None,
     label: str,
 ) -> DiagnosticItem:
+    """
+    Check that a configured text channel is usable.
+
+    No channel is a warning. A missing channel, a
+    non-text channel, or a missing permission is bad.
+    The bot member being unknown is a warning.
+    """
     if channel_id is None:
         return DiagnosticItem(
             label=label,
@@ -185,6 +213,14 @@ def check_role(
     label: str,
     required: bool = False,
 ) -> DiagnosticItem:
+    """
+    Check that the bot can manage a configured role.
+
+    An unset role is good unless required is true.
+    A missing role is bad. A role at or above the
+    bot's top role is bad, because Discord will
+    refuse to assign it.
+    """
     if role_id is None:
         return DiagnosticItem(
             label=label,
@@ -256,6 +292,15 @@ async def build_diagnostic_report(
     bot,
     guild: discord.Guild,
 ) -> DiagnosticReport:
+    """
+    Build a diagnostic report from objects on bot.
+
+    Guild settings and the form store are read via
+    getattr, so a partially constructed bot still
+    returns a report. Any error loading the
+    verification form becomes one bad item. The
+    database check does not decrypt the file.
+    """
     items: list[
         DiagnosticItem
     ] = []
@@ -472,6 +517,8 @@ async def build_diagnostic_report(
 
         else:
             try:
+                # Append mode checks writability
+                # without truncating or decrypting.
                 with path.open(
                     "ab"
                 ):

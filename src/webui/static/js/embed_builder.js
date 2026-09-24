@@ -1,6 +1,13 @@
+// Embed-builder preview. Field HTML is escaped before it is inserted.
+// Colour text must be six hex digits after the first # is removed, then
+// upper-cased. The native colour input is hidden and opened
+// from the text field. Image load handlers ignore a URL that has since
+// been replaced, so a slow response cannot reveal the wrong preview.
+
 let fieldCount = 0;
 
 
+// Used when field names and values are placed into innerHTML.
 function escapeHtml(value) {
     return String(value)
         .replaceAll("&", "&amp;")
@@ -11,6 +18,7 @@ function escapeHtml(value) {
 }
 
 
+// Removes the first # anywhere in the string. A 0x prefix is left in place.
 function normaliseHexColour(value) {
     const cleaned = value
         .trim()
@@ -245,6 +253,7 @@ function setImage(
             id + "-error"
         );
 
+    // Drop the previous load cycle before pointing src at the new URL.
     image.onload = null;
     image.onerror = null;
 
@@ -264,6 +273,7 @@ function setImage(
         return;
     }
 
+    // onload and onerror compare against this so a stale image is ignored.
     image.dataset.previewUrl =
         url;
 

@@ -1,3 +1,12 @@
+"""Slash editor for guild forms, including verification and generic panels.
+
+Questions are stored in order and later shown five to a modal. This module
+reports that page count, but it does not run the form. Publishing posts a
+persistent GenericFormStartView and records the message id so a click can
+find the form. The built-in verification form cannot be deleted here; it is
+reset from the bundled JSON instead.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -26,6 +35,12 @@ async def form_key_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """Match form key or title. Discord returns at most 25 choices.
+
+    If this guild has no stored verification form yet, that key is offered
+    even when it does not match the typed text, so it can still be selected.
+    Choice names are truncated to 100 characters.
+    """
     if interaction.guild is None:
         return []
 
@@ -88,6 +103,11 @@ def build_questions_embeds(
     form_title: str,
     questions: list[StoredFormQuestion],
 ) -> list[discord.Embed]:
+    """List questions, 20 per embed, and stop at Discord's 10-embed cap.
+
+    Modal page count is the question count divided into groups of five, which
+    is the number of inputs one modal can hold.
+    """
     total_questions = len(questions)
     total_modal_pages = max(1, (total_questions + 4) // 5)
 
@@ -176,6 +196,8 @@ def build_questions_embeds(
 
 
 class FormEditorCommand(commands.Cog):
+    """Guild slash commands that create, edit, publish, and reset forms."""
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
@@ -587,6 +609,7 @@ class FormEditorCommand(commands.Cog):
         form: str,
         confirm: bool = False,
     ) -> None:
+        """Delete a form only after confirm is set. Verification is refused."""
         assert interaction.guild is not None
 
         form_key = form.lower().strip()
@@ -669,6 +692,7 @@ class FormEditorCommand(commands.Cog):
         title: str,
         description: str,
     ) -> None:
+        """Post the panel and store its message id for the persistent open button."""
         assert interaction.guild is not None
 
         form_store = get_form_store(self.bot)
@@ -771,5 +795,6 @@ class FormEditorCommand(commands.Cog):
 
 
 async def setup(bot: commands.Bot) -> None:
+    """Register the persistent form button before the editor cog is added."""
     bot.add_view(GenericFormStartView())
     await bot.add_cog(FormEditorCommand(bot))

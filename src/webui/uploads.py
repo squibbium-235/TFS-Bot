@@ -1,3 +1,11 @@
+"""On-disk image uploads served back through the Web UI.
+
+Names and folder segments pass through secure_filename, and resolved
+paths must stay under the upload root. Previews are data URLs built by
+reading the file. Discord attachments flatten a folder path with ``__``
+and reuse one file when several embed slots select it.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -29,6 +37,8 @@ ALLOWED_IMAGE_EXTENSIONS = {
 
 
 class WebUIUploadManager:
+    """Validate, store, list, and attach images under data/uploads/images."""
+
     def __init__(
         self,
         upload_dir: Path = UPLOAD_DIR,
@@ -44,6 +54,11 @@ class WebUIUploadManager:
         self,
         filename: str,
     ) -> str:
+        """Return a safe basename with an allowed image extension.
+
+        secure_filename can empty the name; that is rejected, as is any
+        extension outside the PNG, JPG, JPEG, GIF, and WEBP set.
+        """
         safe_name = secure_filename(
             filename
         )
@@ -72,6 +87,12 @@ class WebUIUploadManager:
         self,
         folder: str | None,
     ) -> str:
+        """Normalise a relative folder and reject traversal segments.
+
+        Backslashes become slashes. Empty, ``.``, and blank segments are
+        dropped. A segment secure_filename cannot keep, or ``.`` / ``..``,
+        raises. The root folder is an empty string.
+        """
         folder = (
             folder
             or ""
@@ -128,6 +149,11 @@ class WebUIUploadManager:
         self,
         folder: str | None,
     ) -> Path:
+        """Resolve a folder and require it to stay inside the upload root.
+
+        The check uses the resolved path and its parents, so a symlink
+        that escapes the root is rejected.
+        """
         safe_folder = (
             self.validate_folder(
                 folder
@@ -166,6 +192,7 @@ class WebUIUploadManager:
         self,
         reference: str,
     ) -> str:
+        """Return ``folder/file`` or a bare filename after both parts are checked."""
         reference = (
             reference
             .strip()
@@ -223,6 +250,10 @@ class WebUIUploadManager:
         self,
         path: Path,
     ) -> str:
+        """Read the whole file and return a base64 data URL.
+
+        Listing images therefore embeds every preview in the HTML response.
+        """
         mime_types = {
             ".png": "image/png",
             ".jpg": "image/jpeg",
@@ -277,6 +308,11 @@ class WebUIUploadManager:
         self,
         reference: str,
     ) -> str:
+        """Flatten folders into one Discord attachment name.
+
+        ``author-icons/icon.png`` becomes ``author-icons__icon.png`` because
+        attachment filenames have no directory.
+        """
         safe_reference = (
             self.validate_reference(
                 reference
@@ -357,6 +393,11 @@ class WebUIUploadManager:
     def list_images(
         self,
     ) -> list[dict[str, str]]:
+        """Newest allowed images first, with a data-URL preview and UTC mtime.
+
+        A file sitting in the upload root reports an empty folder and the
+        label Root.
+        """
         images: list[
             dict[str, str]
         ] = []
@@ -469,6 +510,12 @@ class WebUIUploadManager:
         str | None,
         list[discord.File],
     ]:
+        """Turn selected uploads into attachment:// URLs and File objects.
+
+        The same reference used for more than one slot is attached once.
+        Each slot still receives its own attachment URL. A missing file
+        raises before anything is returned.
+        """
         files: list[
             discord.File
         ] = []
@@ -598,6 +645,11 @@ class WebUIUploadManager:
         uploaded_file,
         folder: str | None = None,
     ) -> str:
+        """Store an upload and return its path relative to the upload root.
+
+        A name that already exists gains a numeric suffix before the
+        extension. The relative path uses forward slashes.
+        """
         if (
             uploaded_file is None
             or not uploaded_file.filename
@@ -686,6 +738,7 @@ class WebUIUploadManager:
         self,
         folder: str,
     ) -> str:
+        """Remove an empty folder. The upload root and non-empty folders raise."""
         safe_folder = self.validate_folder(
             folder
         )
@@ -726,6 +779,7 @@ class WebUIUploadManager:
     def close_files(
         files: list[discord.File],
     ) -> None:
+        """Close Discord file handles, ignoring errors from an already closed file."""
         for file in files:
             try:
                 file.close()

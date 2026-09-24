@@ -1,3 +1,10 @@
+"""Owner editor for the per-guild verification DM templates.
+
+Saving text that still matches the built-in default clears the stored
+override. Any other text is stored as the guild's custom template.
+Only keys in DM_TEMPLATE_ORDER are written.
+"""
+
 from __future__ import annotations
 
 from flask import (
@@ -26,6 +33,10 @@ blueprint = Blueprint(
 def build_templates(
     guild_id: int,
 ) -> list[dict[str, object]]:
+    """Pair each stored template with its label, default text, and custom flag.
+
+    Unknown keys are labelled from the key itself.
+    """
     context = webui_context()
 
     template_store = (
@@ -87,6 +98,11 @@ def build_templates(
     ],
 )
 def index():
+    """Save every template in DM_TEMPLATE_ORDER for the selected guild.
+
+    Text equal to the built-in default calls reset, so the guild goes
+    back to following later default changes. Other text is stored as-is.
+    """
     owner_error = require_owner()
 
     if owner_error is not None:
@@ -141,6 +157,7 @@ def index():
                     ]
                 )
 
+                # Identical to the built-in text: drop the override.
                 if (
                     template_text
                     == default_text

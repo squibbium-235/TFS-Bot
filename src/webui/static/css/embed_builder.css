@@ -1,3 +1,9 @@
+/*
+ * Extra skin for the embed builder and the welcome-message preview.
+ * #colour_picker is a 1px invisible input. The text field opens it, so
+ * the picker itself does not receive pointer events.
+ */
+
 :root {
     --bg: #111318;
     --panel: #1e2129;

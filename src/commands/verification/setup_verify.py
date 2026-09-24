@@ -1,3 +1,12 @@
+"""Interactive verification setup: channels, roles, form, automod, welcome, and invites.
+
+The setup views time out and are locked to the user who opened them, so another
+person cannot drive that session. Posting a panel attaches the persistent
+VerifyView, which is also registered when this cog loads. Choosing a form on
+the panel command stores it as the guild's active verification form before the
+message is sent.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -23,6 +32,7 @@ from src.services.forms.form_store import (
 )
 
 
+# Setup panels are ephemeral and expire. They are not restored after a restart.
 SETUP_TIMEOUT = 900
 
 
@@ -47,6 +57,7 @@ async def form_key_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """Match the typed text against form keys only, and return at most 25 choices."""
     if interaction.guild is None:
         return []
 
@@ -156,6 +167,10 @@ async def build_panel_attachment_files(
     str | None,
     list[discord.File],
 ]:
+    """Turn image uploads into files the embed can reference as `attachment://` names.
+
+    Non-image content types are rejected. The caller closes the files after send.
+    """
     files: list[discord.File] = []
 
     image_url: str | None = None
@@ -906,6 +921,8 @@ def build_invite_tracking_embed(
 class OwnedSetupView(
     discord.ui.View
 ):
+    """Base for setup pages. Only the member who opened the panel may use it."""
+
     def __init__(
         self,
         *,
@@ -1070,6 +1087,8 @@ class LogChannelSelect(
 class ChannelsSetupView(
     OwnedSetupView
 ):
+    """Review channel and verification log channel selectors."""
+
     def __init__(
         self,
         *,
@@ -1214,6 +1233,8 @@ class RemoveRoleSelect(
 class RolesSetupView(
     OwnedSetupView
 ):
+    """Stores the role added on approval and the role removed on approval."""
+
     def __init__(
         self,
         *,
@@ -1480,6 +1501,8 @@ class PanelChannelSelect(
 class FormPanelSetupView(
     OwnedSetupView
 ):
+    """Selects the active verification form and can post a basic panel."""
+
     def __init__(
         self,
         *,
@@ -1662,6 +1685,8 @@ class FormPanelSetupView(
 class AutomodTermsModal(
     discord.ui.Modal
 ):
+    """Adds or removes blocked terms, one per line. Blank lines are ignored."""
+
     def __init__(
         self,
         *,
@@ -1779,6 +1804,8 @@ class AutomodTermsModal(
 class AutomodSetupView(
     OwnedSetupView
 ):
+    """Toggles verification automod and edits its term list. Matching lives in verification.py."""
+
     @discord.ui.button(
         label="Toggle",
         style=discord.ButtonStyle.primary,
@@ -2036,6 +2063,8 @@ class WelcomeChannelSelect(
 class WelcomeSetupView(
     OwnedSetupView
 ):
+    """Setup entry for the welcome template. Delivery is handled by the welcome cog."""
+
     def __init__(
         self,
         *,
@@ -2218,6 +2247,8 @@ class WelcomeSetupView(
 class InviteTrackingSetupView(
     OwnedSetupView
 ):
+    """Shows invite-tracker readiness and can refresh the bot's invite cache."""
+
     @discord.ui.button(
         label="Refresh Invites",
         style=discord.ButtonStyle.primary,
@@ -2296,6 +2327,8 @@ class InviteTrackingSetupView(
 class VerificationSetupView(
     OwnedSetupView
 ):
+    """Root setup menu. Each button swaps this ephemeral message to a section view."""
+
     @discord.ui.button(
         label="Channels",
         style=discord.ButtonStyle.primary,
@@ -2499,6 +2532,8 @@ class VerificationSetupView(
 class VerificationConfigCommand(
     commands.Cog
 ):
+    """Slash configuration for verification, including the interactive setup panel."""
+
     def __init__(
         self,
         bot: commands.Bot,
@@ -2622,6 +2657,11 @@ class VerificationConfigCommand(
         image: discord.Attachment | None = None,
         thumbnail: discord.Attachment | None = None,
     ) -> None:
+        """Post a Verify panel and make the chosen form the guild's active form first.
+
+        The form key is saved before the message is sent, so a failed post still
+        leaves that form selected. Uploaded images are closed afterwards.
+        """
         assert interaction.guild is not None
 
         form_key = form.lower().strip()
@@ -3291,6 +3331,7 @@ class VerificationConfigCommand(
         confirm: str,
         reason: str | None = None,
     ) -> None:
+        """Cancel every pending application. The confirm value must be the word CANCEL."""
         assert interaction.guild is not None
 
         if confirm.strip() != "CANCEL":
@@ -3340,6 +3381,7 @@ class VerificationConfigCommand(
 async def setup(
     bot: commands.Bot,
 ) -> None:
+    """Register the persistent Verify button, then load the configuration cog."""
     bot.add_view(
         VerifyView()
     )

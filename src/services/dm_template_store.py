@@ -1,3 +1,14 @@
+"""
+Per-guild DM text for verification outcomes.
+
+A missing row means the built-in default. Saving a
+template stores an override. Resetting deletes that
+row so the default is used again. Unknown format
+placeholders are left as written, and a template
+that cannot be rendered is sent as raw text so the
+moderation action still completes.
+"""
+
 from __future__ import annotations
 
 from collections import UserDict
@@ -69,11 +80,24 @@ class StoredDmTemplate:
 
 
 class SafeFormatDict(UserDict[str, Any]):
+    """
+    Mapping that keeps unknown format placeholders.
+
+    str.format_map asks this for a missing key
+    instead of raising KeyError. The placeholder
+    is returned unchanged, including the braces.
+    """
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
 
 
 def normalise_template_key(template_key: str) -> str:
+    """
+    Return a known template key.
+
+    Hyphens and spaces become underscores. Anything
+    other than the built-in keys raises ValueError.
+    """
     cleaned = template_key.lower().strip().replace("-", "_").replace(" ", "_")
 
     if cleaned not in DEFAULT_DM_TEMPLATES:
@@ -84,6 +108,12 @@ def normalise_template_key(template_key: str) -> str:
 
 
 def render_template_text(template_text: str, context: Mapping[str, Any]) -> str:
+    """
+    Fill placeholders in a DM template.
+
+    Missing keys stay as {name}. Any other formatting
+    failure returns the template unchanged.
+    """
     try:
         return template_text.format_map(SafeFormatDict(dict(context)))
     except Exception:
@@ -93,6 +123,10 @@ def render_template_text(template_text: str, context: Mapping[str, Any]) -> str:
 
 
 class DmTemplateStore:
+    """
+    Load and store per-guild overrides of the
+    built-in verification DM templates.
+    """
     def __init__(self, database_path: str) -> None:
         self.database_path = Path(database_path)
 
@@ -119,6 +153,12 @@ class DmTemplateStore:
         guild_id: int,
         template_key: str,
     ) -> StoredDmTemplate:
+        """
+        Return the guild override, or the built-in text.
+
+        is_custom is false when no row is stored, and
+        updated_at is then None.
+        """
         template_key = normalise_template_key(template_key)
 
         async with open_database(self.database_path) as database:
@@ -202,6 +242,10 @@ class DmTemplateStore:
         guild_id: int,
         template_key: str,
     ) -> None:
+        """
+        Delete the guild override so the built-in
+        template is used again.
+        """
         template_key = normalise_template_key(template_key)
 
         async with open_database(self.database_path) as database:

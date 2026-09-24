@@ -1,3 +1,9 @@
+"""Ephemeral health check for the bot and this server's verification setup.
+
+The embed colour follows the worst result: red when any item is an error,
+orange when there are only warnings, otherwise green.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -19,6 +25,7 @@ from src.utils.embed_builder import (
 def status_icon(
     status: str,
 ) -> str:
+    """Map a report status to an icon. Unrecognised statuses are warnings."""
     if status == STATUS_GOOD:
         return "✅"
 
@@ -32,6 +39,7 @@ def build_diagnostics_embed(
     guild: discord.Guild,
     report: DiagnosticReport,
 ) -> discord.Embed:
+    """Lay the report out as one field per check, including optional detail."""
     if report.error_count:
         colour = discord.Colour.red()
 
@@ -78,6 +86,11 @@ def build_diagnostics_embed(
 class DiagnosticsCommand(
     commands.Cog
 ):
+    """Runs the diagnostic report and replies ephemerally.
+
+    The interaction is deferred first because the report is built asynchronously.
+    """
+
     def __init__(
         self,
         bot: commands.Bot,

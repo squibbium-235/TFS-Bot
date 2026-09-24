@@ -1,3 +1,10 @@
+// Custom-command editor helpers: placeholder insertion and embed preview.
+// A placeholder click inserts into the last focused .cc-placeholder-target.
+// With no focused field it copies instead, which plain HTTP can refuse.
+// Preview text is assigned with textContent so it is not parsed as HTML.
+// The colour bar accepts exactly six hex digits with no # prefix; anything
+// else, including #5865F2, is drawn as #5865F2.
+
 document.addEventListener("DOMContentLoaded", () => {
     let lastFocusedPlaceholderTarget = null;
 
@@ -65,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const addFieldButton =
             actionForm.querySelector(".cc-add-field");
 
+        // Continue past the highest saved slot so new field names do not collide.
         let nextFieldSlot = 0;
 
         fieldsContainer
@@ -85,6 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
             actionForm
                 .querySelectorAll(".cc-remove-field")
                 .forEach((button) => {
+                    // Rebinding after each added field would stack click handlers.
                     if (button.dataset.bound === "1") {
                         return;
                     }

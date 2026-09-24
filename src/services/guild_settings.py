@@ -1,3 +1,13 @@
+"""
+Synchronous per-guild settings in the shared database.
+
+Channel, role, form, and automod flags are key-value
+rows. Blocked verification terms live in their own
+table. On first construction, a legacy
+guild_settings.json is imported once, and only for
+keys that are not already stored.
+"""
+
 from __future__ import annotations
 
 import json
@@ -23,6 +33,13 @@ BUILT_IN_DEFAULT_AUTOMOD_TERMS: tuple[str, ...] = ()
 
 
 class GuildSettingsStore:
+    """
+    Read and write one guild's settings.
+
+    Creating the store creates the tables and runs
+    the legacy JSON import. Automod is treated as
+    enabled until a guild stores an explicit flag.
+    """
     def __init__(
         self,
         database_path: str = "data/tfsbot.sqlite3",
@@ -35,6 +52,10 @@ class GuildSettingsStore:
         self.initialise()
 
     def initialise(self) -> None:
+        """
+        Create the settings tables, then import
+        legacy JSON if that file is still present.
+        """
         with open_sync_database(self.database_path) as database:
             database.execute(
                 """
@@ -64,6 +85,15 @@ class GuildSettingsStore:
         self.migrate_from_legacy_json()
 
     def migrate_from_legacy_json(self) -> None:
+        """
+        Copy review channel, application log, and
+        verification form key out of the legacy JSON.
+
+        Existing database values are kept. Newer
+        settings were never in that file, so they
+        are left alone. A missing file, unreadable
+        JSON, or a non-numeric guild id is skipped.
+        """
         if not self.legacy_json_path.exists():
             return
 
@@ -71,6 +101,7 @@ class GuildSettingsStore:
             with self.legacy_json_path.open("r", encoding="utf-8") as file:
                 data: dict[str, Any] = json.load(file)
         except (OSError, json.JSONDecodeError):
+            # A broken legacy file must not stop startup.
             return
 
         guilds = data.get("guilds", {})
@@ -97,6 +128,8 @@ class GuildSettingsStore:
                 if value is None or str(value).strip() == "":
                     continue
 
+                # overwrite=False so a value already
+                # stored in SQL is not replaced.
                 self._set_value(
                     guild_id=guild_id,
                     setting_key=setting_key,
@@ -184,6 +217,12 @@ class GuildSettingsStore:
         self._delete_value(guild_id, SETTING_APPROVED_REMOVE_ROLE_ID)
 
     def is_automod_enabled(self, guild_id: int) -> bool:
+        """
+        Return whether verification automod is on.
+
+        A missing row means enabled. Only the stored
+        text "1" is on; any other text is off.
+        """
         value = self._get_value(guild_id, SETTING_AUTOMOD_ENABLED)
 
         if value is None:
@@ -199,6 +238,14 @@ class GuildSettingsStore:
         )
 
     def add_automod_term(self, guild_id: int, term: str) -> None:
+        """
+        Store one blocked term for this guild.
+
+        The term is stripped and casefolded. An empty
+        result raises ValueError. A term that is
+        already stored is ignored, and its original
+        created_at is kept.
+        """
         cleaned = self._normalise_automod_term(term)
 
         if not cleaned:
@@ -220,6 +267,11 @@ class GuildSettingsStore:
             database.commit()
 
     def remove_automod_term(self, guild_id: int, term: str) -> bool:
+        """
+        Delete one term, matching it case-insensitively.
+
+        Returns whether a row was removed.
+        """
         cleaned = self._normalise_automod_term(term)
 
         with open_sync_database(self.database_path) as database:
@@ -265,6 +317,14 @@ class GuildSettingsStore:
             database.commit()
 
     def set_automod_terms(self, guild_id: int, terms: list[str]) -> None:
+        """
+        Replace this guild's blocked terms.
+
+        Blank entries are dropped. The rest are
+        casefolded and de-duplicated, then the old
+        rows are deleted and the new list inserted
+        in one transaction.
+        """
         cleaned_terms = self._normalise_automod_terms_list(terms)
 
         with open_sync_database(self.database_path) as database:
@@ -292,6 +352,11 @@ class GuildSettingsStore:
             database.commit()
 
     def add_automod_terms(self, guild_id: int, terms: list[str]) -> int:
+        """
+        Insert terms this guild does not already have.
+
+        Returns how many new rows were stored.
+        """
         cleaned_terms = self._normalise_automod_terms_list(terms)
         added_count = 0
 
@@ -317,6 +382,14 @@ class GuildSettingsStore:
         return added_count
 
     def get_default_automod_terms(self) -> list[str]:
+        """
+        Return the preset blocked terms for a new guild.
+
+        Built-in terms come first. Lines from the
+        optional text file are appended, then the
+        whole list is casefolded and de-duplicated.
+        An unreadable file contributes nothing.
+        """
         terms: list[str] = list(BUILT_IN_DEFAULT_AUTOMOD_TERMS)
 
         if DEFAULT_AUTOMOD_TERMS_PATH.exists():
@@ -364,6 +437,10 @@ class GuildSettingsStore:
         return str(row[0])
 
     def _get_int_value(self, guild_id: int, setting_key: str) -> int | None:
+        """
+        Return an integer setting, or None when the
+        row is missing or the text is not an integer.
+        """
         value = self._get_value(guild_id, setting_key)
 
         if value is None:
@@ -395,6 +472,13 @@ class GuildSettingsStore:
         *,
         overwrite: bool = True,
     ) -> None:
+        """
+        Write one setting.
+
+        When overwrite is false, an existing row is
+        left unchanged. The legacy import relies on
+        that.
+        """
         if overwrite:
             query = """
                 INSERT INTO guild_settings (
@@ -438,6 +522,10 @@ class GuildSettingsStore:
         cls,
         terms: list[str] | tuple[str, ...],
     ) -> list[str]:
+        """
+        Casefold terms, drop blanks, and keep the
+        first occurrence of each term.
+        """
         cleaned_terms: list[str] = []
         seen: set[str] = set()
 
@@ -454,6 +542,10 @@ class GuildSettingsStore:
 
     @staticmethod
     def _normalise_automod_term(term: str) -> str:
+        """
+        Strip a term and casefold it so lookups
+        ignore capitalisation.
+        """
         return term.strip().casefold()
 
     @staticmethod

@@ -1,3 +1,13 @@
+"""Staff claim, release, and internal notes for a pending application.
+
+Action buttons call get_claimed_pending_application_or_respond, which claims an
+unclaimed application for the clicking moderator before the action continues.
+Claim, release, and note buttons use stable custom ids that do not include the
+application id; that id is kept on the button instance, so the parent view has
+to be restored against a specific message. A failed audit write or a failed
+claim-field edit must not undo the moderation action.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -25,6 +35,7 @@ async def send_ephemeral(
     interaction: discord.Interaction,
     message: str,
 ) -> None:
+    """Reply ephemerally, using followup when the interaction is already acknowledged."""
     kwargs = {
         "ephemeral": True,
         "allowed_mentions": (
@@ -50,6 +61,7 @@ async def audit_action(
     action: str,
     detail: str,
 ) -> None:
+    """Write an audit row. Missing store or a logging error is ignored."""
     audit_store = getattr(
         interaction.client,
         "audit_store",
@@ -87,6 +99,10 @@ async def update_claim_display(
     interaction: discord.Interaction,
     claimed_by: int | None,
 ) -> None:
+    """Insert or refresh the claim field at the top of the first embed.
+
+    Passing None removes it. The edit is cosmetic: an HTTP failure is ignored.
+    """
     message = interaction.message
 
     if (
@@ -150,6 +166,12 @@ async def get_claimed_pending_application_or_respond(
     ApplicationStore,
     StoredApplication,
 ] | None:
+    """Return the pending application only when this user holds the claim.
+
+    An unclaimed application is claimed here. If that update loses a race, the
+    row is reloaded and the other moderator is reported. Already holding the
+    claim refreshes the embed and is not treated as a conflict.
+    """
     store = get_application_store(
         interaction.client
     )
@@ -266,6 +288,8 @@ async def get_claimed_pending_application_or_respond(
 class ApplicationNoteModal(
     discord.ui.Modal
 ):
+    """Collects one internal note. The modal custom id is capped at 100 characters."""
+
     def __init__(
         self,
         application_id: str,
@@ -357,6 +381,12 @@ class ApplicationNoteModal(
 class ClaimApplicationButton(
     discord.ui.Button
 ):
+    """Explicit claim. The custom id is shared; the application id is instance state.
+
+    It sits on row 1 so it does not collide with the five action buttons, which
+    already fill Discord's per-row button limit.
+    """
+
     def __init__(
         self,
         application_id: str,
@@ -494,6 +524,8 @@ class ClaimApplicationButton(
 class ReleaseApplicationClaimButton(
     discord.ui.Button
 ):
+    """Drop this user's claim. Success rewrites the embed and does not send a confirmation."""
+
     def __init__(
         self,
         application_id: str,
@@ -597,6 +629,12 @@ class AddApplicationNoteButton(
 class ViewApplicationNotesButton(
     discord.ui.Button
 ):
+    """Show the latest notes, oldest of that page first, cut to fit an ephemeral message.
+
+    The store returns newest first. Reversing that slice makes the ephemeral
+    text read chronologically, and anything past 1900 characters is clipped.
+    """
+
     def __init__(
         self,
         application_id: str,

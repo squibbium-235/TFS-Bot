@@ -1,3 +1,13 @@
+"""
+Verification applications stored in the shared database.
+
+Each application is one row, with answers kept as JSON.
+Later columns (question controls and claim fields) are
+added with ALTER TABLE when an older file is opened.
+Claims are conditional updates, so two reviewers cannot
+both take the same pending application.
+"""
+
 from __future__ import annotations
 
 import json
@@ -28,6 +38,13 @@ APPLICATION_STATUS_CANCELLED = "cancelled"
 
 @dataclass(frozen=True)
 class StoredApplication:
+    """
+    One stored verification application.
+
+    Message URLs are derived from the guild and the
+    stored channel or thread ids. best_message_url
+    prefers the log message, then the review message.
+    """
     id: str
     guild_id: int
     user_id: int
@@ -86,6 +103,9 @@ class StoredApplication:
 
     @property
     def best_message_url(self) -> str | None:
+        """
+        Prefer the log message, then the review message.
+        """
         return self.log_message_url or self.review_message_url
 
 @dataclass(
@@ -99,10 +119,21 @@ class ApplicationNote:
     created_at: str
 
 class ApplicationStore:
+    """
+    Async persistence for verification applications
+    and staff notes on the shared database.
+    """
     def __init__(self, database_path: str) -> None:
         self.database_path = Path(database_path)
 
     async def initialise(self) -> None:
+        """
+        Create the application tables and indexes.
+
+        question_controls_message_id, claimed_by, and
+        claimed_at are added when missing, so older
+        database files keep working.
+        """
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
         async with open_database(self.database_path) as database:
@@ -211,6 +242,13 @@ class ApplicationStore:
         user_id: int,
         answers: list[FormAnswer],
     ) -> None:
+        """
+        Insert a new application as pending.
+
+        The caller supplies the id. This does not
+        check for another pending application from
+        the same user.
+        """
         now = self._now()
 
         async with open_database(self.database_path) as database:
@@ -361,6 +399,13 @@ class ApplicationStore:
         self,
         questioning_thread_id: int,
     ) -> StoredApplication | None:
+        """
+        Return the pending application tied to this
+        questioning thread, if there is one.
+
+        Actioned applications are ignored, even when
+        the thread id is still stored.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -386,6 +431,12 @@ class ApplicationStore:
         self,
         user_id: int,
     ) -> StoredApplication | None:
+        """
+        Return this user's newest pending application
+        that already has a questioning thread.
+
+        The lookup is by user id only, not by guild.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -415,6 +466,10 @@ class ApplicationStore:
         guild_id: int,
         user_id: int,
     ) -> StoredApplication | None:
+        """
+        Return this user's newest pending application
+        in the guild, including one with no thread.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -446,6 +501,10 @@ class ApplicationStore:
         self,
         guild_id: int,
     ) -> list[StoredApplication]:
+        """
+        Return this guild's pending applications,
+        oldest submission first.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -465,6 +524,10 @@ class ApplicationStore:
         return [self._row_to_application(row) for row in rows]
 
     async def list_pending_applications(self) -> list[StoredApplication]:
+        """
+        Return every guild's pending applications,
+        oldest submission first.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -540,6 +603,16 @@ class ApplicationStore:
         exclude_application_id: str | None = None,
         limit: int = 5,
     ) -> list[str]:
+        """
+        Return Discord markdown links to this user's
+        earlier applications in the guild.
+
+        Passing no id to exclude compares against an
+        empty string, so nothing is excluded. Rows
+        with neither a log nor a review message are
+        omitted, but they still consume a number in
+        the "Application N" label.
+        """
         async with open_database(self.database_path) as database:
             database.row_factory = DatabaseRow
 
@@ -590,6 +663,14 @@ class ApplicationStore:
         application_id: str,
         user_id: int,
     ) -> bool:
+        """
+        Claim a pending application for this user.
+
+        Succeeds when nobody holds the claim, or when
+        this user already does (which refreshes
+        claimed_at). Another user's claim is left
+        alone. Returns whether a row changed.
+        """
         now = self._now()
 
         async with open_database(
@@ -630,6 +711,12 @@ class ApplicationStore:
         application_id: str,
         user_id: int,
     ) -> bool:
+        """
+        Clear this user's claim on a pending application.
+
+        Returns false when the application is missing,
+        already actioned, or claimed by someone else.
+        """
         async with open_database(
             self.database_path
         ) as database:
@@ -664,6 +751,13 @@ class ApplicationStore:
         author_id: int,
         content: str,
     ) -> None:
+        """
+        Append a staff note to an existing application.
+
+        Blank notes are rejected. Stored text is cut
+        at 1000 characters. The application must
+        already exist.
+        """
         content = content.strip()
 
         if not content:
@@ -710,6 +804,11 @@ class ApplicationStore:
         application_id: str,
         limit: int = 10,
     ) -> list[ApplicationNote]:
+        """
+        Return the newest notes for an application.
+
+        The limit is clamped to the range 1 to 20.
+        """
         limit = max(
             1,
             min(
@@ -768,6 +867,13 @@ class ApplicationStore:
         reason: str | None = None,
         dm_sent: bool | None = None,
     ) -> None:
+        """
+        Record a final status and clear any claim.
+
+        The current status is not checked. dm_sent is
+        stored as 1, 0, or NULL when unknown. A missing
+        id changes no row and does not raise.
+        """
         now = self._now()
 
         async with open_database(self.database_path) as database:
@@ -804,6 +910,13 @@ class ApplicationStore:
         column_name: str,
         column_definition: str,
     ) -> None:
+        """
+        Add a column when an older database lacks it.
+
+        Names are interpolated because PRAGMA table_info
+        and ALTER TABLE cannot bind identifiers. Callers
+        pass fixed table and column names only.
+        """
         cursor = await database.execute(
             f"PRAGMA table_info({table_name})"
         )
@@ -850,6 +963,12 @@ class ApplicationStore:
     def _deserialise_answers(
         raw_json: str,
     ) -> list[FormAnswer]:
+        """
+        Rebuild answers from stored JSON.
+
+        A missing key falls back to the label, then
+        to the literal "unknown".
+        """
         raw_answers = json.loads(
             raw_json
         )
@@ -899,6 +1018,13 @@ class ApplicationStore:
         self,
         row: DatabaseRow,
     ) -> StoredApplication:
+        """
+        Map a row to an application.
+
+        Columns added after the original table are
+        read only when present, so a row from before
+        that migration still loads.
+        """
         row_keys = set(
             row.keys()
         )

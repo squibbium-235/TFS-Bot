@@ -1,3 +1,13 @@
+"""
+Environment-backed settings for the bot
+and the optional Web UI.
+
+BotConfig.from_environment is how the
+process reads them. A missing token, or
+an enabled Web UI with no usable login,
+fails at startup.
+"""
+
 from __future__ import annotations
 
 import os
@@ -5,8 +15,17 @@ from dataclasses import dataclass
 
 
 def env_bool(name: str, default: bool = False) -> bool:
+    """
+    Read a boolean environment variable.
+
+    Unset uses default. A set value is true
+    only for 1, true, yes, y, or on, ignoring
+    case. An empty string is set, so it is
+    false even when default is true.
+    """
     raw_value = os.getenv(name)
 
+    # Present but empty must not fall through to default.
     if raw_value is None:
         return default
 
@@ -14,6 +33,12 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 def parse_int_list(raw_value: str | None) -> tuple[int, ...]:
+    """
+    Split a comma-separated list of integers.
+
+    Blank items are skipped. A non-numeric
+    item raises ValueError.
+    """
     if not raw_value:
         return ()
 
@@ -32,12 +57,27 @@ def parse_int_list(raw_value: str | None) -> tuple[int, ...]:
 
 @dataclass(frozen=True)
 class WebUiCredential:
+    """
+    Username and password for one Web UI
+    password-login account.
+    """
+
     username: str
     password: str
 
 
 @dataclass(frozen=True)
 class BotConfig:
+    """
+    Frozen settings for Discord, the Web UI,
+    and the encrypted database path.
+
+    Password accounts are only WEBUI_USER_1
+    and WEBUI_USER_2. Discord OAuth can be
+    the only login; password login is required
+    only when Discord auth is off.
+    """
+
     discord_token: str
     prefix: str = "!"
     test_guild_id: int | None = None
@@ -61,6 +101,14 @@ class BotConfig:
 
     @staticmethod
     def from_environment() -> "BotConfig":
+        """
+        Build a config from the process
+        environment.
+
+        DISCORD_TOKEN is required. TEST_GUILD_ID,
+        when set, selects guild slash-command
+        sync instead of the slow global sync.
+        """
         token = os.getenv("DISCORD_TOKEN")
 
         if not token:
@@ -106,6 +154,7 @@ class BotConfig:
             "data/tfsbot.sqlite3",
         )
 
+        # Only the first two numbered Web UI accounts are read.
         for index in range(1, 3):
             username = os.getenv(f"WEBUI_USER_{index}_USERNAME")
             password = os.getenv(f"WEBUI_USER_{index}_PASSWORD")
@@ -124,6 +173,7 @@ class BotConfig:
                     )
                 )
 
+        # Discord login needs the OAuth client and the guild to check.
         if webui_enabled and webui_discord_auth_enabled:
             missing_discord_settings = []
 
@@ -145,6 +195,7 @@ class BotConfig:
                     f"Discord WebUI login is enabled, but these settings are missing: {joined}."
                 )
 
+        # With Discord auth off, password login must actually be usable.
         if (
             webui_enabled
             and not webui_discord_auth_enabled

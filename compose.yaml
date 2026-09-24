@@ -11,8 +11,12 @@ services:
     env_file:
       - .env
 
+    # Encrypted SQLite file lives here (APPLICATION_DB_PATH).
     volumes:
       - ./data:/app/data
 
+    # Web UI port (WEBUI_PORT, default 5050). expose
+    # makes it reachable by other Compose services;
+    # it is not published on the host.
     expose:
       - "5050"

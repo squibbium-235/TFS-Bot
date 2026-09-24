@@ -1,3 +1,12 @@
+"""Flask Web UI created inside the bot process and served by waitress.
+
+start_webui runs waitress on a daemon thread, so the server stops when the
+bot process exits. The session cookie is httponly with SameSite=Lax. Logged-in
+sessions last eight hours from authentication and one hour from the last
+request; a missing timestamp clears the session. Successful POSTs are audited
+after the response is built.
+"""
+
 from __future__ import annotations
 
 import threading
@@ -35,6 +44,13 @@ from src.webui.routes import (
 def build_secret_key(
     bot: discord.Client,
 ) -> str:
+    """Join WebUI passwords with the Discord OAuth client secret.
+
+    Each credential becomes ``username:password``. A non-empty client secret
+    is appended, and the parts are joined with ``|``. If that string is
+    empty the literal ``tfsbot-dev-secret`` is returned. This function does
+    not read the auth flags; it only uses values already on the bot.
+    """
     secret_parts = [
         (
             f"{credential.username}:"
@@ -66,6 +82,13 @@ def build_secret_key(
 def create_webui(
     bot: discord.Client,
 ) -> Flask:
+    """Build the Flask app, session policy, CSRF hooks, and blueprints.
+
+    Uploads are capped at 10 MiB. ``PERMANENT_SESSION_LIFETIME`` is eight
+    hours; the idle limit is enforced separately because Flask does not
+    track it. ``csrf_token`` is injected as a callable so a template
+    reference creates a session token on first use.
+    """
     app = Flask(
         __name__
     )
@@ -101,6 +124,15 @@ def create_webui(
 
     @app.before_request
     def enforce_session_lifetime():
+        """Expire logged-in sessions and refresh the idle clock.
+
+        ``logged_in`` must be exactly True. Missing or non-numeric
+        timestamps always clear the session and redirect to login. An
+        expired session redirects too, except when the request is already
+        the login page, so that page can render after the cookie is
+        cleared. Activity refreshes ``last_activity`` only; it does not
+        move ``authenticated_at``.
+        """
         if not (
             session.get(
                 "logged_in"
@@ -183,6 +215,7 @@ def create_webui(
 
     @app.context_processor
     def inject_csrf_token():
+        """Expose csrf_token() to every template, including the login page."""
         return {
             "csrf_token": (
                 csrf_token()
@@ -193,6 +226,13 @@ def create_webui(
     def audit_webui_change(
         response,
     ):
+        """Record a successful logged-in POST without failing the response.
+
+        The action name prefers the form ``action`` field, then the
+        endpoint. ``guild_id`` is recorded only when that form field is a
+        valid integer. An audit-store failure is logged and swallowed.
+        Routes that write their own audit row still pass through here.
+        """
         if (
             request.method
             == "POST"
@@ -261,6 +301,11 @@ def create_webui(
 def start_webui(
     bot: discord.Client,
 ) -> None:
+    """Start waitress on a daemon thread when the Web UI is enabled.
+
+    A disabled Web UI returns before the app is built. The thread is not
+    joined; process shutdown is what stops it.
+    """
     if not bot.config.webui_enabled:
         return
 

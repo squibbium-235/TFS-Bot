@@ -1,3 +1,30 @@
+"""Verification applications: multi-page modal, staff review, and questioning.
+
+VerifyView is persistent (`timeout` is None, custom id `verify:start`) and is
+registered for every panel. In-progress answers live in memory, so a restart
+drops a half-finished form. Discord modals hold five inputs, and the next page
+is opened from a Continue button.
+
+Pending ApplicationReviewView and ApplicationQuestionControlsView are restored
+per message. A review view is restored only while questioning has not started;
+once a thread exists, the review message is given a disabled view and is not
+reattached. Question controls are restored from their own message id.
+
+The question bridge copies staff thread messages to the applicant's DMs and
+applicant DMs back to the thread. Messages that start with `//` stay in the
+thread. The bot's own messages are ignored so a forwarded copy is not forwarded
+again.
+
+Automod scans the submitted answers. Single-word terms shorter than the minimum
+length are skipped. Phrases are matched separately and may have spaces or
+punctuation between the words.
+
+A kick or ban adds the member to a departure-suppression set for the duration
+of that API call, so the resulting leave is not also recorded as the applicant
+walking away. Approval can add one role and remove another; a role failure is
+reported and does not undo the approval.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -52,11 +79,14 @@ INTERNAL_THREAD_PREFIX = "//"
 
 @dataclass
 class VerificationSession:
+    """Answers collected across modal pages for one in-progress application."""
+
     user_id: int
     guild_id: int | None
     answers: list[FormAnswer] = field(default_factory=list)
 
 
+# Page state for forms that are still being filled. Lost on restart.
 VERIFICATION_SESSIONS: dict[str, VerificationSession] = {}
 
 
@@ -80,6 +110,11 @@ async def load_verification_form(
     client: discord.Client,
     guild_id: int | None,
 ):
+    """Load the guild's configured verification form, or the built-in default.
+
+    Outside a guild, or when the form store is missing, the bundled default is
+    used and no guild override is consulted.
+    """
     form_store = get_form_store(client)
 
     if guild_id is not None and form_store is not None:
@@ -109,6 +144,7 @@ def discord_timestamp(value: datetime, style: str = "R") -> str:
 
 
 def trim_embed_value(value: str, limit: int = 1000) -> str:
+    """Fit an answer into an embed field. An empty answer is shown explicitly."""
     cleaned = value.strip()
 
     if not cleaned:
@@ -135,6 +171,7 @@ def get_avatar_reverse_search_url(user: discord.User | discord.Member) -> str:
 
 
 def format_invite_text(invite_info: TrackedInviteInfo | None) -> str | None:
+    """Format a tracked invite. None means nothing was tracked, which the caller labels separately."""
     if invite_info is None:
         return None
 
@@ -182,6 +219,13 @@ AUTOMOD_MIN_SINGLE_WORD_LENGTH = 3
 
 
 def normalise_automod_text(value: str) -> str:
+    """Fold text so evasive spelling and hidden characters do not dodge a term.
+
+    Compatibility characters are normalised, zero-width characters are removed,
+    and URLs are replaced with a space before whitespace is collapsed. A phrase
+    can therefore match across a URL that was stripped out. Curly quotes are
+    folded to straight quotes, then the text is casefolded.
+    """
     value = unicodedata.normalize("NFKC", value)
     value = ZERO_WIDTH_RE.sub("", value)
     value = URL_RE.sub(" ", value)
@@ -209,10 +253,12 @@ def normalise_automod_term(term: str) -> str:
 
 
 def is_automod_phrase(term: str) -> bool:
+    """A phrase still contains a space after normalisation. Short words inside it are kept."""
     return " " in term.strip()
 
 
 def build_single_word_pattern(term: str) -> re.Pattern[str] | None:
+    """Whole-word pattern, or None when the term is empty or below the length cutoff."""
     cleaned = normalise_automod_term(term)
 
     if not cleaned:
@@ -230,6 +276,7 @@ def build_single_word_pattern(term: str) -> re.Pattern[str] | None:
 
 
 def build_phrase_pattern(term: str) -> re.Pattern[str] | None:
+    """Match phrase words with flexible separators. A one-word result uses the word pattern."""
     cleaned = normalise_automod_term(term)
 
     if not cleaned:
@@ -281,6 +328,11 @@ def find_automod_match(
     answers: list[FormAnswer],
     terms: list[str],
 ) -> str | None:
+    """Return the first matching term after normalisation, or None.
+
+    The caller treats any match as a block. The matched text is not shown to
+    the applicant.
+    """
     answers_text = application_answers_text(answers)
 
     for term in terms:
@@ -300,6 +352,7 @@ async def ban_user_for_automod(
     user_id: int,
     reason: str,
 ) -> tuple[bool, str | None]:
+    """Ban by id so the member does not need to be cached. Returns whether Discord accepted it."""
     guild = client.get_guild(guild_id)
 
     if guild is None:
@@ -321,6 +374,10 @@ async def apply_approval_roles(
     client: discord.Client,
     application: StoredApplication,
 ) -> list[str]:
+    """Add the approval role, then remove the other. Failures are returned, not raised.
+
+    A missing member or a hierarchy error does not undo the approval itself.
+    """
     settings_store = getattr(client, "guild_settings", None)
 
     if settings_store is None:
@@ -387,6 +444,10 @@ def build_application_review_embeds(
     questioning_thread_url: str | None = None,
     invite_text: str | None = None,
 ) -> list[discord.Embed]:
+    """Build the staff review embeds, spilling past 25 fields and stopping at 10 embeds.
+
+    Answers that do not fit are dropped. The questioning link is added last.
+    """
     embeds: list[discord.Embed] = []
 
     display_name = getattr(user, "display_name", user.name)
@@ -507,6 +568,7 @@ def get_log_colour_for_status(status: str) -> discord.Colour:
 
 
 def should_show_log_reason(status: str, reason: str | None) -> bool:
+    """Show a reason only for deny, kick, ban, and cancel. Approval and leaving omit it."""
     if reason is None or not reason.strip():
         return False
 
@@ -520,6 +582,7 @@ def should_show_log_reason(status: str, reason: str | None) -> bool:
 
 
 def format_reason_codeblock(reason: str, limit: int = 1000) -> str:
+    """Wrap a reason in a code block. Nested fences are neutralised first."""
     cleaned = reason.strip().replace("```", "'''")
 
     if len(cleaned) <= limit:
@@ -539,6 +602,7 @@ def build_application_log_embeds(
     questioning_thread_url: str | None = None,
     invite_text: str | None = None,
 ) -> list[discord.Embed]:
+    """Build the log embeds. Left and cancelled add a result line instead of a staff reason."""
     embeds: list[discord.Embed] = []
 
     log_colour = get_log_colour_for_status(status)
@@ -675,6 +739,7 @@ async def try_dm_user(
     user_id: int,
     message: str,
 ) -> bool:
+    """DM the user with mentions disabled. Closed DMs and missing users return False."""
     user = await fetch_user_safely(client, user_id)
 
     if user is None:
@@ -699,6 +764,7 @@ def build_question_controls_embed(
     applicant: discord.User | discord.Member,
     opened_by: discord.User | discord.Member,
 ) -> discord.Embed:
+    """Explain the questioning thread, including the `//` prefix that stays private."""
     embed = discord.Embed(
         title="Questioning Opened",
         description=(
@@ -875,6 +941,7 @@ async def archive_question_thread(
     application: StoredApplication,
     final_status: str,
 ) -> None:
+    """Post the result, then lock and archive the thread so it cannot be reopened."""
     thread = await fetch_question_thread(client, application.questioning_thread_id)
 
     if thread is None:
@@ -926,6 +993,7 @@ async def update_review_message_with_question_link(
     application: StoredApplication,
     thread: discord.Thread,
 ) -> None:
+    """Rewrite the review message with a thread link and replace its buttons with a disabled view."""
     message = await fetch_review_message(client, application)
 
     if message is None:
@@ -1008,6 +1076,7 @@ async def post_original_application_in_thread(
 
 
 async def build_forward_files(message: discord.Message) -> tuple[list[discord.File], list[str]]:
+    """Copy up to ten attachments. Stickers are kept as URLs because they cannot be re-uploaded."""
     files: list[discord.File] = []
     urls: list[str] = []
 
@@ -1043,6 +1112,7 @@ async def send_forwarded_message(
     fallback_urls: list[str],
     embeds: list[discord.Embed] | None = None,
 ) -> bool:
+    """Send the forward. If the files are rejected, send the text plus the original URLs instead."""
     embeds = embeds or []
 
     try:
@@ -1153,6 +1223,14 @@ async def handle_question_bridge_message(
     client: discord.Client,
     message: discord.Message,
 ) -> bool:
+    """Bridge one message. True means the caller should not also treat it as a command.
+
+    The bot's own messages return True without forwarding, which stops a copy
+    the bot just sent from being copied back. A thread message that starts with
+    `//` is kept private the same way. Other thread messages on a pending
+    questioning application go to the applicant's DMs. A DM is copied into the
+    thread only when that author has an active questioning application.
+    """
     if client.user is not None and message.author.id == client.user.id:
         return True
 
@@ -1203,6 +1281,11 @@ async def handle_verify_page_submit(
     page_index: int,
     answers: list[FormAnswer],
 ) -> None:
+    """Store this page and either offer Continue or finish the application.
+
+    Answers are appended, not replaced. The session is removed before the
+    final handler runs, so a failed finish cannot be resubmitted from it.
+    """
     session = VERIFICATION_SESSIONS.get(session_id)
 
     if session is None:
@@ -1257,6 +1340,7 @@ async def build_verify_page_modal(
     session_id: str,
     page_index: int,
 ) -> discord.ui.Modal:
+    """Build one verification page. The title keeps the page suffix inside 45 characters."""
     form = await load_verification_form(
         client=client,
         guild_id=guild_id,
@@ -1315,6 +1399,12 @@ async def build_verify_page_modal(
 
 
 class ContinueVerificationView(discord.ui.View):
+    """Opens the next verification page. It expires after ten minutes and is not restored.
+
+    The button custom id is shared. The session id is on this instance, so the
+    button only works while this process still has the view and the session.
+    """
+
     def __init__(
         self,
         session_id: str,
@@ -1365,6 +1455,14 @@ async def handle_verify_complete(
     interaction: discord.Interaction,
     answers: list[FormAnswer],
 ) -> None:
+    """Create the application, or autoban when automod matches.
+
+    A second pending application is refused. An automod hit is stored, then
+    the user is DMed and banned while departure suppression is held, so the
+    ban is not also logged as the applicant leaving. If the ban fails, the
+    application is rejected instead. If the review message cannot be posted,
+    the new application is cancelled so the user can try again.
+    """
     if interaction.guild is None:
         await interaction.response.send_message(
             "Applications can only be submitted from inside a server.",
@@ -1577,6 +1675,7 @@ async def perform_moderation_action(
     action: str,
     reason: str | None,
 ) -> tuple[bool, str | None]:
+    """Carry out kick or ban. Approve and deny do not change the member here."""
     if action == "approve" or action == "deny":
         return True, None
 
@@ -1661,6 +1760,7 @@ def build_dm_template_context(
     moderator: discord.User | discord.Member | None,
     reason: str | None = None,
 ) -> dict[str, str]:
+    """Template values. `reason_block` is empty when there is no reason, so templates can always include it."""
     guild = client.get_guild(application.guild_id)
     server_name = guild.name if guild is not None else "the server"
 
@@ -1753,6 +1853,7 @@ async def build_questioning_dm_message(
 def get_departure_suppression_set(
     client: discord.Client,
 ) -> set[tuple[int, int]]:
+    """Return the bot's (guild id, user id) set, creating it the first time it is needed."""
     existing = getattr(client, "verification_departure_suppression", None)
 
     if isinstance(existing, set):
@@ -1775,6 +1876,7 @@ async def handle_member_left_during_verification(
     client: discord.Client,
     member: discord.Member,
 ) -> None:
+    """Close a pending application because the member left, unless a kick or ban suppressed it."""
     if is_departure_suppressed(
         client=client,
         guild_id=member.guild.id,
@@ -1837,6 +1939,7 @@ async def cancel_pending_application(
     moderator: discord.User | discord.Member,
     reason: str,
 ) -> bool:
+    """Cancel one pending application, log it, and close its review message and thread."""
     if application.status != APPLICATION_STATUS_PENDING:
         return False
 
@@ -1951,6 +2054,13 @@ async def complete_application_action(
     action: str,
     reason: str | None = None,
 ) -> None:
+    """Finish approve, deny, kick, or ban.
+
+    Kick and ban are DMed first, while the user can still receive a message,
+    and departure suppression covers only that moderation call. Approval role
+    changes run after the action succeeds. Role warnings do not roll the
+    decision back. The review buttons are then removed.
+    """
     application_store = get_application_store(interaction.client)
 
     if application_store is None:
@@ -2064,6 +2174,8 @@ async def complete_application_action(
 
 
 class ActionReasonModal(discord.ui.Modal):
+    """Requires a reason before deny, kick, or ban. Approve does not use this modal."""
+
     def __init__(self, application_id: str, action: str) -> None:
         action_title = {
             "deny": "Reject Application",
@@ -2134,6 +2246,14 @@ class ActionReasonModal(discord.ui.Modal):
 
 
 class DisabledApplicationReviewView(discord.ui.View):
+    """Disabled stand-in placed on the review message once questioning starts.
+
+    timeout is None so Discord keeps the components. Each custom id includes
+    the application id and is truncated to 100 characters. These ids differ
+    from the live review buttons, so a restored live view is not attached to
+    this message. The buttons do nothing because they are disabled.
+    """
+
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
 
@@ -2186,6 +2306,15 @@ class DisabledApplicationReviewView(discord.ui.View):
 
 
 class ApplicationQuestionControlsView(discord.ui.View):
+    """Persistent actions inside the questioning thread.
+
+    timeout is None. The action custom ids are shared across applications;
+    the application id is stored on the instance. Restoration therefore passes
+    the controls message id, and this view is registered even after questioning
+    has started. Claim buttons are placed on row 1. Every action goes through
+    the claim helper first.
+    """
+
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
         self.application_id = application_id
@@ -2313,6 +2442,15 @@ class ApplicationQuestionControlsView(discord.ui.View):
 
 
 class ApplicationReviewView(discord.ui.View):
+    """Persistent review buttons on a pending application that is not yet being questioned.
+
+    timeout is None and the custom ids are stable, but they do not encode the
+    application id. The view is restored only for a pending application whose
+    questioning thread is still unset, bound to that review message. Starting
+    a question replaces this view with the disabled one, so the live buttons
+    are not reattached after a restart.
+    """
+
     def __init__(self, application_id: str) -> None:
         super().__init__(timeout=None)
         self.application_id = application_id
@@ -2448,6 +2586,12 @@ class ApplicationReviewView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ) -> None:
+        """Open a thread on the review message and move actions into that thread.
+
+        An existing thread is reused. The review buttons are then replaced by
+        the disabled view. There is no ephemeral confirmation; the thread is
+        the result. The questioning DM is attempted after the thread is stored.
+        """
         result = await self.get_pending_application_or_respond(interaction)
 
         if result is None:
@@ -2563,6 +2707,13 @@ class ApplicationReviewView(discord.ui.View):
 
 
 class VerifyView(discord.ui.View):
+    """Persistent Verify button. One registration handles every panel with this custom id.
+
+    A user who already has a pending application is stopped before a session
+    is created. Otherwise a memory session is started and the first modal page
+    is opened. Later pages depend on that session still being in this process.
+    """
+
     def __init__(self) -> None:
         super().__init__(timeout=None)
 

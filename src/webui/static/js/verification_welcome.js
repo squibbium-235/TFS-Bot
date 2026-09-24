@@ -1,8 +1,16 @@
+// Welcome-embed preview. Local file previews are object URLs and are
+// revoked when the file input is cleared, replaced, or the page unloads.
+// Preview priority matches the server: chosen file, then typed URL, then
+// stored upload. URLs containing { are left unloaded because placeholders
+// such as {avatar} are not real image addresses. Colour text may start
+// with # or 0x and must then be six hex digits.
+
 let welcomeFieldCount = 0;
 
 const localPreviewUrls = new Map();
 
 
+// Field text is inserted with innerHTML, so it is escaped first.
 function escapeHtml(value) {
     return String(value)
         .replaceAll("&", "&amp;")
@@ -24,6 +32,7 @@ function getValue(id) {
 }
 
 
+// Strips one leading # and a leading 0x before checking for six hex digits.
 function normaliseHexColour(value) {
     const cleaned = String(value || "")
         .trim()
@@ -155,6 +164,7 @@ function localFilePreview(fileInputId) {
     const input = document.getElementById(fileInputId);
 
     if (!input || !input.files || input.files.length === 0) {
+        // Clearing the file input must not leave the previous blob URL alive.
         const existing = localPreviewUrls.get(fileInputId);
 
         if (existing) {
@@ -216,6 +226,7 @@ function setPreviewImage(id, url) {
         error.style.display = "none";
     }
 
+    // A brace means a template placeholder, not an image the browser can fetch.
     if (!url || url.includes("{")) {
         return;
     }
@@ -393,6 +404,7 @@ function bindAssetControls(
         uploadSelect.addEventListener(
             "change",
             () => {
+                // One source at a time, matching parse_uploaded_asset on the server.
                 if (uploadSelect.value) {
                     urlInput.value = "";
 

@@ -1,3 +1,13 @@
+"""
+Smoke test that SQLCipher encryption is on.
+
+Writes a throwaway database under data/,
+checks that stdlib sqlite3 cannot read it,
+then reads it back with SQLCipher and the
+hardcoded test key. That key is not the
+production database key.
+"""
+
 from __future__ import annotations
 
 import sqlite3
@@ -21,12 +31,25 @@ TEST_KEY_HEX = (
 def apply_key(
     database: sqlcipher.Connection,
 ) -> None:
+    """
+    Set the smoke-test key. SQLCipher must
+    see it before the first read, or the
+    file looks corrupt.
+    """
     database.execute(
         f'PRAGMA key = "x\'{TEST_KEY_HEX}\'";'
     )
 
 
 def main() -> None:
+    """
+    Create the smoke-test file, prove
+    ordinary SQLite cannot query it, then
+    prove SQLCipher can.
+
+    Any previous file at the same path is
+    removed first.
+    """
     DATABASE_PATH.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -82,6 +105,7 @@ def main() -> None:
         "Trying standard sqlite3..."
     )
 
+    # A successful read here means the file was not encrypted.
     try:
         plain_database = sqlite3.connect(
             str(DATABASE_PATH)

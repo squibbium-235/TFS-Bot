@@ -1,3 +1,10 @@
+"""Owner editor for per-guild custom commands and their ordered actions.
+
+The blueprint is built by a factory. The module-level blueprint is the
+instance created at import. Embed colours are hex. Password logins have
+no Discord user id, so the creator falls back to the bot user.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -65,6 +72,10 @@ LEVELS = [
 def parse_bool(
     value: str | None,
 ) -> bool:
+    """True for the form values 1, true, yes, and on. Anything else is false.
+
+    An unchecked checkbox posts nothing, which is false.
+    """
     return value in {
         "1",
         "true",
@@ -100,6 +111,10 @@ def parse_float(
 def parse_colour(
     value: str | None,
 ) -> int | None:
+    """Parse a hex colour to an integer, or None when the field is empty.
+
+    A leading # or 0x is removed. Values outside 000000–FFFFFF raise.
+    """
     value = (
         str(value or "")
         .strip()
@@ -132,6 +147,10 @@ def parse_colour(
 def get_creator_id(
     bot: discord.Client,
 ) -> int:
+    """Discord user id when the session has one, else the bot id, else 0.
+
+    Password sessions therefore attribute the command to the bot.
+    """
     discord_user_id = str(
         session.get(
             "discord_user_id"
@@ -154,6 +173,14 @@ def build_action_data(
     action_type: str,
     action_number: int | None = None,
 ) -> dict[str, Any]:
+    """Read one action form into the store payload, clamping Discord limits.
+
+    Embed fields are collected only when action_number is set, which is
+    the save path. A field with both sides blank is skipped; one side
+    blank raises. More than 25 fields raises. Unknown reaction or delete
+    targets become trigger, and unknown role targets become invoker.
+    Delete delay is clamped to 0–86400 seconds.
+    """
     if action_type == SEND_MESSAGE:
         return {
             "content": request.form.get(
@@ -348,6 +375,10 @@ def build_action_data(
 def build_default_action(
     action_type: str,
 ) -> dict[str, Any]:
+    """Payload used when an action is first added, before the editor saves it.
+
+    The default embed colour is Discord blurple, 0x5865F2.
+    """
     if action_type == SEND_MESSAGE:
         return {
             "content": "",
@@ -395,6 +426,12 @@ def build_default_action(
 
 def create_custom_commands_blueprint(
 ) -> Blueprint:
+    """Build the custom-commands blueprint and its single page route.
+
+    With no command selected, the page shows the first command in the
+    guild. Cooldowns are clamped to 0–86400 seconds. Deleting a command
+    requires DELETE; clearing actions requires CLEAR.
+    """
     blueprint = Blueprint(
         "custom_commands",
         __name__,
@@ -544,6 +581,11 @@ def create_custom_commands_blueprint(
     )
     
     def index():
+        """Owner editor. POST actions rename, save, delete, or reorder.
+
+        Move-up and move-down are one-position swaps bounded by the
+        current action list. The error text differs for each end.
+        """
         owner_error = require_owner()
 
         if owner_error is not None:

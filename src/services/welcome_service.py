@@ -1,3 +1,14 @@
+"""
+Render and send a guild's welcome embed.
+
+Placeholders are literal {name} replacements, not
+str.format. Local images are stored as tfs-upload://
+references. A preview embed drops those images,
+because Discord only shows them when the matching
+file is attached. Sending builds both the embed
+and those files, and mentions are not pinged.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -21,6 +32,15 @@ async def build_welcome_context(
     guild: discord.Guild,
     member: discord.Member,
 ) -> dict[str, str]:
+    """
+    Return placeholder values for this member.
+
+    The inviter is a mention when the tracker stored
+    an id, otherwise their name, otherwise Unknown.
+    A tracker error also becomes Unknown. member_count
+    uses the guild count, or len(members) when Discord
+    did not supply one.
+    """
     inviter = "Unknown"
 
     invite_tracker = getattr(
@@ -68,6 +88,14 @@ def render_template_text(
     value: str,
     context: dict[str, str],
 ) -> str:
+    """
+    Replace {key} placeholders in one string.
+
+    Unknown placeholders are left as written.
+    Keys are applied in dict order, so a value
+    inserted earlier can still be rewritten if it
+    contains a later key.
+    """
     rendered = value
 
     for key, replacement in context.items():
@@ -83,6 +111,12 @@ def render_template_value(
     value: Any,
     context: dict[str, str],
 ) -> Any:
+    """
+    Render placeholders in strings, lists, and dicts.
+
+    Other types, including numbers such as colour,
+    are returned unchanged.
+    """
     if isinstance(value, str):
         return render_template_text(
             value,
@@ -111,6 +145,12 @@ def render_template_value(
 
 
 def upload_value(reference: str) -> str:
+    """
+    Turn an upload reference into a tfs-upload URL.
+
+    A blank reference becomes an empty string, with
+    no scheme prefix.
+    """
     reference = reference.strip()
 
     if not reference:
@@ -120,6 +160,12 @@ def upload_value(reference: str) -> str:
 
 
 def upload_reference(value: Any) -> str | None:
+    """
+    Return the reference inside a tfs-upload URL.
+
+    Other values, including ordinary http URLs,
+    return None. A scheme with no reference does too.
+    """
     if not isinstance(value, str):
         return None
 
@@ -317,6 +363,14 @@ async def build_welcome_message_payload(
     discord.Embed,
     list[discord.File],
 ]:
+    """
+    Build the embed and the files Discord must receive.
+
+    tfs-upload image, thumbnail, and author icon
+    URLs are rewritten to attachment:// names.
+    If the embed is empty, the opened files are
+    closed before the error is raised.
+    """
     rendered_data = await _render_welcome_data(
         bot=bot,
         guild=guild,
@@ -394,6 +448,13 @@ async def resolve_welcome_channel(
     bot: discord.Client,
     channel_id: int,
 ) -> discord.TextChannel:
+    """
+    Return the configured text channel.
+
+    The cache is used first. A cache miss fetches
+    the channel. Anything other than a text channel
+    raises RuntimeError.
+    """
     channel = bot.get_channel(
         channel_id
     )
@@ -420,6 +481,13 @@ async def send_welcome_message(
     settings: WelcomeSettings,
     member: discord.Member,
 ) -> discord.Message:
+    """
+    Send the welcome message for this member.
+
+    Mentions in the embed are not allowed to ping.
+    Attachment files are closed even when the send
+    fails.
+    """
     if settings.channel_id is None:
         raise RuntimeError(
             "No welcome channel is configured."

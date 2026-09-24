@@ -1,3 +1,13 @@
+"""Guild-defined prefix commands, configured through slash commands.
+
+Each command is a list of actions stored in CustomCommandStore. They run from
+on_message, not as slash commands. A built-in prefix command wins when both
+could match. Messages in an open verification questioning thread are ignored
+so the question bridge keeps that channel. Cooldowns are in-memory and reset
+on restart. Placeholders are substituted before the message is sent; a missing
+`{argN}` becomes empty, and `{random:a|b}` is chosen after the other tokens.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -85,6 +95,7 @@ ARGUMENT_PLACEHOLDER_RE = re.compile(
 def parse_colour(
     value: str | None,
 ) -> int | None:
+    """Parse a 6-digit hex colour used by embed actions. Blank means no colour."""
     if not value:
         return None
 
@@ -114,6 +125,7 @@ async def command_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """Offer this guild's custom commands. Names are capped at 100 and the list at 25."""
     if interaction.guild is None:
         return []
 
@@ -159,6 +171,12 @@ async def command_autocomplete(
 
 
 class CustomCommandCog(commands.Cog):
+    """Runs stored prefix commands and exposes the slash editor for them.
+
+    The cooldown map is keyed by guild, command name, and user. It is written
+    before the actions run, so a later action failure still consumes the cooldown.
+    """
+
     custom_command_group = app_commands.Group(
         name="custom-command",
         description=(
@@ -189,6 +207,12 @@ class CustomCommandCog(commands.Cog):
         self,
         message: discord.Message,
     ) -> None:
+        """Run a custom command when the message is a prefix invocation.
+
+        Questioning threads and other bots are skipped. If discord.py already
+        accepts the message as a built-in command, this listener does nothing.
+        A caught action failure is logged and the remaining actions still run.
+        """
         if message.guild is None:
             return
 
@@ -309,6 +333,7 @@ class CustomCommandCog(commands.Cog):
             time.monotonic()
         )
 
+        # The first mention is the target. With no mention, the author is the target.
         target = (
             message.mentions[0]
             if message.mentions
@@ -367,6 +392,12 @@ class CustomCommandCog(commands.Cog):
         context: dict[str, Any],
         last_response: discord.Message | None,
     ) -> discord.Message | None:
+        """Run one action. A sent message is returned so later actions can target it.
+
+        Role changes skip @everyone, managed roles, and any role at or above
+        the bot's top role. A delayed delete is scheduled and does not block
+        the rest of this action.
+        """
         action_type = action.get(
             "type"
         )
@@ -729,6 +760,7 @@ class CustomCommandCog(commands.Cog):
         list[str],
         str,
     ] | None:
+        """Split off the longest configured prefix, then the command name and arguments."""
         prefixes = await self.bot.get_prefix(
             message
         )
@@ -809,6 +841,7 @@ class CustomCommandCog(commands.Cog):
         text: str,
         context: dict[str, Any],
     ) -> str:
+        """Substitute placeholders. Fixed tokens run first, then `{argN}`, then `{random}`."""
         message: discord.Message = (
             context["message"]
         )
@@ -944,6 +977,7 @@ class CustomCommandCog(commands.Cog):
         command: CustomCommand,
         user_id: int,
     ) -> int:
+        """Whole seconds still left, rounded up. Zero means the command may run."""
         if command.cooldown_seconds <= 0:
             return 0
 
@@ -1046,6 +1080,7 @@ class CustomCommandCog(commands.Cog):
         ) = 0,
         delete_trigger: bool = False,
     ) -> None:
+        """Create a prefix command. Names that match a built-in prefix command are refused."""
         assert (
             interaction.guild
             is not None
@@ -1184,6 +1219,7 @@ class CustomCommandCog(commands.Cog):
             ),
         )
 
+        # An embed can hold 25 fields, so further commands are left off this list.
         for command in custom_commands[:25]:
             embed.add_field(
                 name=(
