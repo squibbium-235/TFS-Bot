@@ -1,3 +1,12 @@
+"""
+Builders for Discord modal forms.
+
+validate_form enforces Discord's modal
+limits before a modal is constructed,
+including five questions and a
+45-character title.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,6 +25,14 @@ MAX_QUESTIONS_PER_MODAL = 5
 
 @dataclass(frozen=True)
 class FormQuestion:
+    """
+    One text input to place on a modal.
+
+    key is also the input's custom_id, so
+    it has to be unique and within the
+    custom_id length limit.
+    """
+
     key: str
     label: str
     style: discord.TextStyle = discord.TextStyle.paragraph
@@ -28,6 +45,11 @@ class FormQuestion:
 
 @dataclass(frozen=True)
 class FormAnswer:
+    """
+    One submitted modal field, keyed the
+    same way as its FormQuestion.
+    """
+
     key: str
     label: str
     value: str
@@ -40,6 +62,13 @@ FormSubmitCallback = Callable[
 
 
 class GeneratedFormModal(discord.ui.Modal):
+    """
+    Modal built from FormQuestion objects.
+
+    Construction validates the form first,
+    so an illegal modal is never sent.
+    """
+
     def __init__(
         self,
         *,
@@ -72,6 +101,10 @@ class GeneratedFormModal(discord.ui.Modal):
             self.add_item(text_input)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        """
+        Collect stripped answers in question
+        order and pass them to the callback.
+        """
         answers = [
             FormAnswer(
                 key=question.key,
@@ -104,6 +137,13 @@ def validate_form(
     custom_id: str,
     questions: list[FormQuestion],
 ) -> None:
+    """
+    Reject a modal Discord would refuse.
+
+    Question keys must be unique because
+    each key is also the text input's
+    custom_id.
+    """
     if not title.strip():
         raise ValueError("Modal title cannot be empty.")
 
@@ -134,6 +174,15 @@ def validate_form(
 
 
 def validate_question(question: FormQuestion) -> None:
+    """
+    Reject one question that breaks a
+    Discord text-input limit.
+
+    The key uses the custom_id length cap
+    because it is sent as the input's
+    custom_id. min_length may not exceed
+    max_length when both are set.
+    """
     if not question.key.strip():
         raise ValueError("Question key cannot be empty.")
 

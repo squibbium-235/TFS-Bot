@@ -1,3 +1,12 @@
+"""
+Slash-command permission gate.
+
+Levels rank public < staff < admin < owner.
+PermissionCommandTree checks every
+interaction. A DM is allowed. A missing
+permission store fails closed.
+"""
+
 from __future__ import annotations
 
 import discord
@@ -16,6 +25,15 @@ from src.services.permission_store import (
 
 
 class PermissionDenied(app_commands.CheckFailure):
+    """
+    Raised when a member is below the level
+    configured for a slash command.
+
+    It subclasses CheckFailure so the bot's
+    app-command error handler can reply with
+    the message built here.
+    """
+
     def __init__(
         self,
         command_key: str,
@@ -33,6 +51,13 @@ class PermissionDenied(app_commands.CheckFailure):
 
 
 def command_key_from_interaction(interaction: discord.Interaction) -> str:
+    """
+    Normalised qualified name of the slash
+    command, or an empty string when the
+    interaction has no command.
+
+    An empty key skips the permission check.
+    """
     if interaction.command is None:
         return ""
 
@@ -47,6 +72,18 @@ async def get_member_level_name(
     member: discord.Member,
     permission_store: PermissionStore,
 ) -> str:
+    """
+    Highest permission level for a member.
+
+    Bot-dev user ids and the Discord guild
+    owner are owner. Configured owner, admin,
+    and staff roles are then checked in that
+    order. Administrator or manage_guild
+    counts as admin only when none of those
+    roles match, so a staff role stays staff
+    even if the member also has Administrator.
+    Anyone else is public.
+    """
     bot_dev_user_ids = get_bot_dev_user_ids()
 
     if member.id in bot_dev_user_ids:
@@ -85,24 +122,47 @@ def member_meets_level(
     member_level: str,
     required_level: str,
 ) -> bool:
+    """
+    True when member_level is at least
+    required_level on the public < staff <
+    admin < owner scale.
+    """
     return LEVEL_VALUES[member_level] >= LEVEL_VALUES[required_level]
 
 
 class PermissionCommandTree(app_commands.CommandTree):
+    """
+    Command tree that enforces configured
+    permission levels before a slash command
+    runs.
+    """
+
     async def interaction_check(
         self,
         interaction: discord.Interaction,
     ) -> bool:
+        """
+        Allow the interaction or raise
+        PermissionDenied.
+
+        No command key, a public requirement,
+        or a DM (guild is None) returns True.
+        A missing permission store returns
+        False, which blocks the command
+        without a permission message.
+        """
         command_key = command_key_from_interaction(interaction)
 
         if not command_key:
             return True
 
+        # DMs have no guild roles to compare.
         if interaction.guild is None:
             return True
 
         permission_store = get_permission_store(interaction.client)
 
+        # Fail closed: do not run the command if the store was not attached.
         if permission_store is None:
             return False
 

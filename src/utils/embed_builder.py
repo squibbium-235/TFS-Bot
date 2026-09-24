@@ -1,9 +1,24 @@
+"""
+Discord embed helpers that stay inside
+client limits.
+
+Text is truncated. Field lists are split
+across embeds, at most 25 fields and 10
+embeds; fields past that are dropped.
+"""
+
 from __future__ import annotations
 
 import discord
 
 
 class EmbedFactory:
+    """
+    Builds embeds and splits long field
+    lists so a message stays within
+    Discord's embed caps.
+    """
+
     DEFAULT_FOOTER = "TFSBot"
 
     MAX_FIELDS_PER_EMBED = 25
@@ -20,6 +35,14 @@ class EmbedFactory:
         author_icon_url: str | None = None,
         footer: str | None = DEFAULT_FOOTER,
     ) -> discord.Embed:
+        """
+        Build one embed, truncating text to
+        Discord's limits.
+
+        A missing colour falls back to
+        blurple. The footer defaults to
+        TFSBot; an empty string omits it.
+        """
         embed = discord.Embed(
             title=title[:256],
             description=description[:4096] if description else None,
@@ -45,6 +68,13 @@ class EmbedFactory:
 
     @staticmethod
     def from_hex_colour(hex_colour: str | None) -> discord.Colour:
+        """
+        Parse a #RRGGBB colour.
+
+        Missing or blank input is blurple.
+        After an optional leading hash the
+        value must be six hex digits.
+        """
         if not hex_colour:
             return discord.Colour.blurple()
 
@@ -67,6 +97,17 @@ class EmbedFactory:
         footer: str | None = DEFAULT_FOOTER,
         fields: list[tuple[str, str, bool]] | None = None,
     ) -> list[discord.Embed]:
+        """
+        Build up to ten embeds from a web
+        form, splitting fields into groups
+        of 25.
+
+        Blank names or values are skipped.
+        One embed is always returned.
+        Continuation embeds keep the colour
+        and footer only. Fields that do not
+        fit in ten embeds are dropped.
+        """
         colour = EmbedFactory.from_hex_colour(hex_colour)
 
         clean_fields = [
@@ -95,9 +136,11 @@ class EmbedFactory:
 
         for field_name, field_value, inline in clean_fields:
             if fields_on_current_embed >= EmbedFactory.MAX_FIELDS_PER_EMBED:
+                # Ten embeds is the message cap; leave any further fields out.
                 if len(embeds) >= EmbedFactory.MAX_EMBEDS_PER_MESSAGE:
                     break
 
+                # 240 leaves room for the " Continued" suffix within 256.
                 current_embed = EmbedFactory.base(
                     title=f"{title[:240]} Continued",
                     colour=colour,
@@ -129,6 +172,13 @@ class EmbedFactory:
         footer: str | None = DEFAULT_FOOTER,
         fields: list[tuple[str, str, bool]] | None = None,
     ) -> discord.Embed:
+        """
+        Return only the first embed from
+        from_web_form_embeds.
+
+        Fields that spilled onto later
+        embeds are not included.
+        """
         return EmbedFactory.from_web_form_embeds(
             title=title,
             description=description,

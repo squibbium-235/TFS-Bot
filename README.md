@@ -24,15 +24,13 @@ Edit `.env` and add your bot token.
 
 ## Run
 
-```bash
-python -m src.tfsbot.main
-```
-
-Or, from inside the `src` folder:
+From the repository root (the directory that contains `src`):
 
 ```bash
-python -m tfsbot.main
+python -m src.main
 ```
+
+The Web UI is optional. It starts only when `WEBUI_ENABLED` is true.
 
 ## Discord Developer Portal
 

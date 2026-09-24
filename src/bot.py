@@ -1,3 +1,14 @@
+"""
+Discord client for TFS-Bot.
+
+setup_hook opens the SQLCipher stores, loads
+cogs, optionally starts the Web UI, restores
+persistent verification views, then syncs
+slash commands. TEST_GUILD_ID syncs that
+guild so iteration is fast; with no test
+guild the tree syncs globally, which is slow.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -21,7 +32,25 @@ from .services.moderation_store import ModerationStore
 
 
 class TFSBot(commands.Bot):
+    """
+    Bot client. Stores are created here and
+    opened in setup_hook.
+
+    PermissionCommandTree gates every slash
+    command. invite_tracker_ready stops
+    on_ready from rebuilding invite snapshots
+    after every reconnect.
+    """
+
     def __init__(self, config: BotConfig) -> None:
+        """
+        Hold config and unopened stores.
+
+        Each store creates its tables when
+        initialise runs in setup_hook. Guild
+        settings uses the synchronous opener;
+        the other stores are async.
+        """
         self.config = config
 
         self.log = logging.getLogger("TFSBot")
@@ -54,8 +83,11 @@ class TFSBot(commands.Bot):
             config.application_db_path
         )
 
+        # Set after the first on_ready invite sync so reconnects do not repeat it.
         self.invite_tracker_ready = False
 
+        # (guild_id, user_id) held while the bot kicks or bans, so the leave
+        # handler does not also treat that as the applicant walking away.
         self.verification_departure_suppression: set[
             tuple[int, int]
         ] = set()
@@ -68,6 +100,7 @@ class TFSBot(commands.Bot):
             config.application_db_path
         )
 
+        # message_content for prefix commands; members for verification and invites.
         intents = discord.Intents.default()
         intents.guilds = True
         intents.messages = True
@@ -80,11 +113,23 @@ class TFSBot(commands.Bot):
             tree_cls=PermissionCommandTree,
         )
 
+        # PermissionDenied is raised by the tree; handle it with the other app errors.
         self.tree.on_error = (
             self.on_app_command_error
         )
 
     async def setup_hook(self) -> None:
+        """
+        Prepare stores and commands before
+        the bot is ready.
+
+        The Web UI, when enabled, runs under
+        waitress on a daemon thread and does
+        not block Discord. Guild sync copies
+        global commands onto TEST_GUILD_ID
+        first; a guild sync without that copy
+        would not publish them.
+        """
         await self.application_store.initialise()
         self.log.info(
             "Application database initialised."
@@ -206,6 +251,7 @@ class TFSBot(commands.Bot):
             "src.commands.custom_commands.custom_commands"
         )
 
+        # Optional. start_webui returns immediately; waitress runs in the background.
         if self.config.webui_enabled:
             self.log.info(
                 "Starting web UI..."
@@ -217,6 +263,7 @@ class TFSBot(commands.Bot):
 
         await self.restore_application_views()
 
+        # Guild sync is the fast path for iteration. Otherwise sync globally.
         if self.config.test_guild_id:
             guild = discord.Object(
                 id=self.config.test_guild_id
@@ -228,6 +275,7 @@ class TFSBot(commands.Bot):
                 self.config.test_guild_id,
             )
 
+            # Guild sync only publishes commands copied onto that guild.
             self.tree.copy_global_to(
                 guild=guild
             )
@@ -264,6 +312,16 @@ class TFSBot(commands.Bot):
     async def restore_application_views(
         self,
     ) -> None:
+        """
+        Reattach persistent buttons on pending
+        verification messages after a restart.
+
+        The review view is restored only while
+        questioning has not started. Question
+        controls are restored whenever that
+        message id is still stored. Each view
+        is bound to its message id.
+        """
         from .commands.verification.verification import (
             ApplicationQuestionControlsView,
             ApplicationReviewView,
@@ -277,6 +335,7 @@ class TFSBot(commands.Bot):
         restored_count = 0
 
         for application in pending_applications:
+            # Review buttons stay up until a questioning thread exists.
             if (
                 application.review_message_id
                 is not None
@@ -294,6 +353,7 @@ class TFSBot(commands.Bot):
 
                 restored_count += 1
 
+            # Controls can exist alongside a thread, so they are separate.
             if (
                 application.question_controls_message_id
                 is not None
@@ -319,6 +379,18 @@ class TFSBot(commands.Bot):
         self,
         message: discord.Message,
     ) -> None:
+        """
+        Route a message to the verification
+        bridge or to prefix commands.
+
+        The bot's own messages are dropped
+        first. The bridge runs before the
+        other-bot filter, so a questioning
+        thread still forwards messages from
+        other bots, and a thread note starting
+        with "//" is consumed rather than
+        forwarded or treated as a command.
+        """
         if (
             self.user is not None
             and message.author.id
@@ -340,6 +412,7 @@ class TFSBot(commands.Bot):
         if handled:
             return
 
+        # After the bridge, so questioning-thread traffic is not dropped here.
         if message.author.bot:
             return
 
@@ -367,6 +440,12 @@ class TFSBot(commands.Bot):
         self,
         invite: discord.Invite,
     ) -> None:
+        """
+        Drop a cached invite snapshot.
+
+        Discord can deliver this event with
+        no guild; those are ignored.
+        """
         guild = invite.guild
 
         if guild is None:
@@ -381,6 +460,16 @@ class TFSBot(commands.Bot):
         self,
         member: discord.Member,
     ) -> None:
+        """
+        Record an applicant leaving during
+        verification.
+
+        Kick and ban mark the member on
+        verification_departure_suppression
+        while that action is in flight, so
+        this path does not also treat the
+        departure as the applicant leaving.
+        """
         from .commands.verification.verification import (
             handle_member_left_during_verification,
         )
@@ -391,6 +480,14 @@ class TFSBot(commands.Bot):
         )
 
     async def on_ready(self) -> None:
+        """
+        Log the login and sync invite
+        snapshots once.
+
+        on_ready also runs after a reconnect.
+        invite_tracker_ready keeps that from
+        rebuilding every guild's invite cache.
+        """
         if self.user is None:
             self.log.info(
                 "Bot is ready, but self.user "
@@ -428,6 +525,15 @@ class TFSBot(commands.Bot):
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,
     ) -> None:
+        """
+        Reply ephemerally to expected slash
+        check failures.
+
+        PermissionDenied uses the message
+        raised by the permission tree. Any
+        other error is logged and reported
+        with a generic ephemeral message.
+        """
         if isinstance(
             error,
             PermissionDenied,
@@ -493,6 +599,14 @@ class TFSBot(commands.Bot):
         interaction: discord.Interaction,
         message: str,
     ) -> None:
+        """
+        Send an ephemeral error, or follow up
+        if the interaction was already
+        acknowledged.
+
+        A failed send is logged and swallowed
+        so error handling cannot raise again.
+        """
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(
@@ -518,6 +632,12 @@ class TFSBot(commands.Bot):
         ctx: commands.Context,
         error: commands.CommandError,
     ) -> None:
+        """
+        Log prefix-command failures.
+
+        Unknown commands are ignored so a
+        typo does not produce a reply.
+        """
         if isinstance(
             error,
             commands.CommandNotFound,

@@ -1,3 +1,13 @@
+"""
+Copy a plaintext TFS-Bot SQLite file into
+a new SQLCipher database.
+
+The source is left unchanged. The target
+must not already exist. The key is
+TFSBOT_DATABASE_KEY (64 hex characters),
+and user_version is copied across.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -15,6 +25,13 @@ KEY_PATTERN = re.compile(
 
 
 def get_database_key() -> str:
+    """
+    Load TFSBOT_DATABASE_KEY from the
+    environment, including a local .env.
+
+    The key must be exactly 64 hexadecimal
+    characters, matching the bot's opener.
+    """
     load_dotenv()
 
     key = os.getenv(
@@ -34,6 +51,10 @@ def get_database_key() -> str:
 def quote_identifier(
     value: str,
 ) -> str:
+    """
+    Quote a SQLite identifier, doubling any
+    embedded double quotes.
+    """
     return (
         '"'
         + value.replace('"', '""')
@@ -45,6 +66,12 @@ def get_tables(
     database: sqlcipher.Connection,
     schema: str = "main",
 ) -> list[str]:
+    """
+    List user tables in name order.
+
+    sqlite_ internal tables are excluded so
+    they are not part of the row-count check.
+    """
     rows = database.execute(
         f"""
         SELECT name
@@ -66,6 +93,10 @@ def get_row_counts(
     tables: list[str],
     schema: str = "main",
 ) -> dict[str, int]:
+    """
+    Count rows per table, using quoted
+    identifiers so odd names stay valid SQL.
+    """
     counts: dict[str, int] = {}
 
     for table in tables:
@@ -90,6 +121,10 @@ def get_row_counts(
 def verify_integrity(
     database: sqlcipher.Connection,
 ) -> None:
+    """
+    Require PRAGMA integrity_check to return
+    a single ok row.
+    """
     result = database.execute(
         "PRAGMA integrity_check;"
     ).fetchone()
@@ -109,6 +144,18 @@ def migrate_database(
     target_path: Path,
     key: str,
 ) -> None:
+    """
+    Export source into a new encrypted file
+    and check the copy.
+
+    sqlcipher_export runs through an ATTACH
+    on the plaintext connection. user_version
+    is applied on the encrypted schema after
+    that export, then checked again when the
+    file is reopened, along with integrity,
+    the table list, and the row counts. The
+    plaintext file is not deleted.
+    """
     if not source_path.exists():
         raise FileNotFoundError(
             f"Source database does not exist: "
@@ -333,6 +380,10 @@ def migrate_database(
 
 
 def main() -> None:
+    """
+    Parse source and target paths, refuse
+    identical paths, and run the export.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Create an encrypted SQLCipher copy "

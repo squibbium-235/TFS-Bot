@@ -1,3 +1,12 @@
+"""
+Process entry point for TFS-Bot.
+
+Loads the environment, builds BotConfig,
+and starts the Discord client. Run as
+`python -m src.main` from the repository
+root.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,6 +19,10 @@ from .config import BotConfig
 
 
 async def main() -> None:
+    """
+    Start the bot and block until the
+    Discord connection ends.
+    """
     load_dotenv()
 
     logging.basicConfig(
