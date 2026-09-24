@@ -84,7 +84,9 @@ def _get_database_key() -> str:
     ):
         raise RuntimeError(
             "TFSBOT_DATABASE_KEY must be "
-            "exactly 64 hexadecimal characters."
+            "exactly 64 hexadecimal characters. "
+            "Generate one with: python -c "
+            '"import secrets; print(secrets.token_hex(32))"'
         )
 
     return key

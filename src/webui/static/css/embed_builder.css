@@ -1,65 +1,14 @@
 /*
- * Extra skin for the embed builder and the welcome-message preview.
+ * Layout for the embed builder and the welcome-message preview.
  * #colour_picker is a 1px invisible input. The text field opens it, so
  * the picker itself does not receive pointer events.
+ *
+ * The Discord-coloured blocks below are a preview of the message that
+ * will be posted. They are not the admin chrome.
  */
-
-:root {
-    --bg: #111318;
-    --panel: #1e2129;
-    --panel-2: #252936;
-    --text: #f2f3f5;
-    --muted: #b5bac1;
-    --border: #3a3f4b;
-    --accent: #5865f2;
-    --danger: #ed4245;
-    --success: #57f287;
-}
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-}
-
-header {
-    padding: 20px 28px;
-    border-bottom: 1px solid var(--border);
-    background: #151820;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 18px;
-}
-
-header h1 {
-    margin: 0;
-    font-size: 22px;
-    flex: 0 0 auto;
-}
-
-header nav {
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
-
-header a {
-    color: var(--muted);
-    text-decoration: none;
-}
 
 main {
     max-width: 1320px;
-    margin: 0 auto;
-    padding: 24px;
 }
 
 .embed-builder-grid {
@@ -67,15 +16,6 @@ main {
     grid-template-columns: minmax(420px, 700px) minmax(360px, 1fr);
     gap: 24px;
     align-items: start;
-}
-
-.panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 20px;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
-    margin-bottom: 18px;
 }
 
 .page-intro {
@@ -110,7 +50,7 @@ main {
 }
 
 .button-link:hover {
-    background: #303747;
+    background: var(--panel-hover);
 }
 
 .section-note {
@@ -121,9 +61,8 @@ main {
 .upload-details {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 18px;
+    border-radius: var(--radius);
     padding: 0;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
     margin-bottom: 18px;
     overflow: hidden;
 }
@@ -175,7 +114,7 @@ main {
 }
 
 .clear-button:hover {
-    background: #303747;
+    background: var(--panel-hover);
 }
 
 h2 {
@@ -194,9 +133,9 @@ label {
 input, textarea, select {
     width: 100%;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 6px;
     padding: 10px 12px;
-    background: #151820;
+    background: var(--panel-3);
     color: var(--text);
     font: inherit;
 }
@@ -206,12 +145,12 @@ textarea {
 }
 
 button {
-    border: 0;
-    border-radius: 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
     padding: 11px 14px;
     background: var(--accent);
-    color: white;
-    font-weight: bold;
+    color: var(--on-accent);
+    font-weight: 700;
     cursor: pointer;
 }
 
@@ -277,9 +216,9 @@ button.danger {
 
 .badge {
     border: 1px solid var(--border);
-    background: #151820;
+    background: var(--panel-3);
     color: var(--muted);
-    border-radius: 999px;
+    border-radius: 4px;
     padding: 4px 8px;
     font-size: 12px;
     white-space: nowrap;

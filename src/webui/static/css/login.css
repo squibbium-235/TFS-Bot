@@ -1,115 +1,150 @@
-* {
-    box-sizing: border-box;
+/*
+ * Standalone sign-in page. It does not load base.css, so the tokens
+ * are repeated here and should stay in step with that file.
+ */
+
+:root {
+    color-scheme: dark;
+    --bg: #141210;
+    --panel: #221e1a;
+    --panel-3: #171410;
+    --text: #f4efe6;
+    --muted: #c4b8a6;
+    --border: #4a4136;
+    --accent: #c4a36a;
+    --accent-hover: #d4b57e;
+    --accent-text: #e2c48a;
+    --on-accent: #1c160e;
+    --focus: rgba(226, 196, 138, 0.28);
+    --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    --font-display: "Iowan Old Style", Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
+
+* { box-sizing: border-box; }
 
 body {
     margin: 0;
     min-height: 100vh;
-
     display: grid;
     place-items: center;
-
-    padding: 20px;
-
-    font-family: Arial, sans-serif;
-
-    background: #111318;
-    color: #f2f3f5;
+    padding: 24px;
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    color: var(--text);
+    background:
+        linear-gradient(180deg, rgba(196, 163, 106, 0.08), transparent 280px),
+        var(--bg);
 }
 
 .login-card {
     width: 100%;
-    max-width: 360px;
+    max-width: 400px;
+    padding: 28px 28px 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 8px;
+}
 
-    padding: 28px;
-
-    background: #1e2129;
-
-    border: 1px solid #3a3f4b;
-    border-radius: 16px;
-
-    box-shadow:
-        0 18px 50px
-        rgba(0, 0, 0, 0.35);
+.product-kicker {
+    margin: 0;
+    color: var(--accent-text);
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.04em;
 }
 
 .login-card h1 {
-    margin-top: 0;
+    margin: 4px 0 0;
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.lede {
+    margin: 8px 0 4px;
+    color: var(--muted);
+    font-size: 14px;
 }
 
 label {
     display: block;
-
-    margin-top: 12px;
-
-    color: #b5bac1;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 input,
 button {
     width: 100%;
-
-    padding: 12px;
-
-    margin-top: 8px;
-
-    border-radius: 10px;
-    border: 1px solid #3a3f4b;
-
-    background: #151820;
-    color: #f2f3f5;
-
+    padding: 11px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel-3);
+    color: var(--text);
     font: inherit;
 }
 
+input:focus {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 1px;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus);
+}
+
 button {
-    border: 0;
-
-    background: #5865f2;
-
+    margin-top: 16px;
+    border: 1px solid transparent;
+    background: var(--accent);
+    color: var(--on-accent);
     cursor: pointer;
-    font-weight: bold;
+    font-weight: 700;
 }
 
-button:hover {
-    background: #4752c4;
+button:hover { background: var(--accent-hover); }
+
+button:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
 }
 
-.discord-button {
-    background: #5865f2;
-}
+.discord-button { background: var(--accent); }
 
 .divider {
     display: flex;
     align-items: center;
-
     gap: 10px;
-
-    margin: 20px 0 12px;
-
-    color: #b5bac1;
-
-    font-size: 13px;
+    margin: 20px 0 4px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .divider::before,
 .divider::after {
     content: "";
-
     flex: 1;
-
     height: 1px;
-
-    background: #3a3f4b;
+    background: var(--border);
 }
 
 .error {
-    color: #ff6b6b;
+    color: #f0b2ac;
+    background: rgba(154, 64, 56, 0.16);
+    border: 1px solid rgba(154, 64, 56, 0.45);
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-top: 14px;
 }
 
 .hint {
-    color: #b5bac1;
-
+    color: var(--muted);
     font-size: 13px;
     line-height: 1.45;
 }

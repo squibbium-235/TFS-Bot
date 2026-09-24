@@ -25,9 +25,16 @@
 
     <div class="login-card">
 
+        <p class="product-kicker">Sanctuary Servo</p>
+
         <h1>
-            Sanctuary Servo WebUI
+            Web UI
         </h1>
+
+        <p class="lede">
+            Sign in to configure verification,
+            forms, and the rest of this server.
+        </p>
 
         {% if discord_login_enabled %}
 
@@ -40,7 +47,7 @@
                     type="submit"
                     class="discord-button"
                 >
-                    Login with Discord
+                    Log in with Discord
                 </button>
 
             </form>
@@ -57,7 +64,7 @@
         {% if discord_login_enabled and password_login_enabled %}
 
             <div class="divider">
-                or emergency login
+                or emergency log in
             </div>
 
         {% endif %}
@@ -100,7 +107,7 @@
                 >
 
                 <button type="submit">
-                    Login
+                    Log in
                 </button>
 
             </form>
