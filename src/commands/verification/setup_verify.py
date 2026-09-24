@@ -135,7 +135,7 @@ def build_verify_embed(
         )
 
     embed.set_footer(
-        text="TFSBot Verification"
+        text="Sanctuary Servo Verification"
     )
 
     return embed
@@ -392,7 +392,7 @@ def build_verification_help_embed(
 
     embed.set_footer(
         text=(
-            "TFSBot Verification • "
+            "Sanctuary Servo Verification • "
             "Configuration commands respond ephemerally"
         )
     )

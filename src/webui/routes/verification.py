@@ -357,7 +357,7 @@ async def post_verification_panel(
         )
 
     embed.set_footer(
-        text="TFSBot Verification"
+        text="Sanctuary Servo Verification"
     )
 
     try:
@@ -446,7 +446,7 @@ def render_page(
     return render_template(
         "verification/index.html",
         **context.template_context(
-            title="TFSBot Verification",
+            title="Sanctuary Servo Verification",
             active_page="verification",
             guilds=context.available_guilds(),
             selected_guild_id=(

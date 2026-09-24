@@ -50,7 +50,7 @@ def build_diagnostics_embed(
         colour = discord.Colour.green()
 
     embed = EmbedFactory.base(
-        title="TFSBot Diagnostics",
+        title="Sanctuary Servo Diagnostics",
         description=(
             f"Health check for "
             f"**{discord.utils.escape_markdown(guild.name)}**.\n\n"

@@ -1,5 +1,5 @@
 """
-Process entry point for TFS-Bot.
+Process entry point for Sanctuary Servo.
 
 Loads the environment, builds BotConfig,
 and starts the Discord client. Run as

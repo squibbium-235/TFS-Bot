@@ -236,7 +236,7 @@ def normalise_form_values(
     """Fill defaults before the template renders.
 
     A missing or blank colour becomes #5865F2. A missing footer becomes
-    TFSBot; a blank footer stays blank because an empty value replaces
+    Sanctuary Servo; a blank footer stays blank because an empty value replaces
     the default.
     """
     payload = payload or {}
@@ -326,7 +326,7 @@ def normalise_form_values(
         "footer": str(
             payload.get(
                 "footer",
-                "TFSBot",
+                "Sanctuary Servo",
             )
             or ""
         ),
@@ -605,7 +605,7 @@ def render_page(
         "embed_builder/index.html",
         **context.template_context(
             title=(
-                "TFSBot Embed Builder"
+                "Sanctuary Servo Embed Builder"
             ),
             active_page="embed_builder",
             channels=(

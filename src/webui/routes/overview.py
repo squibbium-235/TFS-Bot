@@ -795,7 +795,7 @@ def index():
     return render_template(
         "overview/index.html",
         **context.template_context(
-            title="TFSBot Overview",
+            title="Sanctuary Servo Overview",
             active_page="overview",
             guilds=(
                 context.available_guilds()

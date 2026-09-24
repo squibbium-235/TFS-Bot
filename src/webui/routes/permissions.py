@@ -348,7 +348,7 @@ def index():
     return render_template(
         "permissions/index.html",
         **context.template_context(
-            title="TFSBot Permissions",
+            title="Sanctuary Servo Permissions",
             active_page="permissions",
             guilds=(
                 context.available_guilds()

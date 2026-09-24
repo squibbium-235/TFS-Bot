@@ -661,7 +661,7 @@ def render_page(
     return render_template(
         "verification/welcome.html",
         **context.template_context(
-            title="TFSBot Welcome Message",
+            title="Sanctuary Servo Welcome Message",
             active_page="verification",
             guilds=context.available_guilds(),
             selected_guild_id=(

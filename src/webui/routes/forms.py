@@ -930,7 +930,7 @@ def index():
         return render_template(
             "forms/index.html",
             **context.template_context(
-                title="TFSBot Forms",
+                title="Sanctuary Servo Forms",
                 active_page="forms",
                 guilds=(
                     context.available_guilds()
@@ -974,7 +974,7 @@ def index():
         return render_template(
             "forms/index.html",
             **context.template_context(
-                title="TFSBot Forms",
+                title="Sanctuary Servo Forms",
                 active_page="forms",
                 guilds=(
                     context.available_guilds()
@@ -1160,7 +1160,7 @@ def viewer():
         return render_template(
             "forms/viewer.html",
             **context.template_context(
-                title="TFSBot Form Viewer",
+                title="Sanctuary Servo Form Viewer",
                 active_page="forms",
                 selected_guild_id=(
                     str(
@@ -1197,7 +1197,7 @@ def viewer():
         return render_template(
             "forms/viewer.html",
             **context.template_context(
-                title="TFSBot Form Viewer",
+                title="Sanctuary Servo Form Viewer",
                 active_page="forms",
                 selected_guild_id=(
                     str(

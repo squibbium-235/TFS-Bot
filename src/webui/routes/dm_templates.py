@@ -209,7 +209,7 @@ def index():
     return render_template(
         "dm_templates/index.html",
         **context.template_context(
-            title="TFSBot DM Templates",
+            title="Sanctuary Servo DM Templates",
             active_page="dm_templates",
             guilds=(
                 context.available_guilds()

@@ -166,7 +166,7 @@ def index():
     return render_template(
         "uploads/index.html",
         **context.template_context(
-            title="TFSBot Uploads",
+            title="Sanctuary Servo Uploads",
             active_page="uploads",
             folders=(
                 context.uploads

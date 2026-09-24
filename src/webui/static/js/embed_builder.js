@@ -364,7 +364,7 @@ function clearEmbedForm() {
 
     document.getElementById(
         "footer"
-    ).value = "TFSBot";
+    ).value = "Sanctuary Servo";
 
     document.getElementById(
         "fields"

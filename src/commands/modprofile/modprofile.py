@@ -699,10 +699,10 @@ def build_profile_embed(
         ):
             embed.add_field(
                 name=(
-                    "🛡️ TFSBot Moderation Cases"
+                    "🛡️ Sanctuary Servo Moderation Cases"
                     if index == 0
                     else (
-                        "🛡️ TFSBot Cases "
+                        "🛡️ Sanctuary Servo Cases "
                         "(continued)"
                     )
                 ),
@@ -746,7 +746,7 @@ def build_profile_embed(
             name="📋 Discord Moderation Log",
             value=(
                 "Audit log unavailable. "
-                "TFSBot needs the "
+                "Sanctuary Servo needs the "
                 "`View Audit Log` permission."
             ),
             inline=False,
@@ -773,7 +773,7 @@ def build_profile_embed(
         text=(
             f"{len(applications)} verification "
             f"attempt(s) • "
-            f"{len(moderation_cases)} TFSBot "
+            f"{len(moderation_cases)} Sanctuary Servo "
             f"case(s)"
         )
     )
@@ -1068,7 +1068,7 @@ class ModProfileCommands(
                 .create_thread(
                     name=thread_name,
                     reason=(
-                        "TFSBot moderation "
+                        "Sanctuary Servo moderation "
                         "profile created."
                     ),
                 )

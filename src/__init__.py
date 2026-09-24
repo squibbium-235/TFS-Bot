@@ -1,5 +1,5 @@
 """
-TFS-Bot: a discord.py bot with an optional
+Sanctuary Servo: a discord.py bot with an optional
 Flask Web UI.
 
 Persistence is an encrypted SQLCipher

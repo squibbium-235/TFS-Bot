@@ -91,7 +91,7 @@ def main() -> None:
         )
         VALUES (?)
         """,
-        ("TFSBot encryption works",),
+        ("Sanctuary Servo encryption works",),
     )
 
     database.commit()
@@ -153,7 +153,7 @@ def main() -> None:
     encrypted_database.close()
 
     if row != (
-        "TFSBot encryption works",
+        "Sanctuary Servo encryption works",
     ):
         raise RuntimeError(
             "FAIL: encrypted database returned "

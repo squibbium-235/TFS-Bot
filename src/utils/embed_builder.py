@@ -19,7 +19,7 @@ class EmbedFactory:
     Discord's embed caps.
     """
 
-    DEFAULT_FOOTER = "TFSBot"
+    DEFAULT_FOOTER = "Sanctuary Servo"
 
     MAX_FIELDS_PER_EMBED = 25
     MAX_EMBEDS_PER_MESSAGE = 10
@@ -41,7 +41,7 @@ class EmbedFactory:
 
         A missing colour falls back to
         blurple. The footer defaults to
-        TFSBot; an empty string omits it.
+        Sanctuary Servo; an empty string omits it.
         """
         embed = discord.Embed(
             title=title[:256],
