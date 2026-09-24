@@ -4,9 +4,12 @@ Discord client for Sanctuary Servo.
 setup_hook opens the SQLCipher stores, loads
 cogs, optionally starts the Web UI, restores
 persistent verification views, then syncs
-slash commands. TEST_GUILD_ID syncs that
-guild so iteration is fast; with no test
-guild the tree syncs globally, which is slow.
+slash commands.
+
+TEST_GUILD_ID accepts one or more
+comma-separated guild IDs. When it is set,
+commands are synced only to those guilds and
+old global commands are cleared.
 """
 
 from __future__ import annotations
@@ -18,91 +21,164 @@ from discord import app_commands
 from discord.ext import commands
 
 from .config import BotConfig
-from .services.application_store import ApplicationStore
-from .services.dm_template_store import DmTemplateStore
-from .services.forms.form_store import FormStore
-from .services.guild_settings import GuildSettingsStore
-from .services.invite_tracker import InviteTrackerStore
-from .services.permission_store import PermissionStore
-from .utils.permissions import PermissionCommandTree, PermissionDenied
-from .webui.app import start_webui
-from .services.custom_commands.store import CustomCommandStore
-from .services.audit_store import AuditStore
-from .services.moderation_store import ModerationStore
+
+from .services.application_store import (
+    ApplicationStore,
+)
+
+from .services.audit_store import (
+    AuditStore,
+)
+
+from .services.custom_commands.store import (
+    CustomCommandStore,
+)
+
+from .services.dm_template_store import (
+    DmTemplateStore,
+)
+
+from .services.forms.form_store import (
+    FormStore,
+)
+
+from .services.guild_settings import (
+    GuildSettingsStore,
+)
+
+from .services.invite_tracker import (
+    InviteTrackerStore,
+)
+
+from .services.moderation_store import (
+    ModerationStore,
+)
+
+from .services.permission_store import (
+    PermissionStore,
+)
+
+from .utils.permissions import (
+    PermissionCommandTree,
+    PermissionDenied,
+)
+
+from .webui.app import (
+    start_webui,
+)
 
 
-class TFSBot(commands.Bot):
+class TFSBot(
+    commands.Bot
+):
     """
     Bot client. Stores are created here and
     opened in setup_hook.
 
     PermissionCommandTree gates every slash
-    command. invite_tracker_ready stops
-    on_ready from rebuilding invite snapshots
-    after every reconnect.
+    command.
+
+    invite_tracker_ready stops on_ready from
+    rebuilding invite snapshots after every
+    reconnect.
     """
 
-    def __init__(self, config: BotConfig) -> None:
+    def __init__(
+        self,
+        config: BotConfig,
+    ) -> None:
         """
         Hold config and the data stores.
 
         Guild settings opens the database in
         its constructor. The other stores stay
         closed until initialise runs in
-        setup_hook. Guild settings uses the
-        synchronous opener; the rest are async.
+        setup_hook.
+
+        Guild settings uses the synchronous
+        opener; the rest are async.
         """
         self.config = config
 
-        self.log = logging.getLogger("TFSBot")
-
-        self.guild_settings = GuildSettingsStore(
-            config.application_db_path
+        self.log = logging.getLogger(
+            "TFSBot"
         )
 
-        self.application_store = ApplicationStore(
-            config.application_db_path
+        self.guild_settings = (
+            GuildSettingsStore(
+                config.application_db_path
+            )
         )
 
-        self.custom_command_store = CustomCommandStore(
-            config.application_db_path
+        self.application_store = (
+            ApplicationStore(
+                config.application_db_path
+            )
         )
 
-        self.form_store = FormStore(
-            config.application_db_path
+        self.custom_command_store = (
+            CustomCommandStore(
+                config.application_db_path
+            )
         )
 
-        self.permission_store = PermissionStore(
-            config.application_db_path
+        self.form_store = (
+            FormStore(
+                config.application_db_path
+            )
         )
 
-        self.dm_template_store = DmTemplateStore(
-            config.application_db_path
+        self.permission_store = (
+            PermissionStore(
+                config.application_db_path
+            )
         )
 
-        self.invite_tracker = InviteTrackerStore(
-            config.application_db_path
+        self.dm_template_store = (
+            DmTemplateStore(
+                config.application_db_path
+            )
         )
 
-        # Set after the first on_ready invite sync so reconnects do not repeat it.
+        self.invite_tracker = (
+            InviteTrackerStore(
+                config.application_db_path
+            )
+        )
+
+        # Set after the first on_ready invite
+        # sync so reconnects do not repeat it.
         self.invite_tracker_ready = False
 
-        # (guild_id, user_id) held while the bot kicks or bans, so the leave
-        # handler does not also treat that as the applicant walking away.
+        # (guild_id, user_id) held while the
+        # bot kicks or bans, so the leave
+        # handler does not also treat that as
+        # the applicant walking away.
         self.verification_departure_suppression: set[
-            tuple[int, int]
+            tuple[
+                int,
+                int,
+            ]
         ] = set()
 
-        self.audit_store = AuditStore(
-            config.application_db_path
+        self.audit_store = (
+            AuditStore(
+                config.application_db_path
+            )
         )
 
-        self.moderation_store = ModerationStore(
-            config.application_db_path
+        self.moderation_store = (
+            ModerationStore(
+                config.application_db_path
+            )
         )
 
-        # message_content for prefix commands; members for verification and invites.
-        intents = discord.Intents.default()
+        # message_content for prefix commands;
+        # members for verification and invites.
+        intents = (
+            discord.Intents.default()
+        )
+
         intents.guilds = True
         intents.messages = True
         intents.message_content = True
@@ -111,52 +187,106 @@ class TFSBot(commands.Bot):
         super().__init__(
             command_prefix=config.prefix,
             intents=intents,
-            tree_cls=PermissionCommandTree,
+            tree_cls=(
+                PermissionCommandTree
+            ),
         )
 
-        # PermissionDenied is raised by the tree; handle it with the other app errors.
+        # PermissionDenied is raised by the
+        # tree; handle it with the other app
+        # errors.
         self.tree.on_error = (
             self.on_app_command_error
         )
 
-    async def setup_hook(self) -> None:
+    def guild_is_allowed(
+        self,
+        guild_id: int,
+    ) -> bool:
+        """
+        Return whether Sanctuary Servo should
+        operate in this guild.
+
+        An empty TEST_GUILD_ID keeps the old
+        global behaviour.
+
+        When one or more IDs are configured,
+        only those guilds are allowed.
+        """
+        if not self.config.test_guild_id:
+            return True
+
+        return (
+            guild_id
+            in self.config.test_guild_id
+        )
+
+    async def setup_hook(
+        self,
+    ) -> None:
         """
         Prepare stores and commands before
         the bot is ready.
 
         The Web UI, when enabled, runs under
         waitress on a daemon thread and does
-        not block Discord. Guild sync copies
-        global commands onto TEST_GUILD_ID
-        first; a guild sync without that copy
-        would not publish them.
+        not block Discord.
+
+        If TEST_GUILD_ID contains IDs, global
+        commands are copied and synced to each
+        configured guild.
+
+        The global command set is then cleared
+        remotely so the bot is not published
+        everywhere.
         """
-        await self.application_store.initialise()
+        await (
+            self.application_store
+            .initialise()
+        )
+
         self.log.info(
             "Application database initialised."
         )
 
-        await self.custom_command_store.initialise()
+        await (
+            self.custom_command_store
+            .initialise()
+        )
+
         self.log.info(
             "Custom command database initialised."
         )
 
         self.guild_settings.initialise()
+
         self.log.info(
             "Guild settings database initialised."
         )
 
-        await self.form_store.initialise()
+        await (
+            self.form_store
+            .initialise()
+        )
+
         self.log.info(
             "Form database initialised."
         )
 
-        await self.permission_store.initialise()
+        await (
+            self.permission_store
+            .initialise()
+        )
+
         self.log.info(
             "Permission database initialised."
         )
 
-        await self.moderation_store.initialise()
+        await (
+            self.moderation_store
+            .initialise()
+        )
+
         self.log.info(
             "Moderation database initialised."
         )
@@ -169,17 +299,29 @@ class TFSBot(commands.Bot):
             "src.commands.modprofile.modprofile"
         )
 
-        await self.dm_template_store.initialise()
+        await (
+            self.dm_template_store
+            .initialise()
+        )
+
         self.log.info(
             "DM template database initialised."
         )
 
-        await self.audit_store.initialise()
+        await (
+            self.audit_store
+            .initialise()
+        )
+
         self.log.info(
             "Audit database initialised."
         )
 
-        await self.invite_tracker.initialise()
+        await (
+            self.invite_tracker
+            .initialise()
+        )
+
         self.log.info(
             "Invite tracker database initialised."
         )
@@ -252,7 +394,9 @@ class TFSBot(commands.Bot):
             "src.commands.custom_commands.custom_commands"
         )
 
-        # Optional. start_webui returns immediately; waitress runs in the background.
+        # Optional. start_webui returns
+        # immediately; waitress runs in the
+        # background.
         if self.config.webui_enabled:
             self.log.info(
                 "Starting web UI..."
@@ -262,48 +406,134 @@ class TFSBot(commands.Bot):
                 self
             )
 
-        await self.restore_application_views()
+        await (
+            self.restore_application_views()
+        )
 
-        # Guild sync is the fast path for iteration. Otherwise sync globally.
         if self.config.test_guild_id:
-            guild = discord.Object(
-                id=self.config.test_guild_id
-            )
-
             self.log.info(
-                "Copying global commands to "
-                "test guild %s...",
-                self.config.test_guild_id,
+                (
+                    "TEST_GUILD_ID restricts "
+                    "the bot to %s guild(s): %s"
+                ),
+                len(
+                    self.config.test_guild_id
+                ),
+                ", ".join(
+                    str(guild_id)
+                    for guild_id
+                    in self.config.test_guild_id
+                ),
             )
 
-            # Guild sync only publishes commands copied onto that guild.
-            self.tree.copy_global_to(
-                guild=guild
-            )
+            for guild_id in (
+                self.config.test_guild_id
+            ):
+                guild = discord.Object(
+                    id=guild_id
+                )
 
+                self.log.info(
+                    (
+                        "Copying global commands "
+                        "to test guild %s..."
+                    ),
+                    guild_id,
+                )
+
+                # Guild sync only publishes
+                # commands copied onto that
+                # guild.
+                self.tree.copy_global_to(
+                    guild=guild
+                )
+
+                self.log.info(
+                    (
+                        "Syncing slash commands "
+                        "to test guild %s..."
+                    ),
+                    guild_id,
+                )
+
+                try:
+                    synced = (
+                        await self.tree.sync(
+                            guild=guild
+                        )
+                    )
+
+                except discord.HTTPException:
+                    self.log.exception(
+                        (
+                            "Failed to sync "
+                            "slash commands to "
+                            "test guild %s."
+                        ),
+                        guild_id,
+                    )
+
+                    continue
+
+                self.log.info(
+                    (
+                        "Synced %s command(s) "
+                        "to test guild %s."
+                    ),
+                    len(synced),
+                    guild_id,
+                )
+
+            # If this application was ever
+            # globally synced, remove those
+            # global commands.
+            #
+            # The guild copies above remain
+            # available in each configured
+            # test guild.
             self.log.info(
-                "Syncing slash commands to "
-                "test guild %s...",
-                self.config.test_guild_id,
+                (
+                    "Clearing global slash "
+                    "commands because "
+                    "TEST_GUILD_ID is configured..."
+                )
             )
 
-            synced = await self.tree.sync(
-                guild=guild
+            self.tree.clear_commands(
+                guild=None
             )
 
-            self.log.info(
-                "Synced %s command(s) "
-                "to test guild %s.",
-                len(synced),
-                self.config.test_guild_id,
-            )
+            try:
+                cleared = (
+                    await self.tree.sync()
+                )
+
+            except discord.HTTPException:
+                self.log.exception(
+                    (
+                        "Failed to clear global "
+                        "slash commands."
+                    )
+                )
+
+            else:
+                self.log.info(
+                    (
+                        "Global slash command "
+                        "sync completed with "
+                        "%s command(s)."
+                    ),
+                    len(cleared),
+                )
 
         else:
             self.log.info(
                 "Syncing global slash commands..."
             )
 
-            synced = await self.tree.sync()
+            synced = (
+                await self.tree.sync()
+            )
 
             self.log.info(
                 "Synced %s global command(s).",
@@ -318,10 +548,12 @@ class TFSBot(commands.Bot):
         verification messages after a restart.
 
         The review view is restored only while
-        questioning has not started. Question
-        controls are restored whenever that
-        message id is still stored. Each view
-        is bound to its message id.
+        questioning has not started.
+
+        Question controls are restored whenever
+        that message id is still stored.
+
+        Each view is bound to its message id.
         """
         from .commands.verification.verification import (
             ApplicationQuestionControlsView,
@@ -329,34 +561,45 @@ class TFSBot(commands.Bot):
         )
 
         pending_applications = (
-            await self.application_store
-            .list_pending_applications()
+            await (
+                self.application_store
+                .list_pending_applications()
+            )
         )
 
         restored_count = 0
 
-        for application in pending_applications:
-            # Review buttons stay up until a questioning thread exists.
+        for application in (
+            pending_applications
+        ):
+            # Review buttons stay up until a
+            # questioning thread exists.
             if (
                 application.review_message_id
                 is not None
-                and application.questioning_thread_id
-                is None
+                and (
+                    application
+                    .questioning_thread_id
+                    is None
+                )
             ):
                 self.add_view(
                     ApplicationReviewView(
                         application.id
                     ),
                     message_id=(
-                        application.review_message_id
+                        application
+                        .review_message_id
                     ),
                 )
 
                 restored_count += 1
 
-            # Controls can exist alongside a thread, so they are separate.
+            # Controls can exist alongside a
+            # thread, so they are separate.
             if (
-                application.question_controls_message_id
+                application
+                .question_controls_message_id
                 is not None
             ):
                 self.add_view(
@@ -372,7 +615,10 @@ class TFSBot(commands.Bot):
                 restored_count += 1
 
         self.log.info(
-            "Restored %s pending application view(s).",
+            (
+                "Restored %s pending "
+                "application view(s)."
+            ),
             restored_count,
         )
 
@@ -384,14 +630,29 @@ class TFSBot(commands.Bot):
         Route a message to the verification
         bridge or to prefix commands.
 
+        Messages from unlisted guilds are
+        ignored while TEST_GUILD_ID restriction
+        mode is active.
+
         The bot's own messages are dropped
-        first. The bridge runs before the
-        other-bot filter, so a questioning
-        thread still forwards messages from
-        other bots, and a thread note starting
-        with "//" is consumed rather than
-        forwarded or treated as a command.
+        first.
+
+        The bridge runs before the other-bot
+        filter, so a questioning thread still
+        forwards messages from other bots.
+
+        A thread note starting with "//" is
+        consumed rather than forwarded or
+        treated as a command.
         """
+        if (
+            message.guild is not None
+            and not self.guild_is_allowed(
+                message.guild.id
+            )
+        ):
+            return
+
         if (
             self.user is not None
             and message.author.id
@@ -404,16 +665,19 @@ class TFSBot(commands.Bot):
         )
 
         handled = (
-            await handle_question_bridge_message(
-                self,
-                message,
+            await (
+                handle_question_bridge_message(
+                    self,
+                    message,
+                )
             )
         )
 
         if handled:
             return
 
-        # After the bridge, so questioning-thread traffic is not dropped here.
+        # After the bridge, so questioning
+        # thread traffic is not dropped here.
         if message.author.bot:
             return
 
@@ -421,20 +685,74 @@ class TFSBot(commands.Bot):
             message
         )
 
+    async def on_guild_join(
+        self,
+        guild: discord.Guild,
+    ) -> None:
+        """
+        Leave guilds not listed in
+        TEST_GUILD_ID when the bot is running
+        in restricted-guild mode.
+        """
+        if self.guild_is_allowed(
+            guild.id
+        ):
+            return
+
+        self.log.warning(
+            "Leaving unlisted guild %s (%s).",
+            guild.name,
+            guild.id,
+        )
+
+        try:
+            await guild.leave()
+
+        except discord.HTTPException:
+            self.log.exception(
+                (
+                    "Failed to leave unlisted "
+                    "guild %s (%s)."
+                ),
+                guild.name,
+                guild.id,
+            )
+
     async def on_member_join(
         self,
         member: discord.Member,
     ) -> None:
-        await self.invite_tracker.track_member_join(
-            member
+        if not self.guild_is_allowed(
+            member.guild.id
+        ):
+            return
+
+        await (
+            self.invite_tracker
+            .track_member_join(
+                member
+            )
         )
 
     async def on_invite_create(
         self,
         invite: discord.Invite,
     ) -> None:
-        await self.invite_tracker.sync_invite(
-            invite
+        guild = invite.guild
+
+        if guild is None:
+            return
+
+        if not self.guild_is_allowed(
+            guild.id
+        ):
+            return
+
+        await (
+            self.invite_tracker
+            .sync_invite(
+                invite
+            )
         )
 
     async def on_invite_delete(
@@ -444,17 +762,25 @@ class TFSBot(commands.Bot):
         """
         Drop a cached invite snapshot.
 
-        Discord can deliver this event with
-        no guild; those are ignored.
+        Discord can deliver this event with no
+        guild; those are ignored.
         """
         guild = invite.guild
 
         if guild is None:
             return
 
-        await self.invite_tracker.delete_invite_snapshot(
-            guild.id,
-            invite.code,
+        if not self.guild_is_allowed(
+            guild.id
+        ):
+            return
+
+        await (
+            self.invite_tracker
+            .delete_invite_snapshot(
+                guild.id,
+                invite.code,
+            )
         )
 
     async def on_member_remove(
@@ -467,33 +793,51 @@ class TFSBot(commands.Bot):
 
         Kick and ban mark the member on
         verification_departure_suppression
-        while that action is in flight, so
-        this path does not also treat the
-        departure as the applicant leaving.
+        while that action is in flight.
+
+        That means this path does not also
+        treat the departure as the applicant
+        walking away.
         """
+        if not self.guild_is_allowed(
+            member.guild.id
+        ):
+            return
+
         from .commands.verification.verification import (
             handle_member_left_during_verification,
         )
 
-        await handle_member_left_during_verification(
-            self,
-            member,
+        await (
+            handle_member_left_during_verification(
+                self,
+                member,
+            )
         )
 
-    async def on_ready(self) -> None:
+    async def on_ready(
+        self,
+    ) -> None:
         """
-        Log the login and sync invite
-        snapshots once.
+        Log the login, leave any guilds that
+        are not listed in TEST_GUILD_ID, and
+        sync invite snapshots once.
 
         on_ready also runs after a reconnect.
+
         invite_tracker_ready keeps that from
         rebuilding every guild's invite cache.
         """
         if self.user is None:
             self.log.warning(
-                "Bot is ready, but self.user is None. "
-                "Invite tracking was not synchronised."
+                (
+                    "Bot is ready, but "
+                    "self.user is None. "
+                    "Invite tracking was "
+                    "not synchronised."
+                )
             )
+
             return
 
         self.log.info(
@@ -502,14 +846,53 @@ class TFSBot(commands.Bot):
             self.user.id,
         )
 
+        if self.config.test_guild_id:
+            for guild in list(
+                self.guilds
+            ):
+                if self.guild_is_allowed(
+                    guild.id
+                ):
+                    continue
+
+                self.log.warning(
+                    (
+                        "Leaving unlisted "
+                        "guild %s (%s)."
+                    ),
+                    guild.name,
+                    guild.id,
+                )
+
+                try:
+                    await guild.leave()
+
+                except discord.HTTPException:
+                    self.log.exception(
+                        (
+                            "Failed to leave "
+                            "unlisted guild "
+                            "%s (%s)."
+                        ),
+                        guild.name,
+                        guild.id,
+                    )
+
         if not self.invite_tracker_ready:
             synced_count = 0
 
             for guild in self.guilds:
+                if not self.guild_is_allowed(
+                    guild.id
+                ):
+                    continue
+
                 if (
-                    await self.invite_tracker
-                    .sync_guild_invites(
-                        guild
+                    await (
+                        self.invite_tracker
+                        .sync_guild_invites(
+                            guild
+                        )
                     )
                 ):
                     synced_count += 1
@@ -517,68 +900,96 @@ class TFSBot(commands.Bot):
             self.invite_tracker_ready = True
 
             self.log.info(
-                "Invite cache synced for %s guild(s).",
+                (
+                    "Invite cache synced "
+                    "for %s guild(s)."
+                ),
                 synced_count,
             )
 
     async def on_app_command_error(
         self,
         interaction: discord.Interaction,
-        error: app_commands.AppCommandError,
+        error: (
+            app_commands
+            .AppCommandError
+        ),
     ) -> None:
         """
         Reply ephemerally to expected slash
         check failures.
 
         PermissionDenied uses the message
-        raised by the permission tree. Any
-        other error is logged and reported
+        raised by the permission tree.
+
+        Any other error is logged and reported
         with a generic ephemeral message.
         """
         if isinstance(
             error,
             PermissionDenied,
         ):
-            await self._send_ephemeral_interaction_error(
-                interaction,
-                str(error),
+            await (
+                self
+                ._send_ephemeral_interaction_error(
+                    interaction,
+                    str(error),
+                )
             )
+
             return
 
         if isinstance(
             error,
             app_commands.MissingPermissions,
         ):
-            await self._send_ephemeral_interaction_error(
-                interaction,
-                (
-                    "You do not have permission "
-                    "to use this command."
-                ),
+            await (
+                self
+                ._send_ephemeral_interaction_error(
+                    interaction,
+                    (
+                        "You do not have "
+                        "permission to use "
+                        "this command."
+                    ),
+                )
             )
+
             return
 
         if isinstance(
             error,
             app_commands.BotMissingPermissions,
         ):
-            await self._send_ephemeral_interaction_error(
-                interaction,
-                (
-                    "I do not have the permissions "
-                    "needed to do that."
-                ),
+            await (
+                self
+                ._send_ephemeral_interaction_error(
+                    interaction,
+                    (
+                        "I do not have the "
+                        "permissions needed "
+                        "to do that."
+                    ),
+                )
             )
+
             return
 
         if isinstance(
             error,
             app_commands.CheckFailure,
         ):
-            await self._send_ephemeral_interaction_error(
-                interaction,
-                "You cannot use this command here.",
+            await (
+                self
+                ._send_ephemeral_interaction_error(
+                    interaction,
+                    (
+                        "You cannot use "
+                        "this command here."
+                    ),
+                )
             )
+
             return
 
         self.log.exception(
@@ -587,12 +998,15 @@ class TFSBot(commands.Bot):
             exc_info=error,
         )
 
-        await self._send_ephemeral_interaction_error(
-            interaction,
-            (
-                "Something went wrong while "
-                "running that command."
-            ),
+        await (
+            self
+            ._send_ephemeral_interaction_error(
+                interaction,
+                (
+                    "Something went wrong "
+                    "while running that command."
+                ),
+            )
         )
 
     async def _send_ephemeral_interaction_error(
@@ -609,23 +1023,36 @@ class TFSBot(commands.Bot):
         so error handling cannot raise again.
         """
         try:
-            if interaction.response.is_done():
-                await interaction.followup.send(
-                    message,
-                    ephemeral=True,
+            if (
+                interaction
+                .response
+                .is_done()
+            ):
+                await (
+                    interaction
+                    .followup
+                    .send(
+                        message,
+                        ephemeral=True,
+                    )
                 )
+
             else:
-                await interaction.response.send_message(
-                    message,
-                    ephemeral=True,
+                await (
+                    interaction
+                    .response
+                    .send_message(
+                        message,
+                        ephemeral=True,
+                    )
                 )
 
         except discord.HTTPException:
             self.log.exception(
                 (
-                    "Failed to send interaction "
-                    "error response."
-                ),
+                    "Failed to send "
+                    "interaction error response."
+                )
             )
 
     @staticmethod
@@ -634,12 +1061,15 @@ class TFSBot(commands.Bot):
     ) -> str | None:
         """
         Return a reply for an expected prefix
-        failure, or None when it should be logged.
+        failure, or None when it should be
+        logged.
 
         These are the same cases the slash
-        handler explains. Anything else, including
-        a command that raised, stays None so the
-        caller records it.
+        handler explains.
+
+        Anything else, including a command
+        that raised, stays None so the caller
+        records it.
         """
         if isinstance(
             error,
@@ -691,7 +1121,9 @@ class TFSBot(commands.Bot):
             error,
             commands.CheckFailure,
         ):
-            return "You cannot use this command here."
+            return (
+                "You cannot use this command here."
+            )
 
         return None
 
@@ -704,9 +1136,11 @@ class TFSBot(commands.Bot):
         Reply to prefix-command failures.
 
         Unknown commands are ignored so a
-        typo does not produce a reply. Expected
-        check and argument errors get a short
-        explanation and are not logged as faults.
+        typo does not produce a reply.
+
+        Expected check and argument errors get
+        a short explanation and are not logged
+        as faults.
         """
         if isinstance(
             error,
@@ -714,8 +1148,11 @@ class TFSBot(commands.Bot):
         ):
             return
 
-        message = self._prefix_command_error_message(
-            error
+        message = (
+            self
+            ._prefix_command_error_message(
+                error
+            )
         )
 
         if message is None:
@@ -729,7 +1166,10 @@ class TFSBot(commands.Bot):
             )
 
             self.log.error(
-                "Unhandled prefix command error: %s",
+                (
+                    "Unhandled prefix "
+                    "command error: %s"
+                ),
                 error,
                 exc_info=cause,
             )
@@ -750,5 +1190,5 @@ class TFSBot(commands.Bot):
                 (
                     "Failed to send prefix "
                     "command error response."
-                ),
+                )
             )
