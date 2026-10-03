@@ -535,6 +535,7 @@ async def send_embeds_to_channel(
 
 
 def build_embeds_from_payload(
+    guild: discord.Guild,
     payload: dict[str, Any],
 ) -> tuple[
     list[discord.Embed],
@@ -551,6 +552,8 @@ def build_embeds_from_payload(
     stage and will be guild-scoped separately.
     """
     context = webui_context()
+    
+    uploads = (context.uploads.for_guild(guild.id))
 
     raw_fields = payload.get(
         "fields",
@@ -612,7 +615,7 @@ def build_embeds_from_payload(
         author_icon_attachment_url,
         files,
     ) = (
-        context.uploads
+        uploads
         .build_attachment_files(
             image_reference=(
                 str(
@@ -760,6 +763,8 @@ def render_page(
         selected_guild = (
             get_selected_guild()
         )
+        
+    uploads = (context.uploads.for_guild(selected_guild.id)if selected_guild else None)
 
     store = (
         get_saved_embed_store()
@@ -830,12 +835,14 @@ def render_page(
                 )
             ),
             uploaded_images=(
-                context.uploads
-                .list_images()
+                uploads.list_images()
+                if uploads
+                else []
             ),
-            upload_folders=(
-                context.uploads
-                .list_folders()
+            uploaded_folders=(
+                uploads.list_folders()
+                if uploads
+                else []
             ),
             saved_embeds=(
                 saved_embeds
@@ -1001,6 +1008,9 @@ def upload_image():
 
         reference = (
             context.uploads
+            .for_guild(
+                selected_guild.id
+            )
             .save_upload(
                 request.files.get(
                     "image"
@@ -1351,6 +1361,7 @@ def send_embed():
             files,
         ) = (
             build_embeds_from_payload(
+                selected_guild,
                 payload
             )
         )

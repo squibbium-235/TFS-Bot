@@ -208,6 +208,8 @@ def parse_uploaded_asset(
     are saved under welcome/<guild id> and wrapped with the upload marker.
     """
     context = webui_context()
+    
+    uploads = (context.uploads.for_guild(guild.id))
 
     uploaded_file = request.files.get(
         upload_field
@@ -218,10 +220,10 @@ def parse_uploaded_asset(
         and uploaded_file.filename
     ):
         reference = (
-            context.uploads.save_upload(
+            uploads.save_upload(
                 uploaded_file,
                 folder=(
-                    f"welcome/{guild.id}"
+                    "welcome"
                 ),
             )
         )
@@ -247,7 +249,7 @@ def parse_uploaded_asset(
     if selected_reference:
         # validate_reference also prevents path traversal / malformed references.
         selected_reference = (
-            context.uploads.validate_reference(
+            uploads.validate_reference(
                 selected_reference
             )
         )
@@ -677,7 +679,9 @@ def render_page(
                 else []
             ),
             uploaded_images=(
-                context.uploads.list_images()
+                context.uploads.for_guild(guild.id).list_images()
+                if guild
+                else []
             ),
             settings=settings,
             values=values,

@@ -9,6 +9,27 @@
         Manage uploaded images used by the Embed Builder. Folders keep author icons, thumbnails, and random server images from becoming one horrible image soup.
     </p>
 
+    <form
+        method="get"
+        action="{{ url_for('uploads.index') }}"
+    >
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+            {% for guild in guilds %}
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </form>
+
     <div class="quick-actions">
         <a class="button-link secondary" href="#upload-file">Upload File</a>
         <a class="button-link secondary" href="#create-folder">Create Folder</a>
@@ -20,6 +41,11 @@
     <h2>Upload File</h2>
 
     <form method="post" action="{{ url_for('uploads.index') }}" enctype="multipart/form-data">
+        <input
+            type="hidden"
+            name="guild_id"
+            value="{{ selected_guild_id }}"
+        >
         <input type="hidden" name="action" value="upload_file">
 
         <label>Folder</label>

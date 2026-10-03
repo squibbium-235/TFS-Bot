@@ -50,6 +50,21 @@ class WebUIUploadManager:
             exist_ok=True,
         )
 
+    def for_guild(self, guild_id: int,) -> "WebUIUploadManager":
+        """
+        Return an upload manager rooted inside one guilds private directory
+        """
+        try:
+            cleaned_guild_id=int(guild_id)
+
+        except(TypeError, ValueError,) as caught:
+            raise ValueError("Guild ID is invalid.") from caught
+        
+        if cleaned_guild_id <= 0:
+            raise ValueError("Guild ID is invalid.")
+        
+        return WebUIUploadManager(self.upload_dir/ str(cleaned_guild_id))
+
     def validate_filename(
         self,
         filename: str,
@@ -615,7 +630,7 @@ class WebUIUploadManager:
             author_icon_url,
             files,
         )
-        
+
     def create_folder(
         self,
         folder: str,

@@ -253,24 +253,18 @@ def parse_optional_role_id(
 
 def save_optional_upload(
     *,
+    guild: discord.Guild,
     field_name: str,
     folder: str,
 ) -> str | None:
     context = webui_context()
-    uploaded_file = request.files.get(
-        field_name
-    )
-
-    if (
-        uploaded_file is None
-        or not uploaded_file.filename
-    ):
+    
+    uploaded_file = request.files.get(field_name)
+    
+    if(uploaded_file is None or not uploaded_file.filename):
         return None
-
-    return context.uploads.save_upload(
-        uploaded_file,
-        folder=folder,
-    )
+    
+    return(context.uploads.for_guild(guild.id).save_upload(uploaded_file, folder=folder,))
 
 
 async def post_verification_panel(
@@ -286,6 +280,8 @@ async def post_verification_panel(
     markdown-escaped before it is placed in the description.
     """
     context = webui_context()
+    
+    uploads = (context.uploads.for_guild(guild.id))
     bot = context.bot
 
     channel = guild.get_channel(
@@ -333,7 +329,7 @@ async def post_verification_panel(
         thumbnail_attachment_url,
         _,
         files,
-    ) = context.uploads.build_attachment_files(
+    ) = uploads.build_attachment_files(
         image_reference=(
             image_upload_filename
         ),
@@ -468,7 +464,9 @@ def render_page(
             ),
             welcome_status=welcome_status,
             uploaded_images=(
-                context.uploads.list_images()
+                context.uploads.for_guild(selected_guild.id).list_images()
+                if selected_guild
+                else []
             ),
             message=message,
             error=error,
@@ -810,16 +808,16 @@ def index():
                             "posting the verification panel."
                         )
 
-                    folder = (
-                        f"verification/{selected_guild.id}"
-                    )
+                    folder = ("verification")
 
                     new_image_reference = save_optional_upload(
+                        guild=selected_guild,
                         field_name="panel_image_upload",
                         folder=folder,
                     )
 
                     new_thumbnail_reference = save_optional_upload(
+                        guild=selected_guild,
                         field_name=(
                             "panel_thumbnail_upload"
                         ),
@@ -843,17 +841,19 @@ def index():
                         ).strip()
                         or None
                     )
+                    
+                    uploads = (context.uploads.for_guild(selected_guild.id))
 
                     if image_reference:
                         image_reference = (
-                            context.uploads.validate_reference(
+                            uploads.validate_reference(
                                 image_reference
                             )
                         )
 
                     if thumbnail_reference:
                         thumbnail_reference = (
-                            context.uploads.validate_reference(
+                            uploads.validate_reference(
                                 thumbnail_reference
                             )
                         )

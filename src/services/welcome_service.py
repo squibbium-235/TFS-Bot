@@ -398,7 +398,7 @@ async def build_welcome_message_payload(
         )
     )
 
-    upload_manager = WebUIUploadManager()
+    upload_manager = WebUIUploadManager().for_guild(guild.id)
 
     (
         image_attachment_url,

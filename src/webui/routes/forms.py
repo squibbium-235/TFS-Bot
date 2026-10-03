@@ -677,6 +677,9 @@ def index():
                     files,
                 ) = (
                     context.uploads
+                    .for_guild(
+                        selected_guild.id
+                    )
                     .build_attachment_files(
                         image_reference=(
                             request.form.get(
@@ -978,7 +981,12 @@ def index():
                 modal_pages=modal_pages,
                 uploaded_images=(
                     context.uploads
+                    .for_guild(
+                        selected_guild.id
+                    )
                     .list_images()
+                    if selected_guild
+                    else []
                 ),
                 message=message,
                 error=error,

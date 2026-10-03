@@ -35,11 +35,11 @@ blueprint = Blueprint(
         "POST",
     ],
 )
-def index():
-    """Create folders, save images, and delete files or empty folders.
 
-    A new folder name wins over the selected folder when both are posted.
-    Folder deletion requires the confirmation field to be exactly DELETE.
+def index():
+    """
+    Manage uploads belonging only to the
+    selected Discord guild.
     """
     owner_error = require_owner()
 
@@ -48,9 +48,46 @@ def index():
 
     context = webui_context()
 
+    selected_guild = context.selected_guild(
+        request.form.get(
+            "guild_id"
+        )
+        if request.method == "POST"
+        else request.args.get(
+            "guild_id"
+        )
+    )
+
     message: str | None = None
     error: str | None = None
     selected_folder = ""
+
+    if selected_guild is None:
+        return render_template(
+            "uploads/index.html",
+            **context.template_context(
+                title="Sanctuary Servo Uploads",
+                active_page="uploads",
+                guilds=(
+                    context.available_guilds()
+                ),
+                selected_guild_id=None,
+                folders=[],
+                uploaded_images=[],
+                selected_folder="",
+                message=None,
+                error=(
+                    "No server selected."
+                ),
+            ),
+        )
+
+    uploads = (
+        context.uploads
+        .for_guild(
+            selected_guild.id
+        )
+    )
 
     try:
         if request.method == "POST":
@@ -61,8 +98,7 @@ def index():
 
             if action == "create_folder":
                 folder = (
-                    context.uploads
-                    .create_folder(
+                    uploads.create_folder(
                         request.form.get(
                             "folder",
                             "",
@@ -87,8 +123,7 @@ def index():
                 )
 
                 reference = (
-                    context.uploads
-                    .save_upload(
+                    uploads.save_upload(
                         request.files.get(
                             "image"
                         ),
@@ -97,8 +132,7 @@ def index():
                 )
 
                 selected_folder = (
-                    context.uploads
-                    .validate_folder(
+                    uploads.validate_folder(
                         selected_folder
                     )
                 )
@@ -110,8 +144,7 @@ def index():
 
             elif action == "delete_file":
                 reference = (
-                    context.uploads
-                    .delete_file(
+                    uploads.delete_file(
                         request.form.get(
                             "file_reference",
                             "",
@@ -139,8 +172,7 @@ def index():
                     )
 
                 folder = (
-                    context.uploads
-                    .delete_folder(
+                    uploads.delete_folder(
                         request.form.get(
                             "folder",
                             "",
@@ -168,13 +200,19 @@ def index():
         **context.template_context(
             title="Sanctuary Servo Uploads",
             active_page="uploads",
+            guilds=(
+                context.available_guilds()
+            ),
+            selected_guild_id=(
+                str(
+                    selected_guild.id
+                )
+            ),
             folders=(
-                context.uploads
-                .list_folders()
+                uploads.list_folders()
             ),
             uploaded_images=(
-                context.uploads
-                .list_images()
+                uploads.list_images()
             ),
             selected_folder=(
                 selected_folder
@@ -184,16 +222,16 @@ def index():
         ),
     )
 
-
 @blueprint.route(
-    "/uploads/<path:filename>"
+    "/uploads/<int:guild_id>/<path:filename>"
 )
 def file(
+    guild_id: int,
     filename: str,
 ):
-    """Send one validated upload. Viewers may download; they cannot manage.
-
-    A reference that fails validation is 400. A missing file is 404.
+    """
+    Serve a file only when the current WebUI
+    session can access its guild.
     """
     context = webui_context()
 
@@ -204,10 +242,24 @@ def file(
     if login_error is not None:
         return login_error
 
+    if not context.guild_is_accessible(
+        guild_id
+    ):
+        return (
+            "File not found.",
+            404,
+        )
+
+    uploads = (
+        context.uploads
+        .for_guild(
+            guild_id
+        )
+    )
+
     try:
         path = (
-            context.uploads
-            .image_path(
+            uploads.image_path(
                 filename
             )
         )
