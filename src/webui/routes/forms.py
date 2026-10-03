@@ -68,7 +68,30 @@ def resolve_public_channel(
     
     The channel must already belong to the selected guild's channel list
     
-    arbritarary channel. ids are not fetched from discord to stop"""
+    arbritarary channel. ids are not fetched from discord to stop other guilds from popping up
+    """
+    channel = guild.get_channel(channel_id)
+    
+    if not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Selected channel is not an avaliable text channel in the selected server.")
+    
+    bot_member = guild.me
+    
+    if bot_member is None:
+        raise RuntimeError("Sanctuary Servo could not resolve its own server member.")
+    
+    permissions =(channel.permissions_for(bot_member))
+    
+    if not permissions.view_channel:
+        raise RuntimeError("Sanctuary Servo cannot view that channel.")
+    
+    if not permissions.send_messages:
+        raise RuntimeError("Sanctuary Servo cannot send messages in that channel.")
+    
+    if not permissions.embed_links:
+        raise RuntimeError("Sanctuary Servo cannot send embeds in that channel.")
+    
+    return channel
     
 
 async def get_guild_forms(
