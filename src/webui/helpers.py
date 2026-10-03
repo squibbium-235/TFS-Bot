@@ -122,3 +122,20 @@ def require_owner():
             ),
         ),
     )
+    
+def require_system_owner():
+    """
+    Return None only for the emergency password system owner
+    
+    Guild owners are auth users, but cannot access whole bot admin stuff
+    """
+    context = webui_context()
+    login_error = require_login()
+    
+    if login_error is not None:
+        return login_error
+    
+    if context.is_system_owner():
+        return None
+    
+    return render_template("access_denied.html", **context.template_context(title="Access Denies", active_page="overview",message=None,error=("You need system-owner access to use that page")))

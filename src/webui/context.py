@@ -77,6 +77,9 @@ class WebUIContext:
             "is_owner": (
                 self.is_owner()
             ),
+            "is_system_owner": (
+                self.is_system_owner()
+            ),
             "webui_role": (
                 self.current_role()
             ),
@@ -173,6 +176,17 @@ class WebUIContext:
             )
             is True
         )
+        
+    def is_system_owner(
+        self,
+    ) -> bool:
+        """
+        Return whether this is the emergency password logon owner
+        
+        Guild owners are deliberatley not system owners (apart from milo)
+        """
+        return (self.is_logged_in() and session.get("auth_method") == "password")
+        
 
     def current_role(
         self,
