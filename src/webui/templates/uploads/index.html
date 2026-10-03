@@ -119,6 +119,11 @@
                         <td>{{ image.modified }}</td>
                         <td>
                             <form method="post" action="{{ url_for('uploads.index') }}">
+                                <input
+                                    type="hidden"
+                                    name="guild_id"
+                                    value="{{ selected_guild_id }}"
+                                >
                                 <input type="hidden" name="action" value="delete_file">
                                 <input type="hidden" name="file_reference" value="{{ image.reference }}">
                                 <button type="submit" class="danger-button">Delete</button>
