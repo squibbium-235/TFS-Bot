@@ -1,13 +1,19 @@
 """
 Owner Embed Builder for Sanctuary Servo.
 
-Saved embeds are stored globally for the bot.
+Saved embeds belong to individual Discord
+guilds.
 
-Channel selection is restricted to guilds the
-current Web UI session is authorised to access.
-A forged channel ID is rejected server-side,
-rather than merely being hidden from the HTML
-select element.
+The selected guild is resolved through the
+Web UI session's accessible guild list.
+
+Channel selection is restricted to the
+selected guild and is validated again when
+an embed is sent.
+
+Uploads are still global at this stage.
+They will be moved to per-guild storage in
+the next tenancy-hardening phase.
 """
 
 from __future__ import annotations
@@ -94,59 +100,91 @@ def get_saved_embed_store() -> SavedEmbedStore:
     return store
 
 
-def get_available_channels() -> list[dict[str, str]]:
+def get_selected_guild(
+) -> discord.Guild | None:
     """
-    Return channels the current Web UI session
-    is allowed to use.
+    Resolve the guild selected by this request.
 
-    Two restrictions are applied:
+    GET requests may omit guild_id, in which
+    case WebUIContext selects the first
+    accessible guild.
 
-    1. The guild must be accessible to the
-       current Web UI user.
-    2. Sanctuary Servo itself must be able to
-       view and send messages in the channel.
-
-    This deliberately does not iterate over
-    context.bot.guilds directly.
+    POST requests must explicitly include a
+    guild_id. Missing guild context fails
+    closed rather than accidentally applying
+    an action to another server.
     """
     context = webui_context()
+
+    if request.method == "POST":
+        guild_id_text = (
+            request.form.get(
+                "guild_id",
+                "",
+            ).strip()
+        )
+
+        if not guild_id_text:
+            return None
+
+    else:
+        guild_id_text = (
+            request.args.get(
+                "guild_id"
+            )
+        )
+
+    return context.selected_guild(
+        guild_id_text
+    )
+
+
+def get_available_channels(
+    guild: discord.Guild | None,
+) -> list[dict[str, str]]:
+    """
+    Return usable text channels belonging
+    only to the selected guild.
+
+    Sanctuary Servo must be able to view the
+    channel, send messages and embed links.
+    """
+    if guild is None:
+        return []
+
+    member = guild.me
+
+    if member is None:
+        return []
 
     channels: list[
         dict[str, str]
     ] = []
 
-    for guild in (
-        context.accessible_guild_objects()
-    ):
-        member = guild.me
+    for channel in guild.text_channels:
+        permissions = (
+            channel.permissions_for(
+                member
+            )
+        )
 
-        if member is None:
+        if (
+            not permissions.view_channel
+            or not permissions.send_messages
+            or not permissions.embed_links
+        ):
             continue
 
-        for channel in guild.text_channels:
-            permissions = (
-                channel.permissions_for(
-                    member
-                )
-            )
-
-            if (
-                not permissions.view_channel
-                or not permissions.send_messages
-            ):
-                continue
-
-            channels.append(
-                {
-                    "id": str(
-                        channel.id
-                    ),
-                    "label": (
-                        f"{guild.name} / "
-                        f"#{channel.name}"
-                    ),
-                }
-            )
+        channels.append(
+            {
+                "id": str(
+                    channel.id
+                ),
+                "label": (
+                    f"#{channel.name}"
+                ),
+            }
+        )
 
     channels.sort(
         key=lambda item: (
@@ -157,18 +195,21 @@ def get_available_channels() -> list[dict[str, str]]:
     return channels
 
 
-def get_available_channel_ids() -> set[int]:
+def get_available_channel_ids(
+    guild: discord.Guild | None,
+) -> set[int]:
     """
-    Return the channel IDs currently available
-    to this Web UI session.
+    Return channel IDs available in the
+    selected guild.
 
-    The send endpoint uses this separately
-    from the HTML dropdown so a forged POST
-    cannot target another guild.
+    This is used server-side when sending,
+    independently of the HTML select box.
     """
     channel_ids: set[int] = set()
 
-    for channel in get_available_channels():
+    for channel in get_available_channels(
+        guild
+    ):
         try:
             channel_ids.add(
                 int(
@@ -186,7 +227,8 @@ def get_available_channel_ids() -> set[int]:
     return channel_ids
 
 
-def parse_embed_form_payload() -> dict[str, Any]:
+def parse_embed_form_payload(
+) -> dict[str, Any]:
     """
     Read the Embed Builder form.
 
@@ -289,9 +331,9 @@ def normalise_form_values(
     """
     Fill values required by the template.
 
-    A missing colour defaults to Discord blue.
+    Missing colour defaults to Discord blue.
 
-    A missing footer defaults to Sanctuary
+    Missing footer defaults to Sanctuary
     Servo. An explicitly blank footer remains
     blank.
     """
@@ -392,6 +434,7 @@ def normalise_form_values(
 
 async def send_embeds_to_channel(
     bot: discord.Client,
+    guild: discord.Guild,
     channel_id: int,
     allowed_channel_ids: set[int],
     embeds: list[discord.Embed],
@@ -399,16 +442,14 @@ async def send_embeds_to_channel(
 ) -> None:
     """
     Send embeds only to a channel authorised
-    for this Web UI session.
+    for the selected guild.
 
-    The channel ID is checked again here so
-    this function cannot accidentally be used
-    to bypass the HTML channel list.
+    The selected channel is checked against
+    the permitted ID list and the channel's
+    guild is checked again before sending.
 
-    The channel is deliberately not fetched
-    from Discord by arbitrary ID. It must
-    already belong to an accessible cached
-    guild/channel.
+    Arbitrary Discord channel fetching is
+    deliberately not used.
     """
     if (
         channel_id
@@ -416,7 +457,7 @@ async def send_embeds_to_channel(
     ):
         raise RuntimeError(
             "That channel is not available "
-            "to your Web UI session."
+            "in the selected server."
         )
 
     channel = bot.get_channel(
@@ -434,20 +475,24 @@ async def send_embeds_to_channel(
 
     if (
         channel.guild.id
-        not in {
-            guild.id
-            for guild in (
-                webui_context()
-                .accessible_guild_objects()
-            )
-        }
+        != guild.id
+    ):
+        raise RuntimeError(
+            "Selected channel does not "
+            "belong to the selected server."
+        )
+
+    context = webui_context()
+
+    if not context.guild_is_accessible(
+        guild.id
     ):
         raise RuntimeError(
             "You do not have Web UI access "
             "to that server."
         )
 
-    member = channel.guild.me
+    member = guild.me
 
     if member is None:
         raise RuntimeError(
@@ -473,6 +518,12 @@ async def send_embeds_to_channel(
             "messages in that channel."
         )
 
+    if not permissions.embed_links:
+        raise RuntimeError(
+            "Sanctuary Servo cannot send "
+            "embeds in that channel."
+        )
+
     await channel.send(
         embeds=embeds,
         files=(
@@ -495,6 +546,9 @@ def build_embeds_from_payload(
 
     Uploaded files take precedence over typed
     external URLs.
+
+    Uploads are still globally stored at this
+    stage and will be guild-scoped separately.
     """
     context = webui_context()
 
@@ -687,13 +741,14 @@ def build_embeds_from_payload(
 
 def render_page(
     *,
+    selected_guild: discord.Guild | None = None,
     message: str | None = None,
     error: str | None = None,
     loaded_embed: SavedEmbed | None = None,
     form_payload: dict[str, Any] | None = None,
 ) -> str:
     """
-    Render the Embed Builder.
+    Render the Embed Builder for one guild.
 
     An explicit form payload wins over a
     loaded saved embed, allowing failed
@@ -701,13 +756,33 @@ def render_page(
     """
     context = webui_context()
 
+    if selected_guild is None:
+        selected_guild = (
+            get_selected_guild()
+        )
+
     store = (
         get_saved_embed_store()
     )
 
-    saved_embeds = context.run_coro(
-        store.list_embeds()
-    )
+    saved_embeds: list[
+        SavedEmbed
+    ] = []
+
+    if selected_guild is not None:
+        saved_embeds = context.run_coro(
+            store.list_embeds(
+                selected_guild.id
+            )
+        )
+
+    if (
+        loaded_embed is not None
+        and selected_guild is not None
+        and loaded_embed.guild_id
+        != selected_guild.id
+    ):
+        loaded_embed = None
 
     if (
         form_payload is None
@@ -723,6 +798,12 @@ def render_page(
         )
     )
 
+    legacy_embed_count = (
+        context.run_coro(
+            store.legacy_embed_count()
+        )
+    )
+
     return render_template(
         "embed_builder/index.html",
         **context.template_context(
@@ -733,8 +814,20 @@ def render_page(
             active_page=(
                 "embed_builder"
             ),
+            guilds=(
+                context.available_guilds()
+            ),
+            selected_guild_id=(
+                str(
+                    selected_guild.id
+                )
+                if selected_guild
+                else ""
+            ),
             channels=(
-                get_available_channels()
+                get_available_channels(
+                    selected_guild
+                )
             ),
             uploaded_images=(
                 context.uploads
@@ -753,6 +846,9 @@ def render_page(
             form_values=(
                 form_values
             ),
+            legacy_embed_count=(
+                legacy_embed_count
+            ),
             message=message,
             error=error,
         ),
@@ -763,12 +859,31 @@ def render_page(
     "/embed-builder"
 )
 def index():
+    """
+    Display the Embed Builder for one server.
+
+    Saved IDs are resolved together with the
+    selected guild so a forged ID from another
+    guild cannot be loaded.
+    """
     owner_error = (
         require_owner()
     )
 
     if owner_error is not None:
         return owner_error
+
+    selected_guild = (
+        get_selected_guild()
+    )
+
+    if selected_guild is None:
+        return render_page(
+            selected_guild=None,
+            error=(
+                "No server selected."
+            ),
+        )
 
     saved_embed_id_text = (
         request.args.get(
@@ -778,7 +893,11 @@ def index():
     )
 
     if not saved_embed_id_text:
-        return render_page()
+        return render_page(
+            selected_guild=(
+                selected_guild
+            )
+        )
 
     try:
         saved_embed_id = int(
@@ -787,6 +906,9 @@ def index():
 
     except ValueError:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=(
                 "Saved embed ID "
                 "is invalid."
@@ -800,22 +922,30 @@ def index():
     saved_embed = context.run_coro(
         get_saved_embed_store()
         .get_embed(
-            saved_embed_id
+            selected_guild.id,
+            saved_embed_id,
         )
     )
 
     if saved_embed is None:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=(
                 "That saved embed "
-                "no longer exists."
+                "does not exist in "
+                "the selected server."
             ),
         )
 
     return render_page(
+        selected_guild=(
+            selected_guild
+        ),
         loaded_embed=(
             saved_embed
-        )
+        ),
     )
 
 
@@ -826,6 +956,16 @@ def index():
     ],
 )
 def upload_image():
+    """
+    Upload an image from the Embed Builder.
+
+    Upload storage is still global for now,
+    but the selected guild is retained in the
+    page state.
+
+    Per-guild upload storage is the next
+    tenancy-hardening step.
+    """
     owner_error = (
         require_owner()
     )
@@ -836,6 +976,17 @@ def upload_image():
     context = (
         webui_context()
     )
+
+    selected_guild = (
+        get_selected_guild()
+    )
+
+    if selected_guild is None:
+        return render_page(
+            error=(
+                "No server selected."
+            ),
+        )
 
     try:
         folder = (
@@ -859,6 +1010,9 @@ def upload_image():
         )
 
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             message=(
                 f"Uploaded "
                 f"{reference}."
@@ -867,6 +1021,9 @@ def upload_image():
 
     except Exception as caught_error:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=str(
                 caught_error
             ),
@@ -880,6 +1037,10 @@ def upload_image():
     ],
 )
 def save_embed():
+    """
+    Save a new embed belonging to the selected
+    guild.
+    """
     owner_error = (
         require_owner()
     )
@@ -895,11 +1056,26 @@ def save_embed():
         parse_embed_form_payload()
     )
 
+    selected_guild = (
+        get_selected_guild()
+    )
+
+    if selected_guild is None:
+        return render_page(
+            error=(
+                "No server selected."
+            ),
+            form_payload=payload,
+        )
+
     try:
         saved_embed = (
             context.run_coro(
                 get_saved_embed_store()
                 .create_embed(
+                    guild_id=(
+                        selected_guild.id
+                    ),
                     name=(
                         request.form.get(
                             "saved_name",
@@ -912,6 +1088,9 @@ def save_embed():
         )
 
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             message=(
                 "Saved embed "
                 f"“{saved_embed.name}”."
@@ -923,6 +1102,9 @@ def save_embed():
 
     except Exception as caught_error:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=str(
                 caught_error
             ),
@@ -937,6 +1119,10 @@ def save_embed():
     ],
 )
 def update_embed():
+    """
+    Update a saved embed only when it belongs
+    to the selected guild.
+    """
     owner_error = (
         require_owner()
     )
@@ -952,6 +1138,18 @@ def update_embed():
         parse_embed_form_payload()
     )
 
+    selected_guild = (
+        get_selected_guild()
+    )
+
+    if selected_guild is None:
+        return render_page(
+            error=(
+                "No server selected."
+            ),
+            form_payload=payload,
+        )
+
     try:
         saved_embed_id = int(
             request.form[
@@ -963,6 +1161,9 @@ def update_embed():
             context.run_coro(
                 get_saved_embed_store()
                 .update_embed(
+                    guild_id=(
+                        selected_guild.id
+                    ),
                     saved_embed_id=(
                         saved_embed_id
                     ),
@@ -978,6 +1179,9 @@ def update_embed():
         )
 
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             message=(
                 "Updated embed "
                 f"“{saved_embed.name}”."
@@ -989,6 +1193,9 @@ def update_embed():
 
     except Exception as caught_error:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=str(
                 caught_error
             ),
@@ -1004,8 +1211,8 @@ def update_embed():
 )
 def delete_embed():
     """
-    Delete a saved embed and return to a
-    blank Embed Builder.
+    Delete a saved embed only from the
+    selected guild.
     """
     owner_error = (
         require_owner()
@@ -1018,6 +1225,17 @@ def delete_embed():
         webui_context()
     )
 
+    selected_guild = (
+        get_selected_guild()
+    )
+
+    if selected_guild is None:
+        return render_page(
+            error=(
+                "No server selected."
+            ),
+        )
+
     try:
         saved_embed_id = int(
             request.form[
@@ -1029,25 +1247,32 @@ def delete_embed():
             context.run_coro(
                 get_saved_embed_store()
                 .delete_embed(
-                    saved_embed_id
+                    selected_guild.id,
+                    saved_embed_id,
                 )
             )
         )
 
         if not deleted:
             raise RuntimeError(
-                "That saved embed "
-                "no longer exists."
+                "That saved embed does not "
+                "exist in the selected server."
             )
 
         return redirect(
             url_for(
-                "embed_builder.index"
+                "embed_builder.index",
+                guild_id=(
+                    selected_guild.id
+                ),
             )
         )
 
     except Exception as caught_error:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=str(
                 caught_error
             ),
@@ -1064,9 +1289,9 @@ def send_embed():
     """
     Send the current Embed Builder payload.
 
-    The selected channel is validated against
-    the current Web UI session before Discord
-    is touched.
+    The selected guild and selected channel
+    are both validated server-side before
+    Discord is touched.
 
     Attachment handles are always closed.
     """
@@ -1085,11 +1310,20 @@ def send_embed():
         parse_embed_form_payload()
     )
 
+    selected_guild = (
+        get_selected_guild()
+    )
+
     files: list[
         discord.File
     ] = []
 
     try:
+        if selected_guild is None:
+            raise RuntimeError(
+                "No server selected."
+            )
+
         channel_id = int(
             request.form[
                 "channel_id"
@@ -1097,7 +1331,9 @@ def send_embed():
         )
 
         allowed_channel_ids = (
-            get_available_channel_ids()
+            get_available_channel_ids(
+                selected_guild
+            )
         )
 
         if (
@@ -1106,8 +1342,8 @@ def send_embed():
         ):
             raise RuntimeError(
                 "That channel is not "
-                "available to your "
-                "Web UI session."
+                "available in the selected "
+                "server."
             )
 
         (
@@ -1122,6 +1358,7 @@ def send_embed():
         context.run_coro(
             send_embeds_to_channel(
                 bot=context.bot,
+                guild=selected_guild,
                 channel_id=channel_id,
                 allowed_channel_ids=(
                     allowed_channel_ids
@@ -1146,9 +1383,10 @@ def send_embed():
                     context.run_coro(
                         get_saved_embed_store()
                         .get_embed(
+                            selected_guild.id,
                             int(
                                 saved_embed_id_text
-                            )
+                            ),
                         )
                     )
                 )
@@ -1157,6 +1395,9 @@ def send_embed():
                 loaded_embed = None
 
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             message=(
                 "Embed sent. Used "
                 f"{len(embeds)} "
@@ -1170,6 +1411,9 @@ def send_embed():
 
     except Exception as caught_error:
         return render_page(
+            selected_guild=(
+                selected_guild
+            ),
             error=str(
                 caught_error
             ),
