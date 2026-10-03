@@ -1,4 +1,16 @@
-{# Saved embeds belong to this builder. A chosen upload is sent instead of a typed URL. Loaded fields are JSON in the page, not rendered as inputs by the template. #}
+{#
+    Embed Builder for one selected Discord guild.
+
+    Saved embeds are guild-specific.
+
+    Uploaded images are still shared globally for now.
+    They will become guild-specific in the next
+    tenancy-hardening phase.
+
+    Loaded embed fields are passed to JavaScript as
+    JSON rather than being rendered directly here.
+#}
+
 {% extends "base.html" %}
 
 
@@ -15,50 +27,162 @@
 {% block content %}
 
 <div class="panel page-intro">
+
     <h2>Embed Builder</h2>
 
     <p class="hint">
         Build, save and send Discord embeds.
-        Saved embeds currently belong only to the Embed Builder.
+        Saved embeds belong to the selected server.
     </p>
 
+
+    <form
+        method="get"
+        action="{{ url_for('embed_builder.index') }}"
+    >
+
+        <label>Server</label>
+
+        <select
+            name="guild_id"
+            onchange="this.form.submit()"
+        >
+
+            {% for guild in guilds %}
+
+                <option
+                    value="{{ guild.id }}"
+                    {{ 'selected' if guild.id == selected_guild_id else '' }}
+                >
+                    {{ guild.name }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+    </form>
+
+
     <div class="quick-actions">
-        <a class="button-link" href="#saved-embeds">Saved Embeds</a>
-        <a class="button-link" href="#embed-destination">Destination</a>
-        <a class="button-link" href="#embed-content">Embed Content</a>
-        <a class="button-link" href="#embed-images">Images</a>
-        <a class="button-link" href="#embed-fields">Fields</a>
-        <a class="button-link" href="#embed-preview">Preview</a>
+
+        <a
+            class="button-link"
+            href="#saved-embeds"
+        >
+            Saved Embeds
+        </a>
+
+        <a
+            class="button-link"
+            href="#embed-destination"
+        >
+            Destination
+        </a>
+
+        <a
+            class="button-link"
+            href="#embed-content"
+        >
+            Embed Content
+        </a>
+
+        <a
+            class="button-link"
+            href="#embed-images"
+        >
+            Images
+        </a>
+
+        <a
+            class="button-link"
+            href="#embed-fields"
+        >
+            Fields
+        </a>
+
+        <a
+            class="button-link"
+            href="#embed-preview"
+        >
+            Preview
+        </a>
+
     </div>
+
 </div>
 
 
 {% if message %}
-    <p class="message">{{ message }}</p>
+
+    <p class="message">
+        {{ message }}
+    </p>
+
 {% endif %}
+
 
 {% if error %}
-    <p class="error">{{ error }}</p>
+
+    <p class="error">
+        {{ error }}
+    </p>
+
 {% endif %}
 
 
-<div class="panel" id="saved-embeds">
+{% if legacy_embed_count %}
+
+    <p class="message">
+        {{ legacy_embed_count }}
+        older global saved
+        embed{% if legacy_embed_count != 1 %}s{% endif %}
+        {% if legacy_embed_count == 1 %}was{% else %}were{% endif %}
+        preserved during the per-server migration.
+        {% if legacy_embed_count == 1 %}It is{% else %}They are{% endif %}
+        not currently exposed to any server.
+    </p>
+
+{% endif %}
+
+
+<div
+    class="panel"
+    id="saved-embeds"
+>
+
     <h2>Saved Embeds</h2>
 
     <p class="hint">
-        Load a previously saved embed into the builder.
-        Saving these does not automatically use them anywhere else in Sanctuary Servo.
+        Load an embed saved for the selected server.
+        Saving an embed does not automatically use it
+        anywhere else in Sanctuary Servo.
     </p>
 
+
     {% if saved_embeds %}
+
         <form
             method="get"
             action="{{ url_for('embed_builder.index') }}"
         >
+
+            <input
+                type="hidden"
+                name="guild_id"
+                value="{{ selected_guild_id }}"
+            >
+
+
             <label>Saved embed</label>
 
-            <select name="saved_id" required>
+            <select
+                name="saved_id"
+                required
+            >
+
                 {% for saved in saved_embeds %}
+
                     <option
                         value="{{ saved.id }}"
                         {% if loaded_embed and loaded_embed.id == saved.id %}
@@ -67,73 +191,119 @@
                     >
                         {{ saved.name }}
                     </option>
+
                 {% endfor %}
+
             </select>
 
+
             <div class="actions">
+
                 <button type="submit">
                     Load
                 </button>
 
                 <a
                     class="button-link"
-                    href="{{ url_for('embed_builder.index') }}"
+                    href="{{ url_for(
+                        'embed_builder.index',
+                        guild_id=selected_guild_id
+                    ) }}"
                 >
                     New Blank Embed
                 </a>
+
             </div>
+
         </form>
 
+
         {% if loaded_embed %}
+
             <form
                 method="post"
                 action="{{ url_for('embed_builder.delete_embed') }}"
             >
+
+                <input
+                    type="hidden"
+                    name="guild_id"
+                    value="{{ selected_guild_id }}"
+                >
+
                 <input
                     type="hidden"
                     name="saved_id"
                     value="{{ loaded_embed.id }}"
                 >
 
+
                 <div class="actions">
+
                     <button
                         type="submit"
                         class="danger"
                     >
                         Delete {{ loaded_embed.name }}
                     </button>
+
                 </div>
+
             </form>
+
         {% endif %}
 
+
     {% else %}
+
         <p class="hint">
-            No embeds have been saved yet.
+            No embeds have been saved for this server yet.
         </p>
+
     {% endif %}
+
 </div>
 
 
 <details class="upload-details">
-    <summary>Upload Image</summary>
+
+    <summary>
+        Upload Image
+    </summary>
 
     <div class="upload-details-inner">
+
         <form
             method="post"
             action="{{ url_for('embed_builder.upload_image') }}"
             enctype="multipart/form-data"
         >
+
+            <input
+                type="hidden"
+                name="guild_id"
+                value="{{ selected_guild_id }}"
+            >
+
+
             <label>Folder</label>
 
             <select name="folder">
-                <option value="">Root</option>
+
+                <option value="">
+                    Root
+                </option>
 
                 {% for folder in upload_folders %}
+
                     <option value="{{ folder.path }}">
                         {{ folder.label }}
                     </option>
+
                 {% endfor %}
+
             </select>
+
 
             <label>Or new folder</label>
 
@@ -141,6 +311,7 @@
                 name="new_folder"
                 placeholder="author-icons"
             >
+
 
             <label>Image file</label>
 
@@ -151,24 +322,33 @@
                 required
             >
 
+
             <p class="hint">
                 Uploaded images can be reused by saved embeds.
-                Do not delete an uploaded image if a saved embed still uses it.
+                Uploads are still shared globally at this stage.
+                Do not delete an image while an embed still uses it.
             </p>
+
 
             <button type="submit">
                 Upload Image
             </button>
+
         </form>
+
     </div>
+
 </details>
 
 
 <div class="embed-builder-grid">
 
+
 <section>
 
+
 <div class="panel">
+
 
 <form
     method="post"
@@ -176,18 +356,32 @@
     id="embed-form"
 >
 
+    <input
+        type="hidden"
+        name="guild_id"
+        value="{{ selected_guild_id }}"
+    >
+
+
     {% if loaded_embed %}
+
         <input
             type="hidden"
             name="saved_id"
             value="{{ loaded_embed.id }}"
         >
+
     {% endif %}
 
 
-    <h2>Save</h2>
+    <h2>
+        Save
+    </h2>
 
-    <label>Saved embed name</label>
+
+    <label>
+        Saved embed name
+    </label>
 
     <input
         name="saved_name"
@@ -196,6 +390,7 @@
         value="{{ loaded_embed.name if loaded_embed else '' }}"
         placeholder="Welcome message"
     >
+
 
     <div class="actions">
 
@@ -208,7 +403,9 @@
             Save As
         </button>
 
+
         {% if loaded_embed %}
+
             <button
                 type="submit"
                 class="secondary"
@@ -217,6 +414,7 @@
             >
                 Update Saved Embed
             </button>
+
         {% endif %}
 
     </div>
@@ -228,19 +426,27 @@
 
     <p class="hint section-note">
         This only matters when actually sending the embed.
+        Only channels in the selected server are available.
     </p>
 
-    <label>Channel</label>
+
+    <label>
+        Channel
+    </label>
 
     <select
         name="channel_id"
         required
     >
+
         {% for channel in channels %}
+
             <option value="{{ channel.id }}">
                 {{ channel.label }}
             </option>
+
         {% endfor %}
+
     </select>
 
 
@@ -252,7 +458,9 @@
     </h2>
 
 
-    <label>Title</label>
+    <label>
+        Title
+    </label>
 
     <input
         name="title"
@@ -263,7 +471,9 @@
     >
 
 
-    <label>Description</label>
+    <label>
+        Description
+    </label>
 
     <textarea
         name="description"
@@ -273,7 +483,9 @@
     >{{ form_values.description }}</textarea>
 
 
-    <label>Colour</label>
+    <label>
+        Colour
+    </label>
 
     <div class="colour-input-wrap">
 
@@ -304,17 +516,22 @@
     </h2>
 
 
-    <label>Uploaded image</label>
+    <label>
+        Uploaded image
+    </label>
 
     <select
         name="image_upload_filename"
         id="image_upload_filename"
     >
+
         <option value="">
             No uploaded image
         </option>
 
+
         {% for image in uploaded_images %}
+
             <option
                 value="{{ image.reference }}"
                 data-url="{{ image.url }}"
@@ -324,11 +541,15 @@
             >
                 {{ image.label }}
             </option>
+
         {% endfor %}
+
     </select>
 
 
-    <label>Or external image URL</label>
+    <label>
+        Or external image URL
+    </label>
 
     <input
         name="image_url"
@@ -338,17 +559,22 @@
     >
 
 
-    <label>Uploaded thumbnail</label>
+    <label>
+        Uploaded thumbnail
+    </label>
 
     <select
         name="thumbnail_upload_filename"
         id="thumbnail_upload_filename"
     >
+
         <option value="">
             No uploaded thumbnail
         </option>
 
+
         {% for image in uploaded_images %}
+
             <option
                 value="{{ image.reference }}"
                 data-url="{{ image.url }}"
@@ -358,11 +584,15 @@
             >
                 {{ image.label }}
             </option>
+
         {% endfor %}
+
     </select>
 
 
-    <label>Or external thumbnail URL</label>
+    <label>
+        Or external thumbnail URL
+    </label>
 
     <input
         name="thumbnail_url"
@@ -372,7 +602,9 @@
     >
 
 
-    <label>Author name</label>
+    <label>
+        Author name
+    </label>
 
     <input
         name="author_name"
@@ -382,17 +614,22 @@
     >
 
 
-    <label>Uploaded author icon</label>
+    <label>
+        Uploaded author icon
+    </label>
 
     <select
         name="author_icon_upload_filename"
         id="author_icon_upload_filename"
     >
+
         <option value="">
             No uploaded author icon
         </option>
 
+
         {% for image in uploaded_images %}
+
             <option
                 value="{{ image.reference }}"
                 data-url="{{ image.url }}"
@@ -402,11 +639,15 @@
             >
                 {{ image.label }}
             </option>
+
         {% endfor %}
+
     </select>
 
 
-    <label>Or external author icon URL</label>
+    <label>
+        Or external author icon URL
+    </label>
 
     <input
         name="author_icon_url"
@@ -415,7 +656,9 @@
     >
 
 
-    <label>Footer</label>
+    <label>
+        Footer
+    </label>
 
     <input
         name="footer"
@@ -452,6 +695,7 @@
             Add Field
         </button>
 
+
         <button
             type="button"
             class="clear-button"
@@ -460,15 +704,19 @@
             Clear Form
         </button>
 
+
         <button type="submit">
             Send Embed to Channel
         </button>
 
     </div>
 
+
 </form>
 
+
 </div>
+
 
 </section>
 
@@ -478,18 +726,24 @@
     id="embed-preview"
 >
 
+
 <div class="panel">
+
 
     <div class="preview-heading">
 
         <div>
-            <h2>Live Preview</h2>
+
+            <h2>
+                Live Preview
+            </h2>
 
             <p class="hint">
                 Approximate Discord preview.
                 Final spacing may still vary,
                 because Discord enjoys little surprises.
             </p>
+
         </div>
 
     </div>
@@ -529,12 +783,16 @@
                                 id="preview-author-wrap"
                                 style="display: none;"
                             >
+
                                 <img
                                     id="preview-author-icon"
                                     style="display: none;"
                                 >
 
-                                <span id="preview-author"></span>
+                                <span
+                                    id="preview-author"
+                                ></span>
+
                             </div>
 
 
@@ -589,6 +847,7 @@
                         style="display: none;"
                     >
 
+
                     <div
                         class="image-preview-error"
                         id="preview-image-error"
@@ -615,22 +874,28 @@
 
 </div>
 
+
 </section>
 
+
 </div>
+
 
 {% endblock %}
 
 
 {% block scripts %}
 
+
 <script
     id="tfsbot-loaded-fields"
     type="application/json"
 >{{ form_values.fields | tojson }}</script>
 
+
 <script
     src="{{ url_for('static', filename='js/embed_builder.js') }}"
 ></script>
+
 
 {% endblock %}
