@@ -176,7 +176,11 @@
                     </span>
 
                     <span class="account-role">
-                        {{ webui_role|title }}
+                        {% if is_system_owner %}
+                            System Owner
+                        {% else %}
+                            {{ webui_role|title }}
+                        {% endif %}
                     </span>
                 </span>
 

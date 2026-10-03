@@ -413,16 +413,51 @@ class WebUIAccessManager:
                 viewer_role_ids
             ),
         }
-
+        
+    def matching_guild_role(
+        self,
+        guild_id: int,
+        member_role_ids,
+    ) -> str | None:
+        """
+        Return this member's WebUI role for one specific guild
+        
+        Owner wins over viewer.
+        """
+        member_role_ids = {
+            str(role_id)
+            for role_id in member_role_ids
+        }
+        
+        owner_role_ids = {
+            str(role_id)
+            for role_id in self.effective_role_ids(guild_id, "owner",)
+        }
+        
+        viewer_role_ids = {
+            str(role_id)
+            for role_id in self.effective_role_ids(guild_id, "viewer",)
+        }
+        
+        if owner_role_ids.intersection(member_role_ids):
+            return "owner"
+        
+        if viewer_role_ids.intersection(member_role_ids):
+            return "viewer"
+        
+        return None
+        
     def matching_discord_role(
         self,
         member_data: dict[str, Any],
     ) -> str | None:
-        """Map one guild member payload to ``owner``, ``viewer``, or None.
+        """
+        Return the authenticated member's
+        role in WEBUI_DISCORD_GUILD_ID.
 
-        Only ``webui_discord_guild_id`` is considered. Owner is returned
-        when any owner role overlaps, even if a viewer role also matches.
-        No configured guild id refuses the login.
+        This decides whether they may enter
+        the WebUI at all. Per-guild access is
+        calculated separately after login.
         """
         guild_id = getattr(
             self.bot.config,
@@ -433,41 +468,18 @@ class WebUIAccessManager:
         if guild_id is None:
             return None
 
-        member_role_ids = {
-            str(role_id)
-            for role_id
-            in member_data.get(
-                "roles",
-                [],
-            )
-        }
+        roles = member_data.get(
+            "roles",
+            [],
+        )
 
-        owner_role_ids = {
-            str(role_id)
-            for role_id
-            in self.effective_role_ids(
-                guild_id,
-                "owner",
-            )
-        }
-
-        viewer_role_ids = {
-            str(role_id)
-            for role_id
-            in self.effective_role_ids(
-                guild_id,
-                "viewer",
-            )
-        }
-
-        if owner_role_ids.intersection(
-            member_role_ids
+        if not isinstance(
+            roles,
+            list,
         ):
-            return "owner"
+            return None
 
-        if viewer_role_ids.intersection(
-            member_role_ids
-        ):
-            return "viewer"
-
-        return None
+        return self.matching_guild_role(
+            guild_id,
+            roles,
+        )

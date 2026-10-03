@@ -352,29 +352,29 @@ def fetch_discord_member(
     return member_data
 
 
-async def shared_bot_guild_ids(
+async def shared_bot_guild_roles(
     user_id: int,
-) -> list[str]:
+) -> dict[str, str]:
     """
-    Return guild IDs shared by Sanctuary Servo
-    and the authenticated Discord user.
+    Return the WebUI role the Discord user
+    holds in each Sanctuary Servo guild.
 
-    The member cache is checked first.
+    Mere membership is not enough.
 
-    If the member is not cached, Discord is
-    queried directly through the bot account.
+    The actual Discord server owner is always
+    treated as a WebUI owner for that server.
+    Otherwise the configured owner/viewer role
+    lists are used.
 
-    NotFound means the user is not a member.
-
-    Forbidden also fails closed for that guild
-    rather than exposing its existence.
-
-    A general Discord HTTP failure aborts login
-    because we cannot safely determine access.
+    Guilds where the user has neither role are
+    omitted completely.
     """
     context = webui_context()
 
-    visible_guild_ids: list[str] = []
+    guild_roles: dict[
+        str,
+        str,
+    ] = {}
 
     for guild in list(
         context.bot.guilds
@@ -383,43 +383,58 @@ async def shared_bot_guild_ids(
             user_id
         )
 
-        if member is not None:
-            visible_guild_ids.append(
+        if member is None:
+            try:
+                member = await (
+                    guild.fetch_member(
+                        user_id
+                    )
+                )
+
+            except discord.NotFound:
+                continue
+
+            except discord.Forbidden:
+                continue
+
+            except discord.HTTPException as error:
+                raise RuntimeError(
+                    "Sanctuary Servo could not "
+                    "verify your server "
+                    "membership with Discord. "
+                    "Try again."
+                ) from error
+
+        if guild.owner_id == user_id:
+            guild_role = "owner"
+
+        else:
+            guild_role = (
+                context
+                .access
+                .matching_guild_role(
+                    guild.id,
+                    (
+                        role.id
+                        for role
+                        in member.roles
+                    ),
+                )
+            )
+
+        if guild_role is not None:
+            guild_roles[
                 str(guild.id)
-            )
+            ] = guild_role
 
-            continue
-
-        try:
-            await guild.fetch_member(
-                user_id
-            )
-
-        except discord.NotFound:
-            continue
-
-        except discord.Forbidden:
-            # Fail closed. If the bot cannot
-            # verify membership, do not expose
-            # the guild through the Web UI.
-            continue
-
-        except discord.HTTPException as error:
-            raise RuntimeError(
-                "Sanctuary Servo could not "
-                "verify your server membership "
-                "with Discord. Try again."
-            ) from error
-
-        visible_guild_ids.append(
-            str(guild.id)
+    return dict(
+        sorted(
+            guild_roles.items(),
+            key=lambda item: int(
+                item[0]
+            ),
         )
-
-    visible_guild_ids.sort(
-        key=int
     )
-
-    return visible_guild_ids
 
 
 def render_login_page(
@@ -762,13 +777,20 @@ def discord_login_callback():
                 "user ID."
             ) from error
 
-        allowed_guild_ids = (
+        guild_roles = (
             context.run_coro(
-                shared_bot_guild_ids(
+                shared_bot_guild_roles(
                     user_id
                 )
             )
         )
+
+        if not guild_roles:
+            return render_login_failure(
+                "Your Discord account does "
+                "not have WebUI access to "
+                "any Sanctuary Servo server."
+            )
 
         display_name = (
             global_name
@@ -802,8 +824,14 @@ def discord_login_callback():
         ] = webui_role
 
         session[
+            "discord_guild_roles"
+        ] = guild_roles
+
+        session[
             "discord_guild_ids"
-        ] = allowed_guild_ids
+        ] = list(
+            guild_roles.keys()
+        )
 
         authenticated_at = int(
             time.time()

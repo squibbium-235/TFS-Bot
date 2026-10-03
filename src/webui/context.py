@@ -181,48 +181,54 @@ class WebUIContext:
         self,
     ) -> bool:
         """
-        Return whether this is the emergency password logon owner
-        
-        Guild owners are deliberatley not system owners (apart from milo)
+        Return whether this is the emergency
+        password-login system owner.
+
+        Discord guild owners are not system
+        owners.
         """
-        return (self.is_logged_in() and session.get("auth_method") == "password")
+        return (
+            self.is_logged_in()
+            and session.get(
+                "auth_method"
+            )
+            == "password"
+        )
         
 
     def current_role(
         self,
     ) -> str:
         """
-        Return owner, viewer, or an empty
-        string.
+        Return the highest role held by this
+        session.
 
-        Password login does not store a
-        Discord role, so a logged-in password
-        session is treated as owner.
+        This is for navigation/display only.
+        Guild mutations must use
+        is_owner_for_guild().
         """
-        role = str(
-            session.get(
-                "webui_role"
-            )
-            or ""
-        ).lower().strip()
-
-        if role in {
-            "owner",
-            "viewer",
-        }:
-            return role
+        if self.is_system_owner():
+            return "owner"
 
         if (
             session.get(
-                "logged_in"
-            )
-            is True
-            and session.get(
                 "auth_method"
             )
-            == "password"
+            != "discord"
         ):
+            return ""
+
+        roles = set(
+            self
+            .discord_session_guild_roles()
+            .values()
+        )
+
+        if "owner" in roles:
             return "owner"
+
+        if "viewer" in roles:
+            return "viewer"
 
         return ""
 
@@ -259,61 +265,24 @@ class WebUIContext:
             or "WebUI user"
         )
 
-    def discord_session_guild_ids(
-        self,
-    ) -> set[int]:
+    def discord_session_guild_roles(self) -> dict[int, str]:
         """
-        Return guild IDs authorised for the
-        current Discord OAuth session.
-
-        Missing, invalid, or old sessions fail
-        closed and therefore return no guilds.
-
-        This means Discord users logged in
-        before the guild-filtering feature was
-        deployed must log out and back in.
+        Return validated per-guild roles from the OAuth session.
+        
+        Old sessions without this mapping fail and must login again (so who GAF because thats like 2 fucking people)
         """
         if (
             not self.is_logged_in()
-            or session.get(
-                "auth_method"
-            )
-            != "discord"
+            or session.get("auth_method") != "discord"
         ):
-            return set()
-
-        raw_ids = session.get(
-            "discord_guild_ids"
-        )
-
-        if not isinstance(
-            raw_ids,
-            list,
-        ):
-            return set()
-
-        guild_ids: set[
-            int
-        ] = set()
-
-        for raw_id in raw_ids:
-            try:
-                guild_id = int(
-                    raw_id
-                )
-
-            except (
-                TypeError,
-                ValueError,
-            ):
-                continue
-
-            if guild_id > 0:
-                guild_ids.add(
-                    guild_id
-                )
-
-        return guild_ids
+            return {}
+        
+        raw_roles = session.get("discord_guild_roles")
+        
+        if not isinstance(raw_roles, dict):
+            return {}
+        
+        guild_roles: dict[int, str] = {}
 
     def accessible_guild_objects(
         self,
@@ -459,6 +428,12 @@ class WebUIContext:
                     return guild
 
             return None
+
+        if(not guild_id_text and not self.is_system_owner()):
+            owner_guilds = [guild for guild in accessible_guilds if self.is_owner_for_guild(guild_id)]
+            
+            if owner_guilds:
+                return owner_guilds[0]
 
         if accessible_guilds:
             return (

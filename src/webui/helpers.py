@@ -11,6 +11,7 @@ from flask import (
     current_app,
     redirect,
     render_template,
+    request,
     url_for,
     session,
 )
@@ -95,40 +96,14 @@ def require_login():
 
 
 def require_owner():
-    """Return None for an owner, a login redirect, or the access-denied page.
-
-    Viewers are authenticated but blocked. The denied page still uses the
-    normal shell, with the overview nav item marked active.
     """
-    context = webui_context()
-
-    login_error = require_login()
-
-    if login_error is not None:
-        return login_error
-
-    if context.is_owner():
-        return None
-
-    return render_template(
-        "access_denied.html",
-        **context.template_context(
-            title="Access Denied",
-            active_page="overview",
-            message=None,
-            error=(
-                "You need the owner WebUI role "
-                "to use that page."
-            ),
-        ),
-    )
+    Require owner access to the guild selected by the request
     
-def require_system_owner():
-    """
-    Return None only for the emergency password system owner
+    system owners always pass.
     
-    Guild owners are auth users, but cannot access whole bot admin stuff
+    guild owners pass only for guilds where their session has an owner role
     """
+    
     context = webui_context()
     login_error = require_login()
     
@@ -138,4 +113,54 @@ def require_system_owner():
     if context.is_system_owner():
         return None
     
-    return render_template("access_denied.html", **context.template_context(title="Access Denied", active_page="overview",message=None,error=("You need system-owner access to use that page")))
+    if request.method == "POST":
+        guild_id_text = request.form.get("guild_id")
+    else:
+        guild_id_text = request.args.get("guild_id")
+    
+    guild = context.selected_guild(guild_id_text)
+    
+    if(guild is not None and context.is_owner_for_guild(guild.id)):
+        return None
+    
+    return render_template(
+        "access_denied.html",
+        **context.template_context(
+            title="Access Denied",
+            active_page="overview",
+            message=None,
+            error=(
+                "You need the owner WebUI "
+                "role for that server to "
+                "use that page."
+            ),
+        ),
+    )
+    
+def require_system_owner():
+    """
+    Require emergency password-login
+    system-owner access.
+    """
+    context = webui_context()
+
+    login_error = require_login()
+
+    if login_error is not None:
+        return login_error
+
+    if context.is_system_owner():
+        return None
+
+    return render_template(
+        "access_denied.html",
+        **context.template_context(
+            title="Access Denied",
+            active_page="overview",
+            message=None,
+            error=(
+                "You need system-owner "
+                "access to use that page."
+            ),
+        ),
+    )
