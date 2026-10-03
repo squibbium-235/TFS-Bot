@@ -265,24 +265,127 @@ class WebUIContext:
             or "WebUI user"
         )
 
-    def discord_session_guild_roles(self) -> dict[int, str]:
+    def discord_session_guild_roles(
+        self,
+    ) -> dict[int, str]:
         """
-        Return validated per-guild roles from the OAuth session.
-        
-        Old sessions without this mapping fail and must login again (so who GAF because thats like 2 fucking people)
+        Return validated per-guild roles from
+        the Discord OAuth session.
+
+        Old sessions without this mapping fail
+        closed and must log in again.
         """
         if (
             not self.is_logged_in()
-            or session.get("auth_method") != "discord"
+            or session.get(
+                "auth_method"
+            )
+            != "discord"
         ):
             return {}
-        
-        raw_roles = session.get("discord_guild_roles")
-        
-        if not isinstance(raw_roles, dict):
+
+        raw_roles = session.get(
+            "discord_guild_roles"
+        )
+
+        if not isinstance(
+            raw_roles,
+            dict,
+        ):
             return {}
-        
-        guild_roles: dict[int, str] = {}
+
+        guild_roles: dict[
+            int,
+            str,
+        ] = {}
+
+        for (
+            raw_guild_id,
+            raw_role,
+        ) in raw_roles.items():
+            try:
+                guild_id = int(
+                    raw_guild_id
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+            role = str(
+                raw_role
+                or ""
+            ).lower().strip()
+
+            if (
+                guild_id > 0
+                and role
+                in {
+                    "owner",
+                    "viewer",
+                }
+            ):
+                guild_roles[
+                    guild_id
+                ] = role
+
+        return guild_roles
+
+
+    def discord_session_guild_ids(
+        self,
+    ) -> set[int]:
+        """
+        Return guild IDs where this Discord
+        session has a valid WebUI role.
+        """
+        return set(
+            self
+            .discord_session_guild_roles()
+            .keys()
+        )
+
+
+    def guild_role(
+        self,
+        guild_id: int,
+    ) -> str:
+        """
+        Return the current session's role in
+        one guild.
+
+        System owners count as owner in every
+        guild.
+        """
+        if self.is_system_owner():
+            return "owner"
+
+        return (
+            self
+            .discord_session_guild_roles()
+            .get(
+                guild_id,
+                "",
+            )
+        )
+
+
+    def is_owner_for_guild(
+        self,
+        guild_id: int,
+    ) -> bool:
+        """
+        Return whether this session owns the
+        specified guild in the WebUI.
+        """
+        return (
+            self.guild_role(
+                guild_id
+            )
+            == "owner"
+        )
 
     def accessible_guild_objects(
         self,
@@ -428,12 +531,6 @@ class WebUIContext:
                     return guild
 
             return None
-
-        if(not guild_id_text and not self.is_system_owner()):
-            owner_guilds = [guild for guild in accessible_guilds if self.is_owner_for_guild(guild_id)]
-            
-            if owner_guilds:
-                return owner_guilds[0]
 
         if accessible_guilds:
             return (

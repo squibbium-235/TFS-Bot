@@ -114,13 +114,44 @@ def require_owner():
         return None
     
     if request.method == "POST":
-        guild_id_text = request.form.get("guild_id")
+        guild_id_text = request.form.get(
+            "guild_id"
+        )
     else:
-        guild_id_text = request.args.get("guild_id")
-    
-    guild = context.selected_guild(guild_id_text)
-    
-    if(guild is not None and context.is_owner_for_guild(guild.id)):
+        guild_id_text = request.args.get(
+            "guild_id"
+        )
+
+    if guild_id_text:
+        guild = context.selected_guild(
+            guild_id_text
+        )
+
+    else:
+        guild = next(
+            (
+                guild
+                for guild
+                in (
+                    context
+                    .accessible_guild_objects()
+                )
+                if (
+                    context
+                    .is_owner_for_guild(
+                        guild.id
+                    )
+                )
+            ),
+            None,
+        )
+
+    if (
+        guild is not None
+        and context.is_owner_for_guild(
+            guild.id
+        )
+    ):
         return None
     
     return render_template(
