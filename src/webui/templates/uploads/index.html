@@ -72,6 +72,11 @@
     <h2>Create Folder</h2>
 
     <form method="post" action="{{ url_for('uploads.index') }}">
+        <input
+            type="hidden"
+            name="guild_id"
+            value="{{ selected_guild_id }}"
+        >
         <input type="hidden" name="action" value="create_folder">
 
         <label>Folder name</label>
@@ -135,6 +140,11 @@
     </p>
 
     <form method="post" action="{{ url_for('uploads.index') }}">
+        <input
+            type="hidden"
+            name="guild_id"
+            value="{{ selected_guild_id }}"
+        >
         <input type="hidden" name="action" value="delete_folder">
 
         <label>Folder</label>
