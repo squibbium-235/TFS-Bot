@@ -531,6 +531,19 @@ class WebUIContext:
                     return guild
 
             return None
+        
+        if not self.is_system_owner():
+            owner_guilds = [
+                guild
+                for guild
+                in accessible_guilds
+                if self.is_owner_for_guild(
+                    guild.id
+                )
+            ]
+
+            if owner_guilds:
+                return owner_guilds[0]
 
         if accessible_guilds:
             return (
