@@ -839,7 +839,7 @@ def render_page(
                 if uploads
                 else []
             ),
-            uploaded_folders=(
+            upload_folders=(
                 uploads.list_folders()
                 if uploads
                 else []
