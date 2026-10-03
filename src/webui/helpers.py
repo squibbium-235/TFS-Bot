@@ -138,4 +138,4 @@ def require_system_owner():
     if context.is_system_owner():
         return None
     
-    return render_template("access_denied.html", **context.template_context(title="Access Denies", active_page="overview",message=None,error=("You need system-owner access to use that page")))
+    return render_template("access_denied.html", **context.template_context(title="Access Denied", active_page="overview",message=None,error=("You need system-owner access to use that page")))
