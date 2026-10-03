@@ -59,6 +59,17 @@ def parse_optional_int(
 
     return int(stripped)
 
+def resolve_public_channel(
+    guild: discord.Guild,
+    channel_id: int,
+) -> discord.TextChannel:
+    """
+    Resolve a form publishing channel strictly within the selected guild
+    
+    The channel must already belong to the selected guild's channel list
+    
+    arbritarary channel. ids are not fetched from discord to stop"""
+    
 
 async def get_guild_forms(
     guild: discord.Guild,
@@ -583,26 +594,11 @@ def index():
                 )
 
                 channel = (
-                    selected_guild.get_channel(
-                        channel_id
+                    resolve_public_channel(
+                        selected_guild,
+                        channel_id,
                     )
                 )
-
-                if channel is None:
-                    channel = context.run_coro(
-                        context.bot.fetch_channel(
-                            channel_id
-                        )
-                    )
-
-                if not isinstance(
-                    channel,
-                    discord.TextChannel,
-                ):
-                    raise RuntimeError(
-                        "Selected channel is "
-                        "not a text channel."
-                    )
 
                 form_config = (
                     context.run_coro(
