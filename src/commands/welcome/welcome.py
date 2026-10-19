@@ -298,7 +298,7 @@ class WelcomeEmbedModal(
                     )
                 ),
                 placeholder=(
-                    "Welcome {user}!"
+                    "Welcome {user.mention}!"
                 ),
                 required=False,
                 max_length=256,
