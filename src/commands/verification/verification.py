@@ -467,8 +467,9 @@ def build_application_review_embeds(
     first_embed.set_thumbnail(url=user.display_avatar.with_size(256).url)
 
     first_embed.add_field(
-        name=f"{user.mention}'s Info:",
+        name="user Info:",
         value=(
+            f"{user.mention}\n",
             f"[View Profile]({profile_url})\n"
             f"**Display Name:** {discord.utils.escape_markdown(display_name)}\n"
             f"**Account ID:** `{user.id}`\n"
