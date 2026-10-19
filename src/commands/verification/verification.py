@@ -1635,11 +1635,22 @@ async def handle_verify_complete(
         previous_application_links=previous_application_links,
         invite_text=invite_text,
     )
-
+    
+    role = interaction.guild.get_role(657286780474621992)
+    
     try:
         review_message = await review_channel.send(
+            content=(
+                f"{role.mention} New verification application!"
+                if role else "New verification application!"
+            ),
             embeds=embeds,
             view=ApplicationReviewView(application_id),
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False,
+                users=False,
+                roles=[role] if role else [],
+            ),
         )
 
     except discord.HTTPException:
