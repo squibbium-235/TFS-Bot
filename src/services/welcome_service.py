@@ -298,16 +298,12 @@ async def _render_welcome_data(
         
     # discor dcannot render mentions in embed titles, replace them with the bemberes displayname
     if isinstance(rendered_data.get("title"), str):
-        rendered_data["title"] = rendered_data["title"].replace(
-            member.mention, discord.utils.escape_markdown(member.display_name)
-        )
-        
-    # convert user mentions in embed titles to display names
-    if isinstance(rendered_data.get("title"), str):
         display_name = discord.utils.escape_markdown(member.display_name)
-        
+
         rendered_data["title"] = (
-            rendered_data["title"].replace(member.mention, display_name).replace("{user.mention}", display_name)
+            rendered_data["title"]
+            .replace(member.mention, display_name)
+            .replace("{user.mention}", display_name)
         )
 
     return rendered_data
@@ -532,7 +528,6 @@ async def send_welcome_message(
                 if files
                 else None
             ),
-            content=f"Welcome {member.mention}!",
             allowed_mentions=discord.AllowedMentions(
                 users=[member],
                 roles=False,
