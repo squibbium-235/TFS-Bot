@@ -1169,9 +1169,9 @@ async def forward_thread_message_to_user(
     body = trim_message_content(message.content)
 
     if body:
-        content = f"**{discord.utils.escape_markdown(author_name)}:**\n{body}"
+        content = f"**TFS Staff:**\n{body}"
     else:
-        content = f"**{discord.utils.escape_markdown(author_name)}** sent a message."
+        content = f"**TFS Staff** sent a message."
 
     files, urls = await build_forward_files(message)
 
