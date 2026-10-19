@@ -467,9 +467,9 @@ def build_application_review_embeds(
     first_embed.set_thumbnail(url=user.display_avatar.with_size(256).url)
 
     first_embed.add_field(
-        name="user Info:",
+        name="User Info:",
         value=(
-            f"{user.mention}\n",
+            f"**User:** {user.mention}\n"
             f"[View Profile]({profile_url})\n"
             f"**Display Name:** {discord.utils.escape_markdown(display_name)}\n"
             f"**Account ID:** `{user.id}`\n"
@@ -1636,7 +1636,7 @@ async def handle_verify_complete(
         invite_text=invite_text,
     )
     
-    role = interaction.guild.get_role(657286780474621992)
+    role = interaction.guild.get_role(423619283533430784)
     
     try:
         review_message = await review_channel.send(
