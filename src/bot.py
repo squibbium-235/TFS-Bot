@@ -906,6 +906,8 @@ class TFSBot(
                 ),
                 synced_count,
             )
+            
+        await self.change_presence(status=discord.Status.do_not_disturb,activity=discord.Activity(type=discord.ActivityType.competing, name="banning harou"))
 
     async def on_app_command_error(
         self,
